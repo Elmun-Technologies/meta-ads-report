@@ -4,7 +4,10 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AlertTriangle } from "lucide-react";
 import ErrorBoundary from "./components/ErrorBoundary";
-import { DashboardProvider, useDashboardContext } from "./contexts/DashboardContext";
+import {
+  DashboardProvider,
+  useDashboardContext,
+} from "./contexts/DashboardContext";
 import { setCurrency } from "@/lib/format";
 import { CommandPalette, Sidebar, Topbar } from "./components/shell";
 import { DetailDrawer } from "./components/DetailDrawer";
@@ -36,11 +39,48 @@ function LoadingState() {
 function ErrorState({ error }: { error: string }) {
   const { refresh } = useDashboardContext();
   return (
-    <div className="panel" style={{ textAlign: "center", padding: "48px 24px" }}>
-      <AlertTriangle size={30} style={{ color: "var(--warn)", marginBottom: 12 }} />
-      <h3 style={{ margin: "0 0 8px", fontSize: 16 }}>Ma'lumot olinmadi</h3>
-      <p style={{ color: "var(--text-2)", fontSize: 12.5, maxWidth: 460, margin: "0 auto 16px", lineHeight: 1.6 }}>{error}</p>
-      <button className="primary-btn" style={{ margin: "0 auto" }} onClick={() => void refresh()}>
+    <div
+      className="panel"
+      style={{ textAlign: "center", padding: "48px 24px" }}
+    >
+      <AlertTriangle
+        size={30}
+        style={{ color: "var(--warn)", marginBottom: 12 }}
+      />
+      <h3 style={{ margin: "0 0 8px", fontSize: 16 }}>
+        Ma'lumotni o'qib bo'lmadi
+      </h3>
+      <p
+        style={{
+          color: "var(--text-2)",
+          fontSize: 12.5,
+          maxWidth: 520,
+          margin: "0 auto 10px",
+          lineHeight: 1.6,
+        }}
+      >
+        Serverdan ma'lumot olinmadi va build vaqtidagi zaxira fayl ham
+        topilmadi. Sabab: {error}
+      </p>
+      <p
+        style={{
+          color: "var(--text-3)",
+          fontSize: 11.5,
+          maxWidth: 520,
+          margin: "0 auto 16px",
+          lineHeight: 1.6,
+        }}
+      >
+        Lokal ishga tushirishda <b>API server</b> ham ishlab turganini
+        tekshiring. Vercel kabi statik hostingda esa loyihani
+        <b> pnpm build</b> bilan qayta yig'ish kerak — unda ma'lumot statik
+        faylga yoziladi.
+      </p>
+      <button
+        className="primary-btn"
+        style={{ margin: "0 auto" }}
+        onClick={() => void refresh()}
+      >
         Qayta urinish
       </button>
     </div>
@@ -59,11 +99,20 @@ function Shell() {
   return (
     <div className="shell">
       <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
-      {navOpen && <div className="nav-scrim show" onClick={() => setNavOpen(false)} />}
+      {navOpen && (
+        <div className="nav-scrim show" onClick={() => setNavOpen(false)} />
+      )}
       <div className="main">
         <Topbar onMenu={() => setNavOpen(true)} />
-        <main className="content" key={loading ? "loading" : error ? "error" : "ready"}>
-          {loading ? <LoadingState /> : error ? <ErrorState error={error} /> : (
+        <main
+          className="content"
+          key={loading ? "loading" : error ? "error" : "ready"}
+        >
+          {loading ? (
+            <LoadingState />
+          ) : error ? (
+            <ErrorState error={error} />
+          ) : (
             <Switch>
               <Route path="/" component={Overview} />
               <Route path="/campaigns" component={Campaigns} />

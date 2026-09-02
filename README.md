@@ -13,7 +13,7 @@
   <img alt="stack" src="https://img.shields.io/badge/React_19-Vite_7-5e8bff?style=flat-square" />
   <img alt="stack" src="https://img.shields.io/badge/TypeScript-strict-2dd4bf?style=flat-square" />
   <img alt="stack" src="https://img.shields.io/badge/Express-SSE_live-a78bfa?style=flat-square" />
-  <img alt="stack" src="https://img.shields.io/badge/tests-37%2F37_passing-34d399?style=flat-square" />
+  <img alt="stack" src="https://img.shields.io/badge/tests-34%2F34_passing-34d399?style=flat-square" />
   <img alt="stack" src="https://img.shields.io/badge/audit-11_PASS_·_0_GAP-fbbf24?style=flat-square" />
 </p>
 
@@ -21,7 +21,7 @@
 
 ## 🎯 Bu nima?
 
-Sof-Expo kompaniyasi uchun **ko'p platformali reklama analitikasi dashboardi**. Maqsad — marketing jarayonining *butun zanjirini* bitta ekranda ko'rish:
+Sof-Expo kompaniyasi uchun **ko'p platformali reklama analitikasi dashboardi**. Maqsad — marketing jarayonining _butun zanjirini_ bitta ekranda ko'rish:
 
 ```
 Impression → Click → Lead → AmoCRM bosqichlari → Won/Lost → Tushum → ROAS
@@ -39,21 +39,48 @@ Har bir lead **qaysi kampaniya va kreativdan kelganini**, CRM'da **qaysi bosqich
 
 ## ✨ Imkoniyatlar
 
-| Sahifa | Nima bor |
-|---|---|
-| **/** Boshqaruv | 6 KPI karta, skvoznaya voronka (har qadamda konversiya), xulosa dvigateli, signal markazi, anomaliyalar (MAD z-score), pacing + prognoz, interaksiya/video/messaging metrikalari, CRM yopiq sikl paneli |
-| **/campaigns** | Saralanadigan ledger (Expo filtri, CPL vs o'rtacha benchmark, CSV eksport), detail drawer (15+ metrika) |
-| **/creatives** | Kreativ reytingi (Spend/CTR/Clicks/CPL), CTR liderlari charti, status chip'lari (ACTIVE/PAUSED/DISAPPROVED) |
-| **/audience** | Yosh segmentlari: spend/leads chart, CPL kesimi, to'liq jadval |
-| **/leads** | Expo → Kampaniya → Ad set → Kreativ hierarxiyasi (yoyiladigan) |
-| **/pipeline** | **AmoCRM lifecycle**: won/lost/win-rate/ROAS/cost-per-WON, bosqich voronkasi (tannarx bilan), kanban doska, manba atributsiyasi |
-| **/compare** | A/B davrlar (% delta), Expo benchmark, account benchmark |
-| **/report** | Rahbariyat uchun bir sahifalik executive brief — «Chop etish → Save as PDF» (dark temada ham yorug' chiqadi) |
-| **/connections** | Platforma/CRM holati, texnik arxitektura, manba cheklovlari |
+| Sahifa                 | Nima bor                                                                                                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **/** Umumiy natijalar | 6 KPI karta, skvoznaya voronka (har qadamda konversiya), xulosa dvigateli, signal markazi, anomaliyalar (MAD z-score), pacing + prognoz, interaksiya/video/messaging metrikalari, CRM yopiq sikl paneli |
+| **/campaigns**         | Saralanadigan ledger (Expo filtri, CPL vs o'rtacha benchmark, CSV eksport), detail drawer (15+ metrika)                                                                                                 |
+| **/creatives**         | Kreativ reytingi (Spend/CTR/Clicks/CPL), CTR liderlari charti, status chip'lari (ACTIVE/PAUSED/DISAPPROVED)                                                                                             |
+| **/audience**          | Yosh segmentlari: spend/leads chart, CPL kesimi, to'liq jadval                                                                                                                                          |
+| **/leads**             | Kampaniya tuzilmasi: Expo → Kampaniya → Guruh → Kreativ (yoyiladigan)                                                                                                                                   |
+| **/pipeline**          | **Murojaat yo‘li (CRM)**: won/lost/win-rate/ROAS/cost-per-WON, bosqich voronkasi (tannarx bilan), kanban doska, manba atributsiyasi                                                                     |
+| **/compare**           | A/B davrlar (% delta), Expo benchmark, account benchmark                                                                                                                                                |
+| **/report**            | Rahbariyat uchun bir sahifalik executive brief — «Chop etish → Save as PDF» (dark temada ham yorug' chiqadi)                                                                                            |
+| **/connections**       | Qaysi platforma ulangan, ma’lumot qayerdan keladi, manba cheklovlari                                                                                                                                    |
 
 **Umumiy:** ⌘K command palette (sahifa/kampaniya/kreativ/CRM-lead qidiruvi) · dark/light tema · ko'p kabinet tanlagich · live-sync indikator · mobil moslashuv · SSE + polling fallback.
 
+**Tushunarlilik:** har bir sahifa tepasida “bu sahifada nima ko'rasiz” yo'riqnomasi, har bir ko'rsatkich nomi
+o'zbekcha + inglizcha qavsda (`Murojaat narxi (CPL)`) va nom yonidagi <kbd>?</kbd> belgisi orqali oddiy tilda izoh.
+
 ---
+
+## 🚀 Deploy (Vercel va boshqa statik hosting)
+
+`pnpm build:web` ikki ish qiladi:
+
+1. `scripts/build-static-data.ts` — `server/data/snapshots/` ichidagi ma'lumotni normallashtirib
+   **`client/public/data/bootstrap.json`** ga yozadi (≈76 KB).
+2. `vite build` — client'ni `dist/public` ga yig'adi (statik fayl ham ichida).
+
+Client har doim avval `/api/*` ga murojaat qiladi; **javob kelmasa** (serverless funksiya
+ishlamasa, Vercel Deployment Protection bloklasa va h.k.) shu statik fayldan o'qiydi va
+yuqori o'ng burchakda _“Build vaqtidagi ma'lumot”_ belgisi chiqadi. Ya'ni UI hech qachon
+bo'sh qolmaydi.
+
+Vercel sozlamalari (`vercel.json`):
+
+```
+buildCommand:     pnpm build:web
+outputDirectory:  dist/public
+functions:        api/[[...slug]].ts  (includeFiles: server/data/snapshots/**)
+```
+
+Statik rejimda ma'lumotni yangilash uchun — yangi snapshot qo'shib, loyihani qayta deploy qiling
+(yoki uzoq muddatli server rejimida ishga tushiring: `pnpm build && pnpm start` — unda SSE live-sync ishlaydi).
 
 ## 🏗 Arxitektura
 
@@ -129,12 +156,12 @@ pnpm audit      # skvoznaya zanjir auditi — real snapshot ustida 11 tekshiruv
 
 Hammasi **fayl tushirish** orqali ishlaydi — `server/data/snapshots/` papkasiga:
 
-| Fayl nomi | Platforma | Taniladigan maydonlar |
-|---|---|---|
-| `meta_<act-id>_<davr>.json` | Meta Ads (istalgan account) | MCP standart eksporti: `account, summary, campaigns, age, ads, adInsights` |
-| `google_<id>_<davr>.json` | Google Ads | `rows[]`: `campaign_name, cost_micros, clicks, impressions, conversions` |
-| `yandex_<login>_<davr>.json` | Yandex Direct | `rows[]`: `Name, Spend, Clicks, Impressions, Conversions` |
-| `amo_<hisob>_<davr>.json` | AmoCRM | `account, pipelines, stages, leads[]` (utm_campaign!) |
+| Fayl nomi                    | Platforma                   | Taniladigan maydonlar                                                      |
+| ---------------------------- | --------------------------- | -------------------------------------------------------------------------- |
+| `meta_<act-id>_<davr>.json`  | Meta Ads (istalgan account) | MCP standart eksporti: `account, summary, campaigns, age, ads, adInsights` |
+| `google_<id>_<davr>.json`    | Google Ads                  | `rows[]`: `campaign_name, cost_micros, clicks, impressions, conversions`   |
+| `yandex_<login>_<davr>.json` | Yandex Direct               | `rows[]`: `Name, Spend, Clicks, Impressions, Conversions`                  |
+| `amo_<hisob>_<davr>.json`    | AmoCRM                      | `account, pipelines, stages, leads[]` (utm_campaign!)                      |
 
 Fayl tushgani zahoti: `fs.watch` sezadi → SSE orqali barcha ochiq dashboardlarga push → **sahifa yangilash shart emas**, platforma statusi `READY → LIVE`ga o'tadi.
 
@@ -154,15 +181,15 @@ Bog'lanmagan leadlar "Manbasi aniqlanmagan" deb alohida chiqadi — **taxminiy b
 
 ## 📡 API
 
-| Endpoint | Tavsif |
-|---|---|
-| `GET /api/snapshot?platform=meta` | Eng yangi snapshot (normalized). `?file=` — aniq fayl |
-| `GET /api/snapshots` | Mavjud davr/kabinet fayllari ro'yxati (tanlagich uchun) |
-| `GET /api/connections` | Platforma + CRM ulanish holati |
-| `GET /api/crm` | AmoCRM ma'lumoti (matchlangan) |
-| `GET /api/stream` | SSE live-sync kanali (hello/ping/sync eventlari) |
-| `POST /api/refresh` | Barcha clientlarga push (yangi snapshot haqida) |
-| `GET /api/health` | Healthcheck |
+| Endpoint                          | Tavsif                                                  |
+| --------------------------------- | ------------------------------------------------------- |
+| `GET /api/snapshot?platform=meta` | Eng yangi snapshot (normalized). `?file=` — aniq fayl   |
+| `GET /api/snapshots`              | Mavjud davr/kabinet fayllari ro'yxati (tanlagich uchun) |
+| `GET /api/connections`            | Platforma + CRM ulanish holati                          |
+| `GET /api/crm`                    | AmoCRM ma'lumoti (matchlangan)                          |
+| `GET /api/stream`                 | SSE live-sync kanali (hello/ping/sync eventlari)        |
+| `POST /api/refresh`               | Barcha clientlarga push (yangi snapshot haqida)         |
+| `GET /api/health`                 | Healthcheck                                             |
 
 ---
 

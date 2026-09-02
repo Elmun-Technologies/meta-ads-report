@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDownRight, ArrowUpRight, Clock, Info } from "lucide-react";
 import type { NormalizedSnapshot, SnapshotInfo } from "@shared/types";
+import { PageHint } from "@/components/Help";
 import { money, pct, ratio, whole } from "@/lib/format";
 import { useDashboardContext } from "@/contexts/DashboardContext";
 import { EmptyState, Panel } from "@/components/widgets";
@@ -15,18 +16,38 @@ interface ExpoRow {
   frequency: number | null;
 }
 
-function delta(a: number | null | undefined, b: number | null | undefined): number | null {
+function delta(
+  a: number | null | undefined,
+  b: number | null | undefined
+): number | null {
   if (a == null || b == null || b === 0) return null;
   return ((a - b) / b) * 100;
 }
 
-function DeltaBadge({ value, invert = false, suffix = "" }: { value: number | null; invert?: boolean; suffix?: string }) {
+function DeltaBadge({
+  value,
+  invert = false,
+  suffix = "",
+}: {
+  value: number | null;
+  invert?: boolean;
+  suffix?: string;
+}) {
   if (value == null) return <span className="tone-muted">—</span>;
   const positive = value >= 0;
   const good = invert ? !positive : positive;
   const Icon = positive ? ArrowUpRight : ArrowDownRight;
   return (
-    <span className={`mono tone-${good ? "good" : "risk"}`} style={{ fontSize: 11.5, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 2 }}>
+    <span
+      className={`mono tone-${good ? "good" : "risk"}`}
+      style={{
+        fontSize: 11.5,
+        fontWeight: 600,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 2,
+      }}
+    >
       <Icon size={11} />
       {positive ? "+" : ""}
       {value.toFixed(1)}%{suffix}
@@ -45,7 +66,7 @@ export default function Compare() {
 
   useEffect(() => {
     fetch("/api/snapshots")
-      .then((r) => (r.ok ? r.json() : []))
+      .then(r => (r.ok ? r.json() : []))
       .then((list: SnapshotInfo[]) => {
         if (Array.isArray(list) && list.length) {
           setSnapList(list);
@@ -58,7 +79,12 @@ export default function Compare() {
       .catch(() => setSnapList([]));
   }, []);
 
-  const canCompare = snapList != null && snapList.length >= 2 && fileA && fileB && fileA !== fileB;
+  const canCompare =
+    snapList != null &&
+    snapList.length >= 2 &&
+    fileA &&
+    fileB &&
+    fileA !== fileB;
 
   useEffect(() => {
     if (!canCompare) {
@@ -67,7 +93,14 @@ export default function Compare() {
       return;
     }
     setLoading(true);
-    Promise.all([fetch(`/api/snapshot?file=${encodeURIComponent(fileA)}`).then((r) => r.json()), fetch(`/api/snapshot?file=${encodeURIComponent(fileB)}`).then((r) => r.json())])
+    Promise.all([
+      fetch(`/api/snapshot?file=${encodeURIComponent(fileA)}`).then(r =>
+        r.json()
+      ),
+      fetch(`/api/snapshot?file=${encodeURIComponent(fileB)}`).then(r =>
+        r.json()
+      ),
+    ])
       .then(([a, b]) => {
         setSnapA(a.meta ? a : null);
         setSnapB(b.meta ? b : null);
@@ -83,32 +116,81 @@ export default function Compare() {
     if (!snapshot) return [];
     const map = new Map<string, ExpoRow>();
     for (const c of snapshot.campaigns) {
-      const row = map.get(c.expo) ?? { expo: c.expo, campaigns: 0, spend: 0, leads: 0, cpl: null, ctr: null, frequency: null };
+      const row = map.get(c.expo) ?? {
+        expo: c.expo,
+        campaigns: 0,
+        spend: 0,
+        leads: 0,
+        cpl: null,
+        ctr: null,
+        frequency: null,
+      };
       row.campaigns += 1;
       row.spend += c.metrics.spend;
       row.leads += c.metrics.leads;
       map.set(c.expo, row);
     }
     return [...map.values()]
-      .map((r) => ({ ...r, cpl: r.leads ? r.spend / r.leads : null, ctr: null, frequency: null }))
+      .map(r => ({
+        ...r,
+        cpl: r.leads ? r.spend / r.leads : null,
+        ctr: null,
+        frequency: null,
+      }))
       .sort((a, b) => b.spend - a.spend);
   }, [snapshot]);
 
   if (!snapshot) return null;
 
   const avgCpl = snapshot.totals.cpl ?? 0;
-  const maxSpend = Math.max(...expoRows.map((r) => r.spend), 1);
+  const maxSpend = Math.max(...expoRows.map(r => r.spend), 1);
 
   /* A/B KPI qatori */
   const abRows =
     snapA && snapB
       ? [
-          { label: "Spend", a: money(snapA.totals.spend), b: money(snapB.totals.spend), d: delta(snapA.totals.spend, snapB.totals.spend), invert: false },
-          { label: "Leads", a: whole(snapA.totals.leads), b: whole(snapB.totals.leads), d: delta(snapA.totals.leads, snapB.totals.leads), invert: false },
-          { label: "Cost per lead", a: money(snapA.totals.cpl), b: money(snapB.totals.cpl), d: delta(snapA.totals.cpl, snapB.totals.cpl), invert: true },
-          { label: "CTR", a: pct(snapA.totals.ctr), b: pct(snapB.totals.ctr), d: delta(snapA.totals.ctr, snapB.totals.ctr), invert: false },
-          { label: "CPM", a: money(snapA.totals.cpm), b: money(snapB.totals.cpm), d: delta(snapA.totals.cpm, snapB.totals.cpm), invert: true },
-          { label: "Reach", a: whole(snapA.totals.reach), b: whole(snapB.totals.reach), d: delta(snapA.totals.reach, snapB.totals.reach), invert: false },
+          {
+            label: "Spend",
+            a: money(snapA.totals.spend),
+            b: money(snapB.totals.spend),
+            d: delta(snapA.totals.spend, snapB.totals.spend),
+            invert: false,
+          },
+          {
+            label: "Leads",
+            a: whole(snapA.totals.leads),
+            b: whole(snapB.totals.leads),
+            d: delta(snapA.totals.leads, snapB.totals.leads),
+            invert: false,
+          },
+          {
+            label: "Cost per lead",
+            a: money(snapA.totals.cpl),
+            b: money(snapB.totals.cpl),
+            d: delta(snapA.totals.cpl, snapB.totals.cpl),
+            invert: true,
+          },
+          {
+            label: "CTR",
+            a: pct(snapA.totals.ctr),
+            b: pct(snapB.totals.ctr),
+            d: delta(snapA.totals.ctr, snapB.totals.ctr),
+            invert: false,
+          },
+          {
+            label: "CPM",
+            a: money(snapA.totals.cpm),
+            b: money(snapB.totals.cpm),
+            d: delta(snapA.totals.cpm, snapB.totals.cpm),
+            invert: true,
+          },
+          {
+            label: "Reach",
+            a: whole(snapA.totals.reach),
+            b: whole(snapB.totals.reach),
+            d: delta(snapA.totals.reach, snapB.totals.reach),
+            invert: false,
+          },
         ]
       : [];
 
@@ -116,8 +198,8 @@ export default function Compare() {
   const campaignDeltas =
     snapA && snapB
       ? snapA.campaigns
-          .map((ca) => {
-            const cb = snapB.campaigns.find((c) => c.id === ca.id);
+          .map(ca => {
+            const cb = snapB.campaigns.find(c => c.id === ca.id);
             if (!cb) return null;
             return {
               name: ca.originalName,
@@ -139,40 +221,66 @@ export default function Compare() {
     <>
       <div className="page-head">
         <div>
-          <span className="kicker" style={{ color: "var(--accent)" }}>
-            TAQQOSLASH
-          </span>
+          <span className="kicker">Solishtirish</span>
           <h1>Nima o'zgardi?</h1>
-          <p>Davrlar, Expo guruhlari va account benchmark kesimida taqqoslash. Ikkinchi davr snapshoti papkaga tushganda A/B taqqoslash avtomatik yonadi.</p>
+          <p>
+            Ikki davr, yo'nalishlar (Expo) va hisob bo'yicha o'rtacha
+            ko'rsatkichlar asosida taqqoslash. Ikkinchi davr ma'lumoti tushganda
+            A/B taqqoslash o'zi ochiladi.
+          </p>
         </div>
       </div>
 
+      <PageHint>
+        Bu sahifa <b>o'tgan davrga nisbatan nima yaxshilandi/yomonlashdi</b>{" "}
+        degan savolga javob beradi. Yashil — yaxshilanish, qizil — yomonlashish.
+        Yo'nalishlar va kampaniyalar o'rtachaga nisbatan qayerdaligi pastda
+        ko'rsatilgan.
+      </PageHint>
+
       {/* A/B davrlar */}
-      <Panel kicker="DAVRLARARO A/B" title="Ikki davrni taqqoslash" style={{ marginBottom: 14 }}>
+      <Panel
+        kicker="Ikki davr"
+        title="Nima o'zgardi?"
+        style={{ marginBottom: 14 }}
+      >
         {snapList == null ? (
           <EmptyState text="Snapshot ro'yxati yuklanmoqda…" />
         ) : !canCompare ? (
           <div className="note-strip">
             <Info size={15} style={{ flex: "none", color: "var(--accent)" }} />
             <span>
-              A/B taqqoslash uchun kamida <b>2 ta davr snapshoti</b> kerak. Hozir <b>{snapList.length}</b> ta bor ({snapList.map((s) => s.periodLabel).join(", ") || "—"}).
+              A/B taqqoslash uchun kamida <b>2 ta davr snapshoti</b> kerak.
+              Hozir <b>{snapList.length}</b> ta bor (
+              {snapList.map(s => s.periodLabel).join(", ") || "—"}).
               <br />
-              Manus/MCP keyingi oy eksportini <b>server/data/snapshots/</b> papkaga tushirsa (masalan <span className="mono">meta_act-..._september-2026.json</span>), bu panel o'zi % delta bilan ochiladi — UI tarafi tayyor.
+              Manus/MCP keyingi oy eksportini <b>server/data/snapshots/</b>{" "}
+              papkaga tushirsa (masalan{" "}
+              <span className="mono">meta_act-..._september-2026.json</span>),
+              bu panel o'zi % delta bilan ochiladi — UI tarafi tayyor.
             </span>
           </div>
         ) : (
           <>
             <div className="toolbar" style={{ marginBottom: 12 }}>
-              <select className="select-btn" value={fileA} onChange={(e) => setFileA(e.target.value)}>
-                {snapList.map((s) => (
+              <select
+                className="select-btn"
+                value={fileA}
+                onChange={e => setFileA(e.target.value)}
+              >
+                {snapList.map(s => (
                   <option key={s.file} value={s.file}>
                     A: {s.periodLabel}
                   </option>
                 ))}
               </select>
               <span className="chip muted">vs</span>
-              <select className="select-btn" value={fileB} onChange={(e) => setFileB(e.target.value)}>
-                {snapList.map((s) => (
+              <select
+                className="select-btn"
+                value={fileB}
+                onChange={e => setFileB(e.target.value)}
+              >
+                {snapList.map(s => (
                   <option key={s.file} value={s.file}>
                     B: {s.periodLabel}
                   </option>
@@ -193,7 +301,7 @@ export default function Compare() {
                       </tr>
                     </thead>
                     <tbody>
-                      {abRows.map((r) => (
+                      {abRows.map(r => (
                         <tr key={r.label} style={{ cursor: "default" }}>
                           <td>
                             <b style={{ fontSize: 12.5 }}>{r.label}</b>
@@ -210,7 +318,7 @@ export default function Compare() {
                 </div>
                 {campaignDeltas.length > 0 && (
                   <div style={{ marginTop: 14 }}>
-                    <span className="kicker">KAMPANIYA KESIMIDA ENG KATTA O'ZGARISHLAR</span>
+                    <span className="kicker">Eng katta o'zgarishlar</span>
                     <div className="tbl-wrap" style={{ marginTop: 8 }}>
                       <table className="tbl" style={{ minWidth: 640 }}>
                         <thead>
@@ -224,7 +332,7 @@ export default function Compare() {
                           </tr>
                         </thead>
                         <tbody>
-                          {campaignDeltas.map((r) => (
+                          {campaignDeltas.map(r => (
                             <tr key={r.id} style={{ cursor: "default" }}>
                               <td>
                                 <b style={{ fontSize: 12 }}>{r.name}</b>
@@ -254,7 +362,12 @@ export default function Compare() {
       </Panel>
 
       {/* Expo benchmark — hozir ishlaydi */}
-      <Panel kicker="EXPO BENCHMARK" title="Expo guruhlari taqqoslash" sub={`Account o'rtacha CPL: ${money(avgCpl)} — undan farq foizda ko'rsatilgan`} style={{ marginBottom: 14 }}>
+      <Panel
+        kicker="Yo'nalishlar taqqoslash"
+        title="Expo guruhlari"
+        sub={`Hisob bo'yicha o'rtacha murojaat narxi: ${money(avgCpl)} — undan farq foizda ko'rsatilgan`}
+        style={{ marginBottom: 14 }}
+      >
         <div className="tbl-wrap">
           <table className="tbl" style={{ minWidth: 760 }}>
             <thead>
@@ -269,8 +382,11 @@ export default function Compare() {
               </tr>
             </thead>
             <tbody>
-              {expoRows.map((r) => {
-                const cplDelta = r.cpl != null && avgCpl > 0 ? ((r.cpl - avgCpl) / avgCpl) * 100 : null;
+              {expoRows.map(r => {
+                const cplDelta =
+                  r.cpl != null && avgCpl > 0
+                    ? ((r.cpl - avgCpl) / avgCpl) * 100
+                    : null;
                 return (
                   <tr key={r.expo} style={{ cursor: "default" }}>
                     <td>
@@ -280,14 +396,24 @@ export default function Compare() {
                     <td className="num">{money(r.spend)}</td>
                     <td className="num">
                       <span className="share-bar">
-                        <i style={{ width: `${(r.spend / maxSpend) * 100}%` }} />
+                        <i
+                          style={{ width: `${(r.spend / maxSpend) * 100}%` }}
+                        />
                       </span>
                     </td>
                     <td className="num" style={{ fontWeight: 600 }}>
                       {whole(r.leads)}
                     </td>
-                    <td className="num">{r.cpl != null ? money(r.cpl) : "N/A"}</td>
-                    <td className="num">{cplDelta != null ? <DeltaBadge value={cplDelta} invert /> : <span className="tone-muted">—</span>}</td>
+                    <td className="num">
+                      {r.cpl != null ? money(r.cpl) : "N/A"}
+                    </td>
+                    <td className="num">
+                      {cplDelta != null ? (
+                        <DeltaBadge value={cplDelta} invert />
+                      ) : (
+                        <span className="tone-muted">—</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -297,21 +423,42 @@ export default function Compare() {
       </Panel>
 
       {/* Kampaniya benchmark */}
-      <Panel kicker="ACCOUNT BENCHMARK" title="O'rtacha chizig'dan yuqorida va pastda" sub="CPL bo'yicha eng yaxshi 5 va eng qimmat 5 kampaniya (kamida 3 lead)">
+      <Panel
+        kicker="O'rtachaga nisbatan"
+        title="O'rtacha chiziqdan yuqorida va pastda"
+        sub="Murojaat narxi bo'yicha eng yaxshi 5 va eng qimmat 5 kampaniya (kamida 3 ta murojaat bo'lganlar)"
+      >
         <div className="grid-12">
           <div className="col-6">
             <span className="kicker" style={{ color: "var(--good)" }}>
               ✓ O'RTACHADAN ARZON (scale kandidatlari)
             </span>
             {snapshot.campaigns
-              .filter((c) => c.metrics.leads >= 3 && c.metrics.cpl != null && (c.metrics.cpl ?? 0) <= avgCpl)
+              .filter(
+                c =>
+                  c.metrics.leads >= 3 &&
+                  c.metrics.cpl != null &&
+                  (c.metrics.cpl ?? 0) <= avgCpl
+              )
               .sort((a, b) => (a.metrics.cpl ?? 0) - (b.metrics.cpl ?? 0))
               .slice(0, 5)
-              .map((c) => (
+              .map(c => (
                 <div className="d-kv" key={c.id}>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.originalName}</span>
+                  <span
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {c.originalName}
+                  </span>
                   <b className="tone-good">
-                    {money(c.metrics.cpl)} <DeltaBadge value={((c.metrics.cpl! - avgCpl) / avgCpl) * 100} invert />
+                    {money(c.metrics.cpl)}{" "}
+                    <DeltaBadge
+                      value={((c.metrics.cpl! - avgCpl) / avgCpl) * 100}
+                      invert
+                    />
                   </b>
                 </div>
               ))}
@@ -321,14 +468,31 @@ export default function Compare() {
               ✕ O'RTACHADAN QIMMAT (ko'chirish/tahlil)
             </span>
             {snapshot.campaigns
-              .filter((c) => c.metrics.leads >= 3 && c.metrics.cpl != null && (c.metrics.cpl ?? 0) > avgCpl)
+              .filter(
+                c =>
+                  c.metrics.leads >= 3 &&
+                  c.metrics.cpl != null &&
+                  (c.metrics.cpl ?? 0) > avgCpl
+              )
               .sort((a, b) => (b.metrics.cpl ?? 0) - (a.metrics.cpl ?? 0))
               .slice(0, 5)
-              .map((c) => (
+              .map(c => (
                 <div className="d-kv" key={c.id}>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.originalName}</span>
+                  <span
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {c.originalName}
+                  </span>
                   <b className="tone-risk">
-                    {money(c.metrics.cpl)} <DeltaBadge value={((c.metrics.cpl! - avgCpl) / avgCpl) * 100} invert />
+                    {money(c.metrics.cpl)}{" "}
+                    <DeltaBadge
+                      value={((c.metrics.cpl! - avgCpl) / avgCpl) * 100}
+                      invert
+                    />
                   </b>
                 </div>
               ))}
@@ -336,7 +500,11 @@ export default function Compare() {
         </div>
         <div className="note-strip" style={{ marginTop: 12 }}>
           <Clock size={14} style={{ flex: "none", color: "var(--text-3)" }} />
-          <span>Benchmark — tanlangan davrning o'z o'rtachasi. Ikkinchi davr kelgach, «o'tgan davrga nisbatan» ham qo'shiladi (yuqoridagi A/B paneli).</span>
+          <span>
+            Benchmark — tanlangan davrning o'z o'rtachasi. Ikkinchi davr
+            kelgach, «o'tgan davrga nisbatan» ham qo'shiladi (yuqoridagi A/B
+            paneli).
+          </span>
         </div>
       </Panel>
     </>

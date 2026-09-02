@@ -5,50 +5,83 @@ import { useDashboardContext } from "@/contexts/DashboardContext";
 import { EmptyState } from "./widgets";
 
 export function DetailDrawer() {
-  const { drawer, closeDrawer, snapshot, crm, openCreative, openCampaign } = useDashboardContext();
+  const { drawer, closeDrawer, snapshot, crm, openCreative, openCampaign } =
+    useDashboardContext();
   const [, navigate] = useLocation();
   if (!drawer || !snapshot) return null;
 
   /* ---------------- Lead (CRM) drawer ---------------- */
   if (drawer.type === "lead") {
-    const lead = crm?.leads.find((l) => l.id === drawer.id);
+    const lead = crm?.leads.find(l => l.id === drawer.id);
     if (!lead || !crm) return <EmptyState text="Lead topilmadi" />;
-    const campaign = lead.campaignId ? snapshot.campaigns.find((c) => c.id === lead.campaignId) : null;
-    const stageKind = crm.stages.find((s) => s.id === lead.stageId)?.kind ?? "in_progress";
-    const tone = stageKind === "won" ? "var(--good)" : stageKind === "lost" ? "var(--risk)" : "var(--accent)";
+    const campaign = lead.campaignId
+      ? snapshot.campaigns.find(c => c.id === lead.campaignId)
+      : null;
+    const stageKind =
+      crm.stages.find(s => s.id === lead.stageId)?.kind ?? "in_progress";
+    const tone =
+      stageKind === "won"
+        ? "var(--good)"
+        : stageKind === "lost"
+          ? "var(--risk)"
+          : "var(--accent)";
     return (
       <>
         <div className="drawer-backdrop" onClick={closeDrawer} />
         <aside className="drawer">
-          <div className="d-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+          <div
+            className="d-head"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: 10,
+            }}
+          >
             <div style={{ minWidth: 0 }}>
               <span className="kicker" style={{ color: tone }}>
                 LEAD JARAYONI · {crm.account.toUpperCase()}
               </span>
               <h2>{lead.name}</h2>
               <div className="d-orig">
-                {lead.contactName ?? "Kontakt ko'rsatilmagan"} {lead.phone ? `· ${lead.phone}` : ""} · ID {lead.id}
+                {lead.contactName ?? "Kontakt ko'rsatilmagan"}{" "}
+                {lead.phone ? `· ${lead.phone}` : ""} · ID {lead.id}
               </div>
             </div>
-            <button className="icon-btn" onClick={closeDrawer} aria-label="Yopish">
+            <button
+              className="icon-btn"
+              onClick={closeDrawer}
+              aria-label="Yopish"
+            >
               <X size={16} />
             </button>
           </div>
 
-          <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 12 }}>
-            <span className={`chip ${stageKind === "won" ? "good" : stageKind === "lost" ? "risk" : "accent"}`}>{lead.stageName.toUpperCase()}</span>
+          <div
+            style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 12 }}
+          >
+            <span
+              className={`chip ${stageKind === "won" ? "good" : stageKind === "lost" ? "risk" : "accent"}`}
+            >
+              {lead.stageName.toUpperCase()}
+            </span>
             {lead.price > 0 && (
               <span className="chip muted">
-                <CircleDollarSign size={11} /> {whole(lead.price)} {crm.currency}
+                <CircleDollarSign size={11} /> {whole(lead.price)}{" "}
+                {crm.currency}
               </span>
             )}
-            {lead.responsible && <span className="chip muted">{lead.responsible}</span>}
+            {lead.responsible && (
+              <span className="chip muted">{lead.responsible}</span>
+            )}
           </div>
 
           <div className="d-stats">
             <div>
               <small>Yaratilgan</small>
-              <b style={{ fontSize: 13 }}>{new Date(lead.createdAt).toLocaleDateString("uz-UZ")}</b>
+              <b style={{ fontSize: 13 }}>
+                {new Date(lead.createdAt).toLocaleDateString("uz-UZ")}
+              </b>
             </div>
             <div>
               <small>Summa</small>
@@ -58,38 +91,58 @@ export function DetailDrawer() {
             </div>
             <div>
               <small>Manba</small>
-              <b style={{ fontSize: campaign ? 11 : 13 }}>{campaign ? campaign.originalName.slice(0, 30) : "UTM yo'q"}</b>
+              <b style={{ fontSize: campaign ? 11 : 13 }}>
+                {campaign ? campaign.originalName.slice(0, 30) : "UTM yo'q"}
+              </b>
             </div>
             <div>
               <small>Oxirgi harakat</small>
-              <b style={{ fontSize: 13 }}>{new Date(lead.updatedAt).toLocaleDateString("uz-UZ")}</b>
+              <b style={{ fontSize: 13 }}>
+                {new Date(lead.updatedAt).toLocaleDateString("uz-UZ")}
+              </b>
             </div>
           </div>
 
           {campaign && (
             <div className="d-section">
-              <span className="kicker">REKLAMA MANBASI (MATCH: UTM)</span>
+              <span className="kicker">
+                Qaysi reklamadan kelgan (UTM bo'yicha)
+              </span>
               <div className="d-kv">
                 <span>Kampaniya</span>
-                <button className="panel-link" onClick={() => openCampaign(campaign.id)} style={{ fontSize: 11 }}>
+                <button
+                  className="panel-link"
+                  onClick={() => openCampaign(campaign.id)}
+                  style={{ fontSize: 11 }}
+                >
                   {campaign.originalName}
                 </button>
               </div>
               <div className="d-kv">
-                <span>Kampaniya CPL</span>
-                <b>{campaign.metrics.cpl != null ? money(campaign.metrics.cpl) : "N/A"}</b>
+                <span>Kampaniya bo'yicha murojaat narxi</span>
+                <b>
+                  {campaign.metrics.cpl != null
+                    ? money(campaign.metrics.cpl)
+                    : "N/A"}
+                </b>
               </div>
               <div className="d-kv">
-                <span>CTR / Freq</span>
+                <span>Bosish ulushi / takroriylik</span>
                 <b>
-                  {pct(campaign.metrics.ctr)} · {ratio(campaign.metrics.frequency)}
+                  {pct(campaign.metrics.ctr)} ·{" "}
+                  {ratio(campaign.metrics.frequency)}
                 </b>
               </div>
               {lead.creativeId && (
                 <div className="d-kv">
                   <span>Kreativ</span>
-                  <button className="panel-link" onClick={() => openCreative(lead.creativeId!)} style={{ fontSize: 11 }}>
-                    {snapshot.creatives.find((c) => c.id === lead.creativeId)?.originalName ?? "—"}
+                  <button
+                    className="panel-link"
+                    onClick={() => openCreative(lead.creativeId!)}
+                    style={{ fontSize: 11 }}
+                  >
+                    {snapshot.creatives.find(c => c.id === lead.creativeId)
+                      ?.originalName ?? "—"}
                   </button>
                 </div>
               )}
@@ -97,20 +150,35 @@ export function DetailDrawer() {
           )}
 
           <div className="d-section">
-            <span className="kicker">BOSQICHLAR TARIXI</span>
+            <span className="kicker">Bosqichlar tarixi</span>
             {lead.history.length ? (
               lead.history.map((h, i) => (
                 <div className="d-kv" key={`${h.at}-${i}`}>
                   <span>{h.stage}</span>
-                  <b style={{ fontSize: 10.5 }}>{h.at ? new Date(h.at).toLocaleString("uz-UZ", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}</b>
+                  <b style={{ fontSize: 10.5 }}>
+                    {h.at
+                      ? new Date(h.at).toLocaleString("uz-UZ", {
+                          day: "2-digit",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "—"}
+                  </b>
                 </div>
               ))
             ) : (
-              <p style={{ margin: 0, fontSize: 12, color: "var(--text-3)" }}>Stage tarixi eksportda yo'q — faqat hozirgi holat: {lead.stageName}</p>
+              <p style={{ margin: 0, fontSize: 12, color: "var(--text-3)" }}>
+                Stage tarixi eksportda yo'q — faqat hozirgi holat:{" "}
+                {lead.stageName}
+              </p>
             )}
             {lead.lossReason && (
               <div className="note-strip" style={{ marginTop: 10 }}>
-                <span className="kicker" style={{ flex: "none", color: "var(--risk)" }}>
+                <span
+                  className="kicker"
+                  style={{ flex: "none", color: "var(--risk)" }}
+                >
                   YO'QOTISH SABABI
                 </span>
                 <span>{lead.lossReason}</span>
@@ -133,172 +201,271 @@ export function DetailDrawer() {
     );
   }
 
-  const campaign = drawer.type === "campaign" ? snapshot.campaigns.find((c) => c.id === drawer.id) : null;
-  const creative = drawer.type === "creative" ? snapshot.creatives.find((c) => c.id === drawer.id) : campaign?.creatives.find((c) => c.id === drawer.id);
+  const campaign =
+    drawer.type === "campaign"
+      ? snapshot.campaigns.find(c => c.id === drawer.id)
+      : null;
+  const creative =
+    drawer.type === "creative"
+      ? snapshot.creatives.find(c => c.id === drawer.id)
+      : campaign?.creatives.find(c => c.id === drawer.id);
   const isCreative = Boolean(creative);
   const row = creative ?? campaign;
   if (!row) return <EmptyState text="Ma'lumot topilmadi" />;
 
   const m = row.metrics;
-  const bestCpl = snapshot.campaigns.filter((c) => c.metrics.cpl != null).reduce((best, c) => ((c.metrics.cpl ?? 9e9) < (best.metrics.cpl ?? 9e9) ? c : best), snapshot.campaigns[0]);
-  const cplTone = !m.cpl ? "tone-muted" : (m.cpl ?? 0) <= (snapshot.totals.cpl ?? 0) ? "tone-good" : (m.cpl ?? 0) <= (snapshot.totals.cpl ?? 0) * 1.5 ? "tone-warn" : "tone-risk";
+  const bestCpl = snapshot.campaigns
+    .filter(c => c.metrics.cpl != null)
+    .reduce(
+      (best, c) =>
+        (c.metrics.cpl ?? 9e9) < (best.metrics.cpl ?? 9e9) ? c : best,
+      snapshot.campaigns[0]
+    );
+  const cplTone = !m.cpl
+    ? "tone-muted"
+    : (m.cpl ?? 0) <= (snapshot.totals.cpl ?? 0)
+      ? "tone-good"
+      : (m.cpl ?? 0) <= (snapshot.totals.cpl ?? 0) * 1.5
+        ? "tone-warn"
+        : "tone-risk";
 
   return (
     <>
       <div className="drawer-backdrop" onClick={closeDrawer} />
       <aside className="drawer">
-        <div className="d-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div
+          className="d-head"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: 10,
+          }}
+        >
           <div style={{ minWidth: 0 }}>
-            <span className="kicker">{isCreative ? "KREATIV TAFSILOTI" : campaign ? "KAMPANIYA TAFSILOTI" : "TAFSILOT"}</span>
+            <span className="kicker">
+              {isCreative
+                ? "Kreativ tafsilotlari"
+                : campaign
+                  ? "Kampaniya tafsilotlari"
+                  : "Tafsilot"}
+            </span>
             <h2>{isCreative ? creative!.name : campaign!.name}</h2>
-            <div className="d-orig">Original: {isCreative ? creative!.originalName : campaign!.originalName}</div>
+            <div className="d-orig">
+              Original:{" "}
+              {isCreative ? creative!.originalName : campaign!.originalName}
+            </div>
           </div>
-          <button className="icon-btn" onClick={closeDrawer} aria-label="Yopish">
+          <button
+            className="icon-btn"
+            onClick={closeDrawer}
+            aria-label="Yopish"
+          >
             <X size={16} />
           </button>
         </div>
 
-        <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 12 }}>
+        <div
+          style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 12 }}
+        >
           {isCreative ? (
             <>
-              <span className="chip accent">{creative!.effectiveStatus ?? "—"}</span>
-              <span className="chip muted">{creative!.adset ? creative!.adset.name.split(" | ")[0] : "AD SET N/A"}</span>
+              <span className="chip accent">
+                {creative!.effectiveStatus ?? "—"}
+              </span>
+              <span className="chip muted">
+                {creative!.adset
+                  ? creative!.adset.name.split(" | ")[0]
+                  : "AD SET N/A"}
+              </span>
             </>
           ) : (
             <>
-              <span className={`chip ${m.leads > 0 ? "good" : "muted"}`}>{m.leads > 0 ? "LEAD KAMPANIYA" : "LEAD QAYTMADI"}</span>
+              <span className={`chip ${m.leads > 0 ? "good" : "muted"}`}>
+                {m.leads > 0 ? "LEAD KAMPANIYA" : "LEAD QAYTMADI"}
+              </span>
               <span className="chip muted">{campaign!.expo}</span>
-              {campaign!.objective && <span className="chip muted">{String(campaign!.objective).replace(/_/g, " ").toUpperCase()}</span>}
+              {campaign!.objective && (
+                <span className="chip muted">
+                  {String(campaign!.objective).replace(/_/g, " ").toUpperCase()}
+                </span>
+              )}
             </>
           )}
-          <span className="chip muted">{snapshot.meta.period.label || snapshot.meta.period.start}</span>
+          <span className="chip muted">
+            {snapshot.meta.period.label || snapshot.meta.period.start}
+          </span>
         </div>
 
         <div className="d-stats">
           <div>
-            <small>Spend</small>
+            <small>Sarf</small>
             <b>{money(m.spend)}</b>
           </div>
           <div>
-            <small>{isCreative ? "Leads (ad level)" : "Leads"}</small>
-            <b className={isCreative && !creative!.hasLeads ? "tone-muted" : ""}>{isCreative ? (creative!.hasLeads ? whole(m.leads) : "N/A") : whole(m.leads)}</b>
+            <small>
+              {isCreative ? "Murojaatlar (kreativ bo'yicha)" : "Murojaatlar"}
+            </small>
+            <b
+              className={isCreative && !creative!.hasLeads ? "tone-muted" : ""}
+            >
+              {isCreative
+                ? creative!.hasLeads
+                  ? whole(m.leads)
+                  : "N/A"
+                : whole(m.leads)}
+            </b>
           </div>
           <div>
-            <small>Cost per lead</small>
+            <small>Murojaat narxi</small>
             <b className={cplTone}>{m.cpl != null ? money(m.cpl) : "N/A"}</b>
           </div>
           <div>
-            <small>CTR</small>
+            <small>Bosish ulushi</small>
             <b>{pct(m.ctr)}</b>
           </div>
         </div>
 
         <div className="d-section">
-          <span className="kicker">ASOSIY KO'RSATKICHLAR</span>
+          <span className="kicker">Asosiy ko'rsatkichlar</span>
           <div className="d-kv">
-            <span>Impressions</span>
+            <span>Ko'rsatuvlar</span>
             <b>{whole(m.impressions)}</b>
           </div>
           <div className="d-kv">
-            <span>Reach</span>
+            <span>Qamrov</span>
             <b>{m.reach != null ? whole(m.reach) : "N/A"}</b>
           </div>
           <div className="d-kv">
-            <span>Frequency</span>
+            <span>Takroriylik</span>
             <b>{ratio(m.frequency)}</b>
           </div>
           <div className="d-kv">
-            <span>Clicks (all)</span>
+            <span>Barcha bosishlar</span>
             <b>{whole(m.clicks)}</b>
           </div>
           <div className="d-kv">
-            <span>Link clicks</span>
+            <span>Havola bosishlari</span>
             <b>{whole(m.linkClicks)}</b>
           </div>
           <div className="d-kv">
-            <span>Link CTR</span>
+            <span>Havola bosish ulushi</span>
             <b>{pct(m.linkCtr)}</b>
           </div>
           <div className="d-kv">
-            <span>CPC</span>
+            <span>Bosish narxi</span>
             <b>{money(m.cpc)}</b>
           </div>
           <div className="d-kv">
-            <span>CPM</span>
+            <span>1000 ko'rsatuv narxi</span>
             <b>{money(m.cpm)}</b>
           </div>
           {m.landingPageViews != null && (
             <div className="d-kv">
-              <span>Landing page views</span>
+              <span>Sahifaga o'tishlar</span>
               <b>{whole(m.landingPageViews)}</b>
             </div>
           )}
           {m.messagingConversations != null && (
             <div className="d-kv">
-              <span>Messaging conversations</span>
+              <span>Yozishmalar soni</span>
               <b>{whole(m.messagingConversations)}</b>
             </div>
           )}
         </div>
 
-        {!isCreative && campaign && ((row.metrics.postEngagement ?? 0) > 0 || (row.metrics.videoViews ?? 0) > 0 || (row.metrics.messagingConversations ?? 0) > 0) && (
-          <div className="d-section">
-            <span className="kicker">INTERAKSIYA VA VIDEO</span>
-            {(row.metrics.postEngagement ?? 0) > 0 && (
-              <div className="d-kv">
-                <span>Post interaksiyasi</span>
-                <b>{whole(row.metrics.postEngagement)} · ${((row.metrics.spend / (row.metrics.postEngagement || 1)) as number).toFixed(3)}/inter</b>
-              </div>
-            )}
-            {(row.metrics.reactions ?? 0) > 0 && (
-              <div className="d-kv">
-                <span>Reaksiyalar</span>
-                <b>{whole(row.metrics.reactions)}</b>
-              </div>
-            )}
-            {(row.metrics.comments ?? 0) > 0 && (
-              <div className="d-kv">
-                <span>Kommentlar</span>
-                <b>{whole(row.metrics.comments)}</b>
-              </div>
-            )}
-            {(row.metrics.saves ?? 0) > 0 && (
-              <div className="d-kv">
-                <span>Saqlanganlar</span>
-                <b>{whole(row.metrics.saves)}</b>
-              </div>
-            )}
-            {(row.metrics.videoViews ?? 0) > 0 && (
-              <div className="d-kv">
-                <span>Video views</span>
-                <b>
-                  {whole(row.metrics.videoViews)} · {money(row.metrics.spend / (row.metrics.videoViews || 1))}/view
-                </b>
-              </div>
-            )}
-            {(row.metrics.messagingConversations ?? 0) > 0 && (
-              <div className="d-kv">
-                <span>Messaging suhbat</span>
-                <b>
-                  {whole(row.metrics.messagingConversations)}
-                  {row.metrics.messagingFirstReply ? ` → ${whole(row.metrics.messagingFirstReply)} javob` : ""}
-                </b>
-              </div>
-            )}
-          </div>
-        )}
+        {!isCreative &&
+          campaign &&
+          ((row.metrics.postEngagement ?? 0) > 0 ||
+            (row.metrics.videoViews ?? 0) > 0 ||
+            (row.metrics.messagingConversations ?? 0) > 0) && (
+            <div className="d-section">
+              <span className="kicker">Interaksiya va video</span>
+              {(row.metrics.postEngagement ?? 0) > 0 && (
+                <div className="d-kv">
+                  <span>Post interaksiyasi</span>
+                  <b>
+                    {whole(row.metrics.postEngagement)} · $
+                    {(
+                      (row.metrics.spend /
+                        (row.metrics.postEngagement || 1)) as number
+                    ).toFixed(3)}
+                    /inter
+                  </b>
+                </div>
+              )}
+              {(row.metrics.reactions ?? 0) > 0 && (
+                <div className="d-kv">
+                  <span>Reaksiyalar</span>
+                  <b>{whole(row.metrics.reactions)}</b>
+                </div>
+              )}
+              {(row.metrics.comments ?? 0) > 0 && (
+                <div className="d-kv">
+                  <span>Kommentlar</span>
+                  <b>{whole(row.metrics.comments)}</b>
+                </div>
+              )}
+              {(row.metrics.saves ?? 0) > 0 && (
+                <div className="d-kv">
+                  <span>Saqlanganlar</span>
+                  <b>{whole(row.metrics.saves)}</b>
+                </div>
+              )}
+              {(row.metrics.videoViews ?? 0) > 0 && (
+                <div className="d-kv">
+                  <span>Video ko'rishlar</span>
+                  <b>
+                    {whole(row.metrics.videoViews)} ·{" "}
+                    {money(row.metrics.spend / (row.metrics.videoViews || 1))}
+                    /view
+                  </b>
+                </div>
+              )}
+              {(row.metrics.messagingConversations ?? 0) > 0 && (
+                <div className="d-kv">
+                  <span>Messaging suhbat</span>
+                  <b>
+                    {whole(row.metrics.messagingConversations)}
+                    {row.metrics.messagingFirstReply
+                      ? ` → ${whole(row.metrics.messagingFirstReply)} javob`
+                      : ""}
+                  </b>
+                </div>
+              )}
+            </div>
+          )}
 
         {!isCreative && campaign && (
           <div className="d-section">
-            <span className="kicker">TAHLILIY XULOSA</span>
-            <p style={{ margin: 0, fontSize: 12, lineHeight: 1.65, color: "var(--text-2)" }}>
+            <span className="kicker">Xulosa</span>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 12,
+                lineHeight: 1.65,
+                color: "var(--text-2)",
+              }}
+            >
               {m.leads > 0 ? (
                 <>
-                  Bu kampaniya <b style={{ color: "var(--text)" }}>{whole(m.leads)} lead</b> berdi — {money(m.cpl)} har bir lead uchun. Account o'rtacha CPL {money(snapshot.totals.cpl)}
-                  {(m.cpl ?? 0) < (snapshot.totals.cpl ?? 0) ? " (bu kampaniya arzonroq)" : " (bu kampaniya qimmatroq)"}. Eng arzon manba: «{bestCpl?.originalName}» ({money(bestCpl?.metrics.cpl)}). Keyingi qadam — CRM dagi lead sifatini tekshirish.
+                  Bu kampaniya{" "}
+                  <b style={{ color: "var(--text)" }}>{whole(m.leads)} lead</b>{" "}
+                  berdi — {money(m.cpl)} har bir lead uchun. Account o'rtacha
+                  CPL {money(snapshot.totals.cpl)}
+                  {(m.cpl ?? 0) < (snapshot.totals.cpl ?? 0)
+                    ? " (bu kampaniya arzonroq)"
+                    : " (bu kampaniya qimmatroq)"}
+                  . Eng arzon manba: «{bestCpl?.originalName}» (
+                  {money(bestCpl?.metrics.cpl)}). Keyingi qadam — CRM dagi lead
+                  sifatini tekshirish.
                 </>
               ) : (
-                <>Tanlangan davrda bu kampaniyadan lead action qaytmadi. Objective va pixel/event setupini tekshiring — sarf ({money(m.spend)}) natijasiz ketyapti.</>
+                <>
+                  Tanlangan davrda bu kampaniyadan lead action qaytmadi.
+                  Objective va pixel/event setupini tekshiring — sarf (
+                  {money(m.spend)}) natijasiz ketyapti.
+                </>
               )}
             </p>
           </div>
@@ -306,23 +473,66 @@ export function DetailDrawer() {
 
         {!isCreative && campaign && campaign.creatives.length > 0 && (
           <div className="d-section">
-            <span className="kicker">KREATIVLAR ({campaign.creatives.length})</span>
+            <span className="kicker">
+              Kreativlar ({campaign.creatives.length})
+            </span>
             {campaign.creatives.map((cr, i) => (
               <button
                 key={`${cr.id}-${i}`}
                 onClick={() => openCreative(cr.id)}
-                style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "9px 8px", borderRadius: 10, transition: "background .14s" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-hover)")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "9px 8px",
+                  borderRadius: 10,
+                  transition: "background .14s",
+                }}
+                onMouseEnter={e =>
+                  (e.currentTarget.style.background = "var(--panel-hover)")
+                }
+                onMouseLeave={e => (e.currentTarget.style.background = "none")}
               >
-                <span className="rank-badge" style={{ width: 22, height: 22, borderRadius: 7, fontSize: 10, background: `color-mix(in srgb, var(--accent) ${Math.max(90 - i * 12, 30)}%, transparent)` }}>
+                <span
+                  className="rank-badge"
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 7,
+                    fontSize: 10,
+                    background: `color-mix(in srgb, var(--accent) ${Math.max(90 - i * 12, 30)}%, transparent)`,
+                  }}
+                >
                   {i + 1}
                 </span>
                 <span style={{ minWidth: 0, flex: 1 }}>
-                  <b style={{ display: "block", fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cr.originalName}</b>
-                  <small style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text-3)" }}>{cr.adset?.originalName ?? "—"}</small>
+                  <b
+                    style={{
+                      display: "block",
+                      fontSize: 11.5,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {cr.originalName}
+                  </b>
+                  <small
+                    style={{
+                      fontFamily: "var(--mono)",
+                      fontSize: 9,
+                      color: "var(--text-3)",
+                    }}
+                  >
+                    {cr.adset?.originalName ?? "—"}
+                  </small>
                 </span>
-                <span className="mono" style={{ fontSize: 11.5, fontWeight: 600 }}>
+                <span
+                  className="mono"
+                  style={{ fontSize: 11.5, fontWeight: 600 }}
+                >
                   {money(cr.metrics.spend)}
                 </span>
                 <ArrowUpRight size={13} style={{ color: "var(--text-3)" }} />
@@ -333,11 +543,16 @@ export function DetailDrawer() {
 
         {isCreative && creative && (
           <div className="d-section">
-            <span className="kicker">KONTEKST</span>
+            <span className="kicker">Kontekst</span>
             <div className="d-kv">
               <span>Kampaniya</span>
-              <button className="panel-link" onClick={() => openCampaign(creative.campaignId)} style={{ fontSize: 11 }}>
-                {snapshot.campaigns.find((c) => c.id === creative.campaignId)?.originalName ?? creative.campaignId}
+              <button
+                className="panel-link"
+                onClick={() => openCampaign(creative.campaignId)}
+                style={{ fontSize: 11 }}
+              >
+                {snapshot.campaigns.find(c => c.id === creative.campaignId)
+                  ?.originalName ?? creative.campaignId}
               </button>
             </div>
             <div className="d-kv">
@@ -351,7 +566,9 @@ export function DetailDrawer() {
             {creative.createdTime && (
               <div className="d-kv">
                 <span>Yaratilgan</span>
-                <b>{new Date(creative.createdTime).toLocaleDateString("uz-UZ")}</b>
+                <b>
+                  {new Date(creative.createdTime).toLocaleDateString("uz-UZ")}
+                </b>
               </div>
             )}
           </div>
@@ -361,7 +578,8 @@ export function DetailDrawer() {
           className="primary-btn"
           style={{ width: "100%", justifyContent: "center", marginTop: 16 }}
           onClick={() => {
-            if (isCreative && creative) navigate(`/campaigns?focus=${creative.campaignId}`);
+            if (isCreative && creative)
+              navigate(`/campaigns?focus=${creative.campaignId}`);
             else if (campaign) navigate(`/campaigns?focus=${campaign.id}`);
             closeDrawer();
           }}

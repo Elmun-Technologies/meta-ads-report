@@ -1,5 +1,14 @@
 import type { ReactNode } from "react";
-import { ArrowRight, MessageSquare, Repeat2, Scale, Sparkles, Target, Trash2, TrendingUp } from "lucide-react";
+import {
+  ArrowRight,
+  MessageSquare,
+  Repeat2,
+  Scale,
+  Sparkles,
+  Target,
+  Trash2,
+  TrendingUp,
+} from "lucide-react";
 import { compact, money, pct, whole } from "@/lib/format";
 import { TONE_STYLE, type Insight } from "@/lib/insights";
 
@@ -47,13 +56,17 @@ export function KpiCard({
   sub,
   foot,
   icon,
+  note,
   tone = "var(--accent)",
 }: {
-  label: string;
+  /** Asosiy nom: o'zbekcha (inglizcha qavsda) */
+  label: ReactNode;
   value: string;
   sub: ReactNode;
   foot?: ReactNode;
-  icon: ReactNode;
+  icon?: ReactNode;
+  /** "Bu raqam nima degani" — bir gaplik oddiy izoh */
+  note?: ReactNode;
   tone?: string;
 }) {
   return (
@@ -65,6 +78,7 @@ export function KpiCard({
       <div className="kpi-val">{value}</div>
       <div className="kpi-sub">{sub}</div>
       {foot && <div className="kpi-foot">{foot}</div>}
+      {note && <div className="kpi-note">{note}</div>}
     </div>
   );
 }
@@ -81,24 +95,45 @@ const INSIGHT_ICONS = {
   budget: Sparkles,
 };
 
-export function InsightCard({ insight, onAction }: { insight: Insight; onAction?: (insight: Insight) => void }) {
+export function InsightCard({
+  insight,
+  onAction,
+}: {
+  insight: Insight;
+  onAction?: (insight: Insight) => void;
+}) {
   const Icon = INSIGHT_ICONS[insight.icon];
   const tone = TONE_STYLE[insight.tone];
   return (
     <div className="insight-card">
-      <span className="insight-ico" style={{ background: tone.bg, color: tone.color }}>
+      <span
+        className="insight-ico"
+        style={{ background: tone.bg, color: tone.color }}
+      >
         <Icon size={16} />
       </span>
       <div style={{ minWidth: 0 }}>
         <h4>
           {insight.title}
-          <span className={`chip ${insight.tone === "info" ? "accent" : insight.tone}`}>{tone.label}</span>
+          <span
+            className={`chip ${insight.tone === "info" ? "accent" : insight.tone}`}
+          >
+            {tone.label}
+          </span>
         </h4>
         <p>{insight.body}</p>
         {insight.action && onAction && (
           <button
             onClick={() => onAction(insight)}
-            style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 8, fontSize: 11.5, color: "var(--accent)", fontWeight: 600 }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              marginTop: 8,
+              fontSize: 11.5,
+              color: "var(--accent)",
+              fontWeight: 600,
+            }}
           >
             {insight.action.label} <ArrowRight size={12} />
           </button>
@@ -119,7 +154,7 @@ export interface FunnelStage {
 }
 
 export function Funnel({ stages }: { stages: FunnelStage[] }) {
-  const max = Math.max(...stages.map((s) => s.value), 1);
+  const max = Math.max(...stages.map(s => s.value), 1);
   return (
     <div>
       {stages.map((stage, i) => {
@@ -133,7 +168,14 @@ export function Funnel({ stages }: { stages: FunnelStage[] }) {
               <small>{stage.note}</small>
             </div>
             <div className="funnel-track">
-              <div className="funnel-fill" style={{ width: `${width}%`, ["--tone" as string]: stage.tone, animationDelay: `${i * 70}ms` }}>
+              <div
+                className="funnel-fill"
+                style={{
+                  width: `${width}%`,
+                  ["--tone" as string]: stage.tone,
+                  animationDelay: `${i * 70}ms`,
+                }}
+              >
                 <span>{whole(stage.value)}</span>
               </div>
             </div>
@@ -181,9 +223,19 @@ export function RankRow({
           </b>
         </div>
         <div className="rank-track">
-          <div className="rank-fill" style={{ width: `${Math.max(share * 100, 1.5)}%`, ["--tone" as string]: tone }} />
+          <div
+            className="rank-fill"
+            style={{
+              width: `${Math.max(share * 100, 1.5)}%`,
+              ["--tone" as string]: tone,
+            }}
+          />
         </div>
-        {sub && <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 5 }}>{sub}</div>}
+        {sub && (
+          <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 5 }}>
+            {sub}
+          </div>
+        )}
       </div>
     </div>
   );

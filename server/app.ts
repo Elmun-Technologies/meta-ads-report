@@ -17,13 +17,42 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { normalizeMetaExport, type RawMetaExport } from "@shared/normalize";
 import { normalizeGenericAds } from "@shared/generic";
-import { matchLeadsToAds, normalizeAmoExport, type RawAmoExport } from "@shared/amo";
-import type { ConnectionInfo, CrmData, NormalizedSnapshot, PlatformId, SnapshotInfo } from "@shared/types";
+import {
+  matchLeadsToAds,
+  normalizeAmoExport,
+  type RawAmoExport,
+} from "@shared/amo";
+import type {
+  ConnectionInfo,
+  CrmData,
+  NormalizedSnapshot,
+  PlatformId,
+  SnapshotInfo,
+} from "@shared/types";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const DATA_DIR = [path.join(__dirname, "data", "snapshots"), path.resolve(process.cwd(), "server", "data", "snapshots")].find((p) => fs.existsSync(p)) ?? path.resolve(process.cwd(), "server", "data", "snapshots");
+/**
+ * Snapshotlar papkasi — turli muhitlarda (lokal dev, Vercel serverless, Railway/VPS)
+ * turlicha joylashishi mumkin, shuning uchun bir nechta manzil tekshiriladi.
+ */
+const DATA_DIR_CANDIDATES = [
+  path.join(__dirname, "data", "snapshots"),
+  path.join(__dirname, "..", "data", "snapshots"),
+  path.join(__dirname, "..", "server", "data", "snapshots"),
+  path.join(__dirname, "..", "..", "server", "data", "snapshots"),
+  path.resolve(process.cwd(), "server", "data", "snapshots"),
+  path.resolve(process.cwd(), "data", "snapshots"),
+  path.resolve(process.cwd(), "..", "server", "data", "snapshots"),
+];
+
+export const DATA_DIR =
+  DATA_DIR_CANDIDATES.find(
+    p => fs.existsSync(p) && fs.readdirSync(p).some(f => f.endsWith(".json"))
+  ) ??
+  DATA_DIR_CANDIDATES.find(p => fs.existsSync(p)) ??
+  path.resolve(process.cwd(), "server", "data", "snapshots");
 
 /* ------------------------------------------------------------------ */
 /* Connector layer                                                     */
@@ -45,20 +74,27 @@ function platformForFile(file: string): PlatformId {
   return "meta";
 }
 
-function latestFileFor(prefix: "meta" | "google" | "yandex" | "amo"): { file: string; mtime: Date } | null {
+function latestFileFor(
+  prefix: "meta" | "google" | "yandex" | "amo"
+): { file: string; mtime: Date } | null {
   if (!fs.existsSync(DATA_DIR)) return null;
   const files = fs
     .readdirSync(DATA_DIR)
-    .filter((f) => f.startsWith(prefix) && f.endsWith(".json"))
-    .map((file) => ({ file: path.join(DATA_DIR, file), mtime: fs.statSync(path.join(DATA_DIR, file)).mtime }))
+    .filter(f => f.startsWith(prefix) && f.endsWith(".json"))
+    .map(file => ({
+      file: path.join(DATA_DIR, file),
+      mtime: fs.statSync(path.join(DATA_DIR, file)).mtime,
+    }))
     .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
   return files[0] ?? null;
 }
 
 const latestMetaFile = () => latestFileFor("meta");
 
-function readMetaSnapshot(file?: string): NormalizedSnapshot | null {
-  const target = file ? path.join(DATA_DIR, path.basename(file)) : latestMetaFile()?.file;
+export function readMetaSnapshot(file?: string): NormalizedSnapshot | null {
+  const target = file
+    ? path.join(DATA_DIR, path.basename(file))
+    : latestMetaFile()?.file;
   if (!target || !fs.existsSync(target)) return null;
   try {
     const mtime = fs.statSync(target).mtime;
@@ -75,34 +111,49 @@ function readMetaSnapshot(file?: string): NormalizedSnapshot | null {
 }
 
 /** Google Ads / Yandex Direct — universal alias normalizer orqali */
-function readGenericSnapshot(platform: "google-ads" | "yandex-direct"): NormalizedSnapshot | null {
+function readGenericSnapshot(
+  platform: "google-ads" | "yandex-direct"
+): NormalizedSnapshot | null {
   const prefix = platform === "google-ads" ? "google" : "yandex";
   const latest = latestFileFor(prefix);
   if (!latest) return null;
   try {
     const raw = JSON.parse(fs.readFileSync(latest.file, "utf-8"));
-    return normalizeGenericAds(raw, { platform, syncedAt: latest.mtime.toISOString(), file: path.basename(latest.file) });
+    return normalizeGenericAds(raw, {
+      platform,
+      syncedAt: latest.mtime.toISOString(),
+      file: path.basename(latest.file),
+    });
   } catch (err) {
-    console.error(`[${platform}] snapshot o'qishda xato:`, err instanceof Error ? err.message : err);
+    console.error(
+      `[${platform}] snapshot o'qishda xato:`,
+      err instanceof Error ? err.message : err
+    );
     return null;
   }
 }
 
 /** Barcha snapshot fayllari ro'yxati — davrlararo taqqoslash uchun */
-function listSnapshots(): SnapshotInfo[] {
+export function listSnapshots(): SnapshotInfo[] {
   if (!fs.existsSync(DATA_DIR)) return [];
   return fs
     .readdirSync(DATA_DIR)
-    .filter((f) => f.endsWith(".json"))
-    .map((file) => {
+    .filter(f => f.endsWith(".json"))
+    .map(file => {
       try {
         const full = path.join(DATA_DIR, file);
         const raw = JSON.parse(fs.readFileSync(full, "utf-8")) as any;
         return {
           file,
           platform: platformForFile(file),
-          accountName: raw.account?.name ?? raw.account_name ?? raw.Login ?? raw.name ?? "—",
-          periodLabel: raw.account?.period ?? raw.period ?? raw.date_range ?? "—",
+          accountName:
+            raw.account?.name ??
+            raw.account_name ??
+            raw.Login ??
+            raw.name ??
+            "—",
+          periodLabel:
+            raw.account?.period ?? raw.period ?? raw.date_range ?? "—",
           syncedAt: fs.statSync(full).mtime.toISOString(),
         } satisfies SnapshotInfo;
       } catch {
@@ -119,18 +170,26 @@ function latestAmoFile(): { file: string; mtime: Date } | null {
   if (!fs.existsSync(DATA_DIR)) return null;
   const files = fs
     .readdirSync(DATA_DIR)
-    .filter((f) => f.startsWith("amo") && f.endsWith(".json"))
-    .map((file) => ({ file: path.join(DATA_DIR, file), mtime: fs.statSync(path.join(DATA_DIR, file)).mtime }))
+    .filter(f => f.startsWith("amo") && f.endsWith(".json"))
+    .map(file => ({
+      file: path.join(DATA_DIR, file),
+      mtime: fs.statSync(path.join(DATA_DIR, file)).mtime,
+    }))
     .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
   return files[0] ?? null;
 }
 
-function readAmoSnapshot(): CrmData | null {
+export function readAmoSnapshot(): CrmData | null {
   const latest = latestAmoFile();
   if (!latest) return null;
   try {
-    const raw = JSON.parse(fs.readFileSync(latest.file, "utf-8")) as RawAmoExport;
-    const crm = normalizeAmoExport(raw, { syncedAt: latest.mtime.toISOString(), file: path.basename(latest.file) });
+    const raw = JSON.parse(
+      fs.readFileSync(latest.file, "utf-8")
+    ) as RawAmoExport;
+    const crm = normalizeAmoExport(raw, {
+      syncedAt: latest.mtime.toISOString(),
+      file: path.basename(latest.file),
+    });
     return matchLeadsToAds(crm, readMetaSnapshot());
   } catch (err) {
     console.error("[amo] snapshot o'qishda xato:", err);
@@ -146,7 +205,8 @@ const CONNECTORS: Connector[] = [
     note: "Facebook Ads MCP orqali olingan real eksportga ulangan.",
     latestFile: latestMetaFile,
     resolve: () => readMetaSnapshot(),
-  },  {
+  },
+  {
     id: "google-ads",
     name: "Google Ads",
     vendor: "Google",
@@ -177,28 +237,42 @@ const CRM_CONNECTIONS: ConnectionInfo[] = [
   },
 ];
 
-function connectionsPayload(): ConnectionInfo[] {
+export function connectionsPayload(): ConnectionInfo[] {
   const crm = readAmoSnapshot();
   const amoInfo: ConnectionInfo = {
     ...CRM_CONNECTIONS[0],
     status: crm ? "connected" : "ready",
-    accounts: crm ? [{ id: crm.account, name: crm.account, currency: crm.currency }] : [],
+    accounts: crm
+      ? [{ id: crm.account, name: crm.account, currency: crm.currency }]
+      : [],
     syncedAt: crm?.syncedAt ?? null,
   };
-  return [...CONNECTORS.map((c) => {
-    const snapshot = c.resolve();
-    const latest = c.latestFile?.();
-    return {
-      id: c.id,
-      kind: "ads" as const,
-      name: c.name,
-      vendor: c.vendor,
-      status: snapshot ? "connected" : "ready",
-      accounts: snapshot ? [{ id: snapshot.meta.account.id, name: snapshot.meta.account.name, currency: snapshot.meta.account.currency, externalId: snapshot.meta.account.externalId }] : [],
-      syncedAt: latest?.mtime.toISOString() ?? null,
-      note: c.note,
-    } satisfies ConnectionInfo;
-  }), amoInfo];
+  return [
+    ...CONNECTORS.map(c => {
+      const snapshot = c.resolve();
+      const latest = c.latestFile?.();
+      return {
+        id: c.id,
+        kind: "ads" as const,
+        name: c.name,
+        vendor: c.vendor,
+        status: snapshot ? "connected" : "ready",
+        accounts: snapshot
+          ? [
+              {
+                id: snapshot.meta.account.id,
+                name: snapshot.meta.account.name,
+                currency: snapshot.meta.account.currency,
+                externalId: snapshot.meta.account.externalId,
+              },
+            ]
+          : [],
+        syncedAt: latest?.mtime.toISOString() ?? null,
+        note: c.note,
+      } satisfies ConnectionInfo;
+    }),
+    amoInfo,
+  ];
 }
 
 /* ------------------------------------------------------------------ */
@@ -226,7 +300,11 @@ export function watchSnapshots() {
     if (debounce) clearTimeout(debounce);
     debounce = setTimeout(() => {
       const latest = latestMetaFile();
-      broadcast("sync", { at: new Date().toISOString(), source: "snapshots-dir", file: latest ? path.basename(latest.file) : null });
+      broadcast("sync", {
+        at: new Date().toISOString(),
+        source: "snapshots-dir",
+        file: latest ? path.basename(latest.file) : null,
+      });
     }, 400);
   });
 }
@@ -249,8 +327,21 @@ export function createApp(mode: AppMode = "server") {
     next();
   });
 
-  app.get("/api/health", (_req, res) => {
-    res.json({ ok: true, mode, at: new Date().toISOString(), snapshots: fs.existsSync(DATA_DIR) ? fs.readdirSync(DATA_DIR).filter((f) => f.endsWith(".json")).length : 0 });
+  app.get("/api/health", (req, res) => {
+    const files = fs.existsSync(DATA_DIR)
+      ? fs.readdirSync(DATA_DIR).filter(f => f.endsWith(".json"))
+      : [];
+    const debug =
+      req.query.debug === "1"
+        ? { dataDir: DATA_DIR, cwd: process.cwd(), dirname: __dirname, files }
+        : undefined;
+    res.json({
+      ok: true,
+      mode,
+      at: new Date().toISOString(),
+      snapshots: files.length,
+      ...(debug ? { debug } : null),
+    });
   });
 
   app.get("/api/connections", (_req, res) => {
@@ -259,13 +350,19 @@ export function createApp(mode: AppMode = "server") {
 
   app.get("/api/snapshots", (_req, res) => {
     // A/B taqqoslash faqat reklama davr snapshotlari uchun (amo_* — CRM, alohida)
-    res.json(listSnapshots().filter((s) => !s.file.startsWith("amo")));
+    res.json(listSnapshots().filter(s => !s.file.startsWith("amo")));
   });
 
   app.get("/api/crm", (_req, res) => {
     const crm = readAmoSnapshot();
     if (!crm) {
-      res.status(503).json({ connected: false, error: "AmoCRM snapshot topilmadi — server/data/snapshots/ ga amo_*.json qo'ying (format: server/data/README.md)." });
+      res
+        .status(503)
+        .json({
+          connected: false,
+          error:
+            "AmoCRM snapshot topilmadi — server/data/snapshots/ ga amo_*.json qo'ying (format: server/data/README.md).",
+        });
       return;
     }
     res.json({ connected: true, ...crm });
@@ -283,14 +380,20 @@ export function createApp(mode: AppMode = "server") {
       return;
     }
     const platform = String(req.query.platform || "meta") as PlatformId;
-    const connector = CONNECTORS.find((c) => c.id === platform);
+    const connector = CONNECTORS.find(c => c.id === platform);
     if (!connector) {
       res.status(404).json({ error: `Unknown platform: ${platform}` });
       return;
     }
-    const snapshot = connector.resolve(String(req.query.account || "") || undefined);
+    const snapshot = connector.resolve(
+      String(req.query.account || "") || undefined
+    );
     if (!snapshot) {
-      res.status(503).json({ error: `${connector.name} hali ulanmagan — snapshot topilmadi. server/data/snapshots/ ga eksport qo'ying.` });
+      res
+        .status(503)
+        .json({
+          error: `${connector.name} hali ulanmagan — snapshot topilmadi. server/data/snapshots/ ga eksport qo'ying.`,
+        });
       return;
     }
     res.json(snapshot);
@@ -299,20 +402,29 @@ export function createApp(mode: AppMode = "server") {
   app.get("/api/stream", (req, res) => {
     if (mode === "serverless") {
       // Serverless funksiyalar uzoq muddatli ulanishni ushlab turolmaydi — client polling'ga o'tadi.
-      res.status(501).json({ error: "SSE serverless rejimida qo'llab-quvvatlanmaydi — client polling fallback ishlatadi." });
+      res
+        .status(501)
+        .json({
+          error:
+            "SSE serverless rejimida qo'llab-quvvatlanmaydi — client polling fallback ishlatadi.",
+        });
       return;
     }
     res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache, no-transform")
-    res.setHeader("Connection", "keep-alive")
-    res.setHeader("X-Accel-Buffering", "no")
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
     res.write(`retry: 5000\n\n`);
-    res.write(`event: hello\ndata: ${JSON.stringify({ at: new Date().toISOString(), clients: sseClients.size + 1 })}\n\n`);
+    res.write(
+      `event: hello\ndata: ${JSON.stringify({ at: new Date().toISOString(), clients: sseClients.size + 1 })}\n\n`
+    );
     sseClients.add(res);
     const heartbeat = setInterval(() => {
       try {
-        res.write(`event: ping\ndata: ${JSON.stringify({ at: new Date().toISOString() })}\n\n`);
+        res.write(
+          `event: ping\ndata: ${JSON.stringify({ at: new Date().toISOString() })}\n\n`
+        );
       } catch {
         /* ignore */
       }
@@ -343,7 +455,10 @@ export function createApp(mode: AppMode = "server") {
         res.sendFile(indexFile);
       } else {
         // Dev rejimi: client alohida vite serverda ishlayapti
-        res.status(200).type("text/plain").send("API ishlayapti. Client: http://localhost:3000");
+        res
+          .status(200)
+          .type("text/plain")
+          .send("API ishlayapti. Client: http://localhost:3000");
       }
     });
   }
