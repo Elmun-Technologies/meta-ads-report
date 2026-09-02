@@ -224,15 +224,14 @@ export default defineConfig({
     port: 3000,
     strictPort: false, // Will find next available port if 3000 is busy
     host: true,
-    allowedHosts: [
-      ".manuspre.computer",
-      ".manus.computer",
-      ".manus-asia.computer",
-      ".manuscomputer.ai",
-      ".manusvm.computer",
-      "localhost",
-      "127.0.0.1",
-    ],
+    allowedHosts: true, // preview (e2b.app) va boshqa hostlar ham ishlashi uchun
+    proxy: {
+      // API va SSE stream — dev rejimda alohida ishlaydigan express serverga
+      "/api": {
+        target: process.env.API_URL || "http://localhost:3001",
+        changeOrigin: true,
+      },
+    },
     fs: {
       strict: true,
       deny: ["**/.*"],
