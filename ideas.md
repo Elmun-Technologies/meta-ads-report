@@ -67,3 +67,14 @@ Dashboard quyidagi real API ma’lumotlaridan foydalanadi: account summary, 19 t
 - Sof-Expo markasi plain textdan oldin ko‘rinadi; uchta ledger chizig‘i va vermilion marker asosiy brend signali bo‘lib qoladi.
 - Vermilion faqat risk, fatigue, alert yoki editorial underline signali uchun ishlatiladi; cobalt strukturaviy navigatsiya va asosiy urg‘u rangidir.
 - Spend charti ranked comparison sifatida ishlaydi; u faqat bezak emas, qaysi kampaniyaga pul ko‘proq ketganini tez o‘qitishi kerak.
+
+---
+
+## V2 qaror (2026-09): Ads Command Center
+
+Editorial Ledger konseptsi V2 da **Ads Command Center**ga almashtirildi — sabab: loyiha ko'p platformali (Google Ads, Yandex Direct) real-time monitoringga evolyutsiya qilmoqda.
+
+- Dizayn: tungi "command center" (default) + yorug' tema, Inter + JetBrains Mono, tabular numerals.
+- Rang faqat ma'no uchun: accent=asosiy, cyan=leads, violet=CPL, good/warn/risk=signal.
+- Arxitektura: UI endi statik JSON import qilmaydi — /api/snapshot + SSE live sync (server/data/snapshots papkasi fs.watch bilan kuzatiladi).
+- Ko'p platforma: shared/types.ts umumiy model; yangi MCP connector shu modelga normalize qilinadi.
