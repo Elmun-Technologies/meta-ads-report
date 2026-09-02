@@ -1,0 +1,14 @@
+{
+  "account_name": "SOF EXPO",
+  "customer_id": "400-069-0674",
+  "currency": "USD",
+  "period": "2026-08-04 — 2026-09-02",
+  "rows": [
+    { "campaign_id": "foodera-expo-2026-uz", "campaign_name": "Foodera Expo 2026 - UZ", "cost_micros": 52380000, "impressions": 23560, "clicks": 589, "ctr": 2.50 },
+    { "campaign_id": "website-traffic-search-8", "campaign_name": "Website traffic-Search-8", "cost_micros": 37480000, "impressions": 2845, "clicks": 103, "ctr": 3.62 },
+    { "campaign_id": "build-pro-expo-2026-uz", "campaign_name": "BUILD PRO EXPO 2026 - UZ", "cost_micros": 4160000, "impressions": 24, "clicks": 6, "ctr": 25.00 },
+    { "campaign_id": "foodera-expo-2026-kazakhstan", "campaign_name": "Foodera Expo 2026 - Kazakhstan", "cost_micros": 3200000, "impressions": 68, "clicks": 9, "ctr": 13.24 },
+    { "campaign_id": "foodera-expo-2026-russia", "campaign_name": "Foodera Expo 2026 - Russia", "cost_micros": 570000, "impressions": 28, "clicks": 1, "ctr": 3.57 },
+    { "campaign_id": "foodera-expo-2026-kyrgyzstan", "campaign_name": "Foodera Expo 2026 - Kyrgyzstan", "cost_micros": 170000, "impressions": 16, "clicks": 2, "ctr": 12.50 }
+  ]
+}

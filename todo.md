@@ -48,7 +48,7 @@
 
 ## Keyingi (V3 yo'l xaritasi)
 
-- [ ] Google Ads MCP normalizer + connector (snapshot shu papkaga tushadi).
+- [x] Google Ads connector (generic normalizer, `google_*.json` snapshot) — real SOF EXPO eksporti bilan tekshirildi.
 - [ ] Yandex Direct API connector (valyuta konvertatsiyasi bilan).
 - [ ] Ko'p kabinet: bitta platformada bir nechta account switcher.
 - [ ] Kunlik timeseries (insights time_increment=1 bilan) → trend chartlar va davrlararo taqqoslash.
