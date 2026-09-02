@@ -1,0 +1,13 @@
+{
+  "buildCommand": "pnpm build:web",
+  "outputDirectory": "dist/public",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "functions": {
+    "api/[[...slug]].ts": {
+      "includeFiles": "server/data/snapshots/**"
+    }
+  },
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
+}
