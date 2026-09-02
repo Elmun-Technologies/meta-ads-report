@@ -25,14 +25,26 @@
 
 - [x] shared/amo.ts: normalizer + UTM matchlash (utm_campaign → Meta kampaniya/kreativ) + lifecycle analitikasi.
 - [x] /pipeline sahifasi: CRM KPI (won/lost/win rate/ROAS/cost per WON/sikl), bosqich
-  voronkasi (har qadamda konversiya + tannarx + o'tirgan kuni), kanban doska,
-  manba atributsiyasi (qaysi kampaniya haqiqatan bitim berdi).
+      voronkasi (har qadamda konversiya + tannarx + o'tirgan kuni), kanban doska,
+      manba atributsiyasi (qaysi kampaniya haqiqatan bitim berdi).
 - [x] Lead drawer: bosqichlar tarixi + reklama manbasi (match) + yo'qotish sababi.
 - [x] Overview'da yopiq sikl paneli (CRM ulanganda ROAS/cost per WON ko'rinadi).
-- [x] Server: GET /api/crm + AmoCRM connection (kind: crm); amo_*.json papkaga
-  tushganda hammasi avtomatik yonadi (fs.watch → SSE).
+- [x] Server: GET /api/crm + AmoCRM connection (kind: crm); amo\_\*.json papkaga
+      tushganda hammasi avtomatik yonadi (fs.watch → SSE).
 - [x] Command palette'da CRM leadlar qidiruvi.
 - [x] amo_demo_test.json — DEMO (real ulanishda o'chiriladi).
+
+## Bajarildi (V2.3 — tushunarli UI + statik deploy)
+
+- [x] Dizayn tizimi qayta yozildi: gradient/glow/neon o'rniga tekis fon, bitta aksent rang, 1px chiziqlar, zich tipografika.
+- [x] Barcha atamalar o'zbekcha + inglizcha qavsda: Murojaatlar (Leads), Murojaat narxi (CPL), Bosish ulushi (CTR), Takroriylik (Frequency).
+- [x] `Term` komponenti — har bir metrika yonida “?” belgisi, bosganda oddiy tilda izoh (18 ta atama lug'ati).
+- [x] Har sahifa tepasida `PageHint` — “bu sahifada nima ko'rasiz” (9 ta sahifa).
+- [x] Menyu nomlari sodda va izohli: Umumiy natijalar, Kampaniya tuzilmasi, Murojaat yo'li (CRM), Ulanishlar; har birida tooltip.
+- [x] Sarlavhalar savol shaklida: “Pul qaysi kampaniyaga ketdi?”, “Qayerda odam yo'qotilmoqda?”, “Qaysi reklama haqiqatan bitim berdi?”.
+- [x] Vercel/static deploy: `scripts/build-static-data.ts` → `data/bootstrap.json`; API javob bermasa client shu fayldan o'qiydi (bo'sh ekran yo'q).
+- [x] `/api/health?debug=1` — DATA_DIR, cwd, fayllar ro'yxati (serverless diagnostikasi).
+- [x] Smoke-test yangi matnlarga moslashtirildi — 34/34 PASS.
 
 ## Keyingi (V3 yo'l xaritasi)
 

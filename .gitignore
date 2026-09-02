@@ -5,6 +5,7 @@
 # Build outputs
 dist/
 build/
+client/public/data/bootstrap.json
 *.dist
 
 # Environment variables
