@@ -273,7 +273,6 @@ const bodyText = () => (document.body.textContent || "").replace(/\s+/g, " ");
 const overview = bodyText();
 check("Overview sarlavha", overview.includes("Umumiy natijalar"));
 check("Overview KPI (murojaat narxi)", overview.includes("Murojaat narxi"));
-check("Overview xulosa", overview.includes("Raqamlar nima deyapti"));
 check(
   "Overview funnel",
   /Ko.rsatuvlar/.test(overview) && /Sahifaga o.tish/.test(overview)

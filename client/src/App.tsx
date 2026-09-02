@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Route, Switch } from "wouter";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,16 +11,19 @@ import {
 import { setCurrency } from "@/lib/format";
 import { CommandPalette, Sidebar, Topbar } from "./components/shell";
 import { DetailDrawer } from "./components/DetailDrawer";
-import Overview from "./pages/Overview";
-import Campaigns from "./pages/Campaigns";
-import Creatives from "./pages/Creatives";
-import Audience from "./pages/Audience";
-import LeadsExplorer from "./pages/LeadsExplorer";
-import Pipeline from "./pages/Pipeline";
-import Compare from "./pages/Compare";
-import Report from "./pages/Report";
-import Connections from "./pages/Connections";
-import NotFound from "./pages/NotFound";
+
+// Sahifalar lazy yuklanadi — faqat ochilgan bo'limning kodi yuklanadi
+// (dastlabki bundle hajmini kamaytiradi).
+const Overview = lazy(() => import("./pages/Overview"));
+const Campaigns = lazy(() => import("./pages/Campaigns"));
+const Creatives = lazy(() => import("./pages/Creatives"));
+const Audience = lazy(() => import("./pages/Audience"));
+const LeadsExplorer = lazy(() => import("./pages/LeadsExplorer"));
+const Pipeline = lazy(() => import("./pages/Pipeline"));
+const Compare = lazy(() => import("./pages/Compare"));
+const Report = lazy(() => import("./pages/Report"));
+const Connections = lazy(() => import("./pages/Connections"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 function LoadingState() {
   return (
@@ -113,18 +116,20 @@ function Shell() {
           ) : error ? (
             <ErrorState error={error} />
           ) : (
-            <Switch>
-              <Route path="/" component={Overview} />
-              <Route path="/campaigns" component={Campaigns} />
-              <Route path="/creatives" component={Creatives} />
-              <Route path="/audience" component={Audience} />
-              <Route path="/leads" component={LeadsExplorer} />
-              <Route path="/pipeline" component={Pipeline} />
-              <Route path="/compare" component={Compare} />
-              <Route path="/report" component={Report} />
-              <Route path="/connections" component={Connections} />
-              <Route component={NotFound} />
-            </Switch>
+            <Suspense fallback={<LoadingState />}>
+              <Switch>
+                <Route path="/" component={Overview} />
+                <Route path="/campaigns" component={Campaigns} />
+                <Route path="/creatives" component={Creatives} />
+                <Route path="/audience" component={Audience} />
+                <Route path="/leads" component={LeadsExplorer} />
+                <Route path="/pipeline" component={Pipeline} />
+                <Route path="/compare" component={Compare} />
+                <Route path="/report" component={Report} />
+                <Route path="/connections" component={Connections} />
+                <Route component={NotFound} />
+              </Switch>
+            </Suspense>
           )}
         </main>
       </div>

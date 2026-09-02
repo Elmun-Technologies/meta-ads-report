@@ -820,16 +820,6 @@ h4 {
   font-size: 11px;
   color: var(--text-3);
 }
-/* KPI kartadagi "bu nima" izohi */
-.kpi-note {
-  margin-top: 8px;
-  font-size: 11px;
-  color: var(--text-3);
-  line-height: 1.5;
-  border-left: 2px solid var(--line-strong);
-  padding-left: 8px;
-}
-
 /* Signals / chips */
 .chip {
   display: inline-flex;
@@ -1594,6 +1584,67 @@ table.tbl {
   font-variant-numeric: tabular-nums;
   color: var(--text-2);
   font-weight: 550;
+}
+
+/* Ulash qo'llanmasi (connections) */
+.guide-where {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  font-size: 11.5px;
+  color: var(--text-2);
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+  margin-bottom: 6px;
+}
+.guide-where b {
+  color: var(--text);
+  font-weight: 600;
+}
+.step-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 18px;
+}
+.step-row {
+  display: flex;
+  gap: 11px;
+  padding: 11px 0;
+  border-bottom: 1px dashed var(--grid-line);
+  align-items: flex-start;
+}
+.step-row:nth-last-child(-n + 2) {
+  border-bottom: none;
+}
+.step-num {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+.step-body {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+.step-code {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--accent);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 8px;
+  margin-top: 5px;
+  display: inline-block;
+  word-break: break-all;
 }
 
 /* misc */

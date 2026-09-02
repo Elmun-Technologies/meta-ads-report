@@ -41,7 +41,7 @@ Har bir lead **qaysi kampaniya va kreativdan kelganini**, CRM'da **qaysi bosqich
 
 | Sahifa                 | Nima bor                                                                                                                                                                                                |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **/** Umumiy natijalar | 6 KPI karta, skvoznaya voronka (har qadamda konversiya), xulosa dvigateli, signal markazi, anomaliyalar (MAD z-score), pacing + prognoz, interaksiya/video/messaging metrikalari, CRM yopiq sikl paneli |
+| **/** Umumiy natijalar | 6 KPI karta, skvoznaya voronka (har qadamda konversiya), diqqat signallari, pacing + prognoz, interaksiya/video/messaging metrikalari, CRM yopiq sikl paneli |
 | **/campaigns**         | Saralanadigan ledger (Expo filtri, CPL vs o'rtacha benchmark, CSV eksport), detail drawer (15+ metrika)                                                                                                 |
 | **/creatives**         | Kreativ reytingi (Spend/CTR/Clicks/CPL), CTR liderlari charti, status chip'lari (ACTIVE/PAUSED/DISAPPROVED)                                                                                             |
 | **/audience**          | Yosh segmentlari: spend/leads chart, CPL kesimi, to'liq jadval                                                                                                                                          |
@@ -54,7 +54,7 @@ Har bir lead **qaysi kampaniya va kreativdan kelganini**, CRM'da **qaysi bosqich
 **Umumiy:** ⌘K command palette (sahifa/kampaniya/kreativ/CRM-lead qidiruvi) · dark/light tema · ko'p kabinet tanlagich · live-sync indikator · mobil moslashuv · SSE + polling fallback.
 
 **Tushunarlilik:** har bir sahifa tepasida “bu sahifada nima ko'rasiz” yo'riqnomasi, har bir ko'rsatkich nomi
-o'zbekcha + inglizcha qavsda (`Murojaat narxi (CPL)`) va nom yonidagi <kbd>?</kbd> belgisi orqali oddiy tilda izoh.
+o'zbekcha + inglizcha qavsda (`Murojaat narxi (CPL)`).
 
 ---
 
@@ -164,6 +164,10 @@ Hammasi **fayl tushirish** orqali ishlaydi — `server/data/snapshots/` papkasig
 | `amo_<hisob>_<davr>.json`    | AmoCRM                      | `account, pipelines, stages, leads[]` (utm_campaign!)                      |
 
 Fayl tushgani zahoti: `fs.watch` sezadi → SSE orqali barcha ochiq dashboardlarga push → **sahifa yangilash shart emas**, platforma statusi `READY → LIVE`ga o'tadi.
+
+> **/connections** sahifasida har bir platforma uchun bosqichma-bosqich ulash
+> yo'riqnomasi bor: qayerdan boshlash → qanday eksport olish → faylni qanday
+> nomlab qayerga tashlash → qanday tekshirish.
 
 > To'liq JSON namunalari: [`server/data/README.md`](server/data/README.md)
 

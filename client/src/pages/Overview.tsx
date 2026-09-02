@@ -1,26 +1,13 @@
 import { useMemo } from "react";
 import { Link } from "wouter";
-import { ArrowUpRight, MessageSquare, Radar, Video } from "lucide-react";
+import { ArrowUpRight, MessageSquare, Video } from "lucide-react";
 import { PLATFORM_META, type CampaignNode } from "@shared/types";
-import type { Insight } from "@/lib/insights";
-import { buildInsights } from "@/lib/insights";
-import {
-  buildAlerts,
-  buildAnomalies,
-  buildPacing,
-  SEVERITY_META,
-} from "@/lib/alerts";
+import { buildAlerts, buildPacing, SEVERITY_META } from "@/lib/alerts";
 import { buildCrmSummary } from "@shared/amo";
 import { compact, money, pct, ratio, whole } from "@/lib/format";
 import { useDashboardContext } from "@/contexts/DashboardContext";
-import {
-  Funnel,
-  InsightCard,
-  KpiCard,
-  Panel,
-  SpendShare,
-} from "@/components/widgets";
-import { PageHint, Term } from "@/components/Help";
+import { Funnel, KpiCard, Panel, SpendShare } from "@/components/widgets";
+import { PageHint } from "@/components/Help";
 import { LeadsCplChart, SpendByCampaignChart } from "@/components/charts";
 
 const shorten = (name: string, max = 22) =>
@@ -30,16 +17,8 @@ export default function Overview() {
   const { snapshot, crm, crmConnected, openCampaign, openCreative } =
     useDashboardContext();
 
-  const insights = useMemo(
-    () => (snapshot ? buildInsights(snapshot) : []),
-    [snapshot]
-  );
   const alerts = useMemo(
     () => (snapshot ? buildAlerts(snapshot) : []),
-    [snapshot]
-  );
-  const anomalies = useMemo(
-    () => (snapshot ? buildAnomalies(snapshot) : []),
     [snapshot]
   );
   const pacing = useMemo(
@@ -82,7 +61,6 @@ export default function Overview() {
 
   if (!snapshot) return null;
   const { totals, campaigns, creatives, age } = snapshot;
-  const maxSpend = Math.max(...campaigns.map(c => c.metrics.spend), 1);
 
   const spendChart = campaigns
     .slice(0, 9)
@@ -110,13 +88,6 @@ export default function Overview() {
   const maxLeads = campaigns.length
     ? Math.max(...campaigns.map(c => c.metrics.leads))
     : 0;
-
-  const onInsightAction = (insight: Insight) => {
-    if (insight.action?.kind === "campaign" && insight.action.id)
-      openCampaign(insight.action.id);
-    else if (insight.action?.kind === "creatives" && insight.action.id)
-      openCreative(insight.action.id);
-  };
 
   return (
     <>
@@ -146,13 +117,8 @@ export default function Overview() {
       </div>
 
       <PageHint>
-        Bu sahifa bitta savolga javob beradi:{" "}
-        <b>
-          reklamaga ketgan pul qancha murojaat olib keldi va muammo qayerda?
-        </b>{" "}
-        Tepada oltita asosiy ko‘rsatkich, pastda esa raqamlardan chiqarilgan
-        tayyor xulosa va diqqat talab qiladigan kampaniyalar ro‘yxati. Nom
-        yonidagi <b>?</b> belgisi — bu ko‘rsatkich nimaligini tushuntiradi.
+        Oltita asosiy ko‘rsatkich, diqqat talab qiladigan kampaniyalar va
+        murojaatgacha bo‘lgan yo‘l — bitta sahifada.
       </PageHint>
 
       {/* KPI ledger */}
@@ -161,7 +127,7 @@ export default function Overview() {
           <KpiCard
             label={
               <>
-                <Term id="spend">Sarf</Term> <i>(Spend)</i>
+                Sarf <i>(Spend)</i>
               </>
             }
             value={money(totals.spend)}
@@ -170,7 +136,6 @@ export default function Overview() {
                 Jami sarf · <b>{campaigns.length}</b> ta kampaniya bo‘yicha
               </>
             }
-            note="Shu davrda reklamaga ketgan pul."
             foot={
               <>
                 <span>
@@ -190,7 +155,7 @@ export default function Overview() {
           <KpiCard
             label={
               <>
-                <Term id="leads">Murojaatlar</Term> <i>(Leads)</i>
+                Murojaatlar <i>(Leads)</i>
               </>
             }
             value={whole(totals.leads)}
@@ -202,7 +167,6 @@ export default function Overview() {
                 {campaigns.length}
               </>
             }
-            note="Forma to‘ldirgan yoki xabar yozgan odamlar soni."
             foot={<span>Bir kampaniyadan eng ko‘pi: {whole(maxLeads)}</span>}
           />
         </div>
@@ -210,7 +174,7 @@ export default function Overview() {
           <KpiCard
             label={
               <>
-                <Term id="cpl">Murojaat narxi</Term> <i>(CPL)</i>
+                Murojaat narxi <i>(CPL)</i>
               </>
             }
             value={money(totals.cpl)}
@@ -221,11 +185,9 @@ export default function Overview() {
                 <b>{bestCpl != null ? money(bestCpl) : "N/A"}</b>
               </>
             }
-            note="Sarf ÷ murojaatlar soni. Kam bo‘lsa — arzonroq mijoz."
             foot={
               <span>
-                Video ko‘rish:{" "}
-                <Term id="videoViews">{compact(totals.videoViews)}</Term>
+                Video ko‘rish: {compact(totals.videoViews)}
               </span>
             }
           />
@@ -234,7 +196,7 @@ export default function Overview() {
           <KpiCard
             label={
               <>
-                <Term id="ctr">Bosish ulushi</Term> <i>(CTR)</i>
+                Bosish ulushi <i>(CTR)</i>
               </>
             }
             value={pct(totals.ctr)}
@@ -245,7 +207,6 @@ export default function Overview() {
                 <b>{whole(totals.linkClicks)}</b> ta havola bosish
               </>
             }
-            note="Ko‘rganlarning necha foizi bosgan — reklama matni/rasmi qiziqtirganini ko‘rsatadi."
             foot={<span>Havola bosish ulushi: {pct(totals.linkCtr)}</span>}
           />
         </div>
@@ -253,7 +214,7 @@ export default function Overview() {
           <KpiCard
             label={
               <>
-                <Term id="cpm">1000 ko‘rsatuv narxi</Term> <i>(CPM)</i>
+                1000 ko‘rsatuv narxi <i>(CPM)</i>
               </>
             }
             value={money(totals.cpm)}
@@ -263,7 +224,6 @@ export default function Overview() {
                 Bosish narxi (CPC) <b>{money(totals.cpc)}</b>
               </>
             }
-            note="Reklamani 1000 marta ko‘rsatish narxi — auditoriya qimmat yoki arzonligini ko‘rsatadi."
             foot={<span>Takroriylik: {ratio(totals.frequency)}</span>}
           />
         </div>
@@ -271,7 +231,7 @@ export default function Overview() {
           <KpiCard
             label={
               <>
-                <Term id="reach">Qamrov</Term> <i>(Reach)</i>
+                Qamrov <i>(Reach)</i>
               </>
             }
             value={whole(totals.reach)}
@@ -282,27 +242,10 @@ export default function Overview() {
                 ko‘rsatuv
               </>
             }
-            note="Reklamani ko‘rgan takrorsiz odamlar soni."
             foot={<span>Eng faol yosh: {bestAge?.age ?? "—"}</span>}
           />
         </div>
       </div>
-
-      {/* Insights */}
-      <Panel
-        kicker="Tayyor xulosa"
-        title="Raqamlar nima deyapti?"
-        sub="Har bir xulosa shu sahifadagi real raqamlardan avtomatik hisoblanadi — yangi ma’lumot tushganda o‘zi yangilanadi"
-        style={{ marginBottom: 14 }}
-      >
-        <div className="grid-12" style={{ gap: 11 }}>
-          {insights.map(insight => (
-            <div className="col-6" key={insight.id}>
-              <InsightCard insight={insight} onAction={onInsightAction} />
-            </div>
-          ))}
-        </div>
-      </Panel>
 
       {/* Signallar + Pacing */}
       <div className="grid-12" style={{ marginBottom: 14 }}>
@@ -355,53 +298,6 @@ export default function Overview() {
                 )}
               </button>
             ))}
-            {anomalies.length > 0 && (
-              <div
-                style={{
-                  marginTop: 10,
-                  paddingTop: 10,
-                  borderTop: "1px dashed var(--line)",
-                }}
-              >
-                <span
-                  className="kicker"
-                  style={{ display: "flex", alignItems: "center", gap: 6 }}
-                >
-                  <Radar size={12} /> Boshqalardan keskin farq qiladigan
-                  kampaniyalar
-                </span>
-                {anomalies.slice(0, 3).map((an, i) => (
-                  <button
-                    key={`${an.campaignId}-${an.metric}-${i}`}
-                    className="sig-row"
-                    onClick={() => openCampaign(an.campaignId)}
-                  >
-                    <span
-                      className={`chip ${an.direction === "high" ? "warn" : "accent"}`}
-                      style={{
-                        flex: "none",
-                        minWidth: 64,
-                        justifyContent: "center",
-                      }}
-                    >
-                      {an.metric} {an.direction === "high" ? "↑" : "↓"}
-                    </span>
-                    <span style={{ minWidth: 0 }}>
-                      <b>
-                        {an.campaign} — {an.value}
-                      </b>
-                      <small>
-                        z = {an.z.toFixed(1)} · {an.why}
-                      </small>
-                    </span>
-                    <ArrowUpRight
-                      size={14}
-                      style={{ flex: "none", color: "var(--text-3)" }}
-                    />
-                  </button>
-                ))}
-              </div>
-            )}
           </Panel>
         </div>
         <div className="col-5">
@@ -430,21 +326,6 @@ export default function Overview() {
                     <b>{whole(pacing.projected30Leads)}</b>
                   </div>
                 </div>
-                {pacing.scale && (
-                  <div className="what-if">
-                    <span className="kicker">Agar byudjetni oshirsak</span>
-                    <p>
-                      «{pacing.scale.name}» kampaniyasida bitta murojaat{" "}
-                      {money(pacing.scale.cpl)} turibdi —{" "}
-                      <b>
-                        qo‘shimcha $100 sarflansa, taxminan +
-                        {pacing.scale.extraLeadsPer100} ta murojaat keladi
-                      </b>
-                      . Murojaat sifati CRM’da tasdiqlansa, byudjetni shu yerga
-                      ko‘paytirish ma’qul.
-                    </p>
-                  </div>
-                )}
               </>
             )}
           </Panel>
@@ -536,9 +417,9 @@ export default function Overview() {
                   Bog‘lanish
                 </span>
                 <span>
-                  {crm.matchedLeads} ta murojaatdan {crm.leads.length} tasi{" "}
-                  <Term id="utm">UTM belgisi</Term> orqali aniq kampaniyaga
-                  bog‘landi. Bog‘lanmaganlari taxminiy hisobga qo‘shilmagan —{" "}
+                  {crm.matchedLeads} ta murojaatdan {crm.leads.length} tasi UTM
+                  belgisi orqali aniq kampaniyaga bog‘landi. Bog‘lanmaganlari
+                  taxminiy hisobga qo‘shilmagan —{" "}
                   <Link
                     className="panel-link"
                     href="/pipeline"
@@ -592,42 +473,36 @@ export default function Overview() {
                 {
                   key: "imp",
                   label: "Ko‘rsatuvlar",
-                  note: "reklama ekranga chiqdi",
                   value: totals.impressions,
                   tone: "var(--accent)",
                 },
                 {
                   key: "reach",
                   label: "Qamrov",
-                  note: "takrorsiz odamlar",
                   value: totals.reach ?? 0,
                   tone: "var(--accent)",
                 },
                 {
                   key: "clicks",
                   label: "Bosishlar",
-                  note: "hamma turdagi bosish",
                   value: totals.clicks,
                   tone: "var(--cyan)",
                 },
                 {
                   key: "link",
                   label: "Havola bosishlar",
-                  note: "saytga o‘tish",
                   value: totals.linkClicks,
                   tone: "var(--cyan)",
                 },
                 {
                   key: "lpv",
                   label: "Sahifaga o‘tish",
-                  note: "sahifa ochildi",
                   value: totals.landingPageViews ?? 0,
                   tone: "var(--violet)",
                 },
                 {
                   key: "leads",
                   label: "Murojaatlar",
-                  note: "yakuniy natija",
                   value: totals.leads,
                   tone: "var(--good)",
                 },
@@ -763,30 +638,6 @@ export default function Overview() {
                   </b>
                 </div>
               </div>
-              <div className="what-if" style={{ marginTop: 11 }}>
-                <span className="kicker">Hisob</span>
-                <p>
-                  Jami <b>{whole(engagement.postEngagement)}</b> post
-                  interaksiyasi: <b>{whole(engagement.reactions)}</b> reaksiya ·{" "}
-                  <b>{whole(engagement.comments)}</b> komment ·{" "}
-                  <b>{whole(engagement.saves)}</b> saqlash. Har bir interaksiya
-                  uchun o'rtacha{" "}
-                  <b>{money(totals.spend / engagement.postEngagement)}</b> sarf.
-                  {engagement.messaging > 0 && engagement.firstReply > 0 && (
-                    <>
-                      {" "}
-                      Messaging kanalida suhbatlarning{" "}
-                      <b>
-                        {pct(
-                          (engagement.firstReply / engagement.messaging) * 100,
-                          0
-                        )}
-                      </b>{" "}
-                      javob olgan — qolganlari javobsiz qolgan.
-                    </>
-                  )}
-                </p>
-              </div>
             </Panel>
           </div>
         </div>
@@ -865,26 +716,6 @@ export default function Overview() {
               </div>
             ) : (
               <div className="empty-state">Kreativ ma’lumoti topilmadi</div>
-            )}
-            {topCreative && !topCreative.hasLeads && (
-              <div style={{ marginTop: 12 }}>
-                <span className="kicker">
-                  Nima uchun murojaat ko‘rsatilmagan
-                </span>
-                <p
-                  style={{
-                    fontSize: 11.5,
-                    color: "var(--text-2)",
-                    margin: "6px 0 0",
-                    lineHeight: 1.6,
-                  }}
-                >
-                  Bu kreativ bo‘yicha Meta murojaat sonini alohida qaytarmagan —
-                  shuning uchun samaradorlik sarf va bosish ulushi orqali
-                  o‘lchanadi. Murojaat darajasidagi xulosa kampaniya kesimida
-                  beriladi.
-                </p>
-              </div>
             )}
           </Panel>
         </div>

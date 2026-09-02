@@ -56,7 +56,6 @@ export function KpiCard({
   sub,
   foot,
   icon,
-  note,
   tone = "var(--accent)",
 }: {
   /** Asosiy nom: o'zbekcha (inglizcha qavsda) */
@@ -65,8 +64,6 @@ export function KpiCard({
   sub: ReactNode;
   foot?: ReactNode;
   icon?: ReactNode;
-  /** "Bu raqam nima degani" — bir gaplik oddiy izoh */
-  note?: ReactNode;
   tone?: string;
 }) {
   return (
@@ -78,7 +75,6 @@ export function KpiCard({
       <div className="kpi-val">{value}</div>
       <div className="kpi-sub">{sub}</div>
       {foot && <div className="kpi-foot">{foot}</div>}
-      {note && <div className="kpi-note">{note}</div>}
     </div>
   );
 }
@@ -148,7 +144,7 @@ export function InsightCard({
 export interface FunnelStage {
   key: string;
   label: string;
-  note: string;
+  note?: string;
   value: number;
   tone?: string;
 }
@@ -165,7 +161,7 @@ export function Funnel({ stages }: { stages: FunnelStage[] }) {
           <div className="funnel-row" key={stage.key}>
             <div className="f-label">
               {stage.label}
-              <small>{stage.note}</small>
+              {stage.note && <small>{stage.note}</small>}
             </div>
             <div className="funnel-track">
               <div
