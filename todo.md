@@ -46,6 +46,23 @@
 - [x] `/api/health?debug=1` — DATA_DIR, cwd, fayllar ro'yxati (serverless diagnostikasi).
 - [x] Smoke-test yangi matnlarga moslashtirildi — 34/34 PASS.
 
+## Bajarildi (V2.4 — Google Ads API asosi, Variant A)
+
+- [x] `shared/googleAdsApi.ts` — Google Ads **REST client** (OAuth refresh_token →
+      access_token, GAQL `searchStream`). Kampaniya + reklama (ad) + kunlik + qurilma +
+      kalit so'z o'lchamlari uchun GAQL so'rovlari.
+- [x] `scripts/pull-google-ads.ts` (`pnpm google:pull`) — API'dan tortib,
+      `google_<cid>_<sana>.json` batafsil snapshot yozadi (Vercel/statik uchun mos).
+- [x] `scripts/google-ads-oauth.ts` (`pnpm google:oauth`) — refresh token olish vositasi.
+- [x] `shared/generic.ts` kengaytirildi: `ads[]` → kampaniyalarga **creatives**;
+      `cost_micros` endi kattaligidan qat'iy nazar to'g'ri 1e6 bo'linadi.
+- [x] `scripts/google-normalizer-check.ts` (`pnpm google:test:normalize`) — 14 PASS
+      offline tekshiruv.
+- [x] `.env.example` + `docs/google-ads-api-setup.md` (to'liq sozlash qo'llanmasi) +
+      `server/data/README.md` (batafsil pull formati).
+- [ ] (Keyingi) Kredensial tayyorlangach: test MCC'da `pnpm google:pull` sinash.
+- [ ] (Keyingi) Google uchun UI: platform switcher + ad/kunlik/qurilma/keyword ko'rinishi.
+
 ## Keyingi (V3 yo'l xaritasi)
 
 - [ ] Google Ads MCP normalizer + connector (snapshot shu papkaga tushadi).

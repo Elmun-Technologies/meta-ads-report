@@ -148,7 +148,16 @@ pnpm start      # production: bitta server (client + API), port 3000
 pnpm check      # TypeScript strict typecheck
 pnpm smoke      # jsdom render test — 37 tekshiruv (barcha sahifalar, drawer, ⌘K)
 pnpm audit      # skvoznaya zanjir auditi — real snapshot ustida 11 tekshiruv
+
+# Google Ads API (batafsil pull — Variant A)
+pnpm google:oauth           # refresh token olish (docs/google-ads-api-setup.md 3-qadam)
+pnpm google:pull            # Google Ads API'dan tortib, google_*.json snapshot yozadi
+pnpm google:test:normalize  # offline normalizer tekshiruvi (tarmoq talab qilmaydi)
 ```
+
+Google Ads API'ni real ulash bo'yicha to'liq bosqichma-bosqich qo'llanma:
+[**`docs/google-ads-api-setup.md`**](docs/google-ads-api-setup.md) (Google Cloud →
+developer token → OAuth → hosting qarori).
 
 ---
 
