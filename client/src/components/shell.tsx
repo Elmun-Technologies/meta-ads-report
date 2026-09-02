@@ -171,7 +171,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 /* ------------------------------------------------------------------ */
 
 export function Topbar({ onMenu }: { onMenu: () => void }) {
-  const { snapshot, syncing, refresh, theme, toggleTheme, setPaletteOpen, live } = useDashboardContext();
+  const { snapshot, snapshots, snapshotFile, setSnapshotFile, syncing, refresh, theme, toggleTheme, setPaletteOpen, live } = useDashboardContext();
   const [location] = useLocation();
   const platformName = snapshot ? PLATFORM_META[snapshot.meta.platform].name : "—";
 
@@ -191,6 +191,20 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
           <span className="st-label">Qidiruv va buyruqlar…</span>
           <span className="kbd">⌘K</span>
         </button>
+        {snapshots.length > 1 && (
+          <select
+            className="select-btn snap-select desktop-only"
+            value={snapshotFile ?? snapshots[0]?.file ?? ""}
+            onChange={(e) => setSnapshotFile(e.target.value)}
+            title="Kabinet / davr tanlash"
+          >
+            {snapshots.map((s) => (
+              <option key={s.file} value={s.file}>
+                {s.accountName} · {s.periodLabel}
+              </option>
+            ))}
+          </select>
+        )}
         <button className={`icon-btn ${syncing ? "spin" : ""}`} onClick={() => void refresh()} title="Ma'lumotni yangilash">
           <RefreshCw size={15} />
         </button>

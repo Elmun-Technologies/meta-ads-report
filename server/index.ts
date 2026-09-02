@@ -13,6 +13,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { normalizeMetaExport, type RawMetaExport } from "@shared/normalize";
+import { normalizeGenericAds } from "@shared/generic";
 import { matchLeadsToAds, normalizeAmoExport, type RawAmoExport } from "@shared/amo";
 import type { ConnectionInfo, CrmData, NormalizedSnapshot, PlatformId, SnapshotInfo } from "@shared/types";
 
@@ -43,15 +44,17 @@ function platformForFile(file: string): PlatformId {
   return "meta";
 }
 
-function latestMetaFile(): { file: string; mtime: Date } | null {
+function latestFileFor(prefix: "meta" | "google" | "yandex" | "amo"): { file: string; mtime: Date } | null {
   if (!fs.existsSync(DATA_DIR)) return null;
   const files = fs
     .readdirSync(DATA_DIR)
-    .filter((f) => f.startsWith("meta") && f.endsWith(".json"))
+    .filter((f) => f.startsWith(prefix) && f.endsWith(".json"))
     .map((file) => ({ file: path.join(DATA_DIR, file), mtime: fs.statSync(path.join(DATA_DIR, file)).mtime }))
     .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
   return files[0] ?? null;
 }
+
+const latestMetaFile = () => latestFileFor("meta");
 
 function readMetaSnapshot(file?: string): NormalizedSnapshot | null {
   const target = file ? path.join(DATA_DIR, path.basename(file)) : latestMetaFile()?.file;
@@ -70,6 +73,20 @@ function readMetaSnapshot(file?: string): NormalizedSnapshot | null {
   }
 }
 
+/** Google Ads / Yandex Direct — universal alias normalizer orqali */
+function readGenericSnapshot(platform: "google-ads" | "yandex-direct"): NormalizedSnapshot | null {
+  const prefix = platform === "google-ads" ? "google" : "yandex";
+  const latest = latestFileFor(prefix);
+  if (!latest) return null;
+  try {
+    const raw = JSON.parse(fs.readFileSync(latest.file, "utf-8"));
+    return normalizeGenericAds(raw, { platform, syncedAt: latest.mtime.toISOString(), file: path.basename(latest.file) });
+  } catch (err) {
+    console.error(`[${platform}] snapshot o'qishda xato:`, err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 /** Barcha snapshot fayllari ro'yxati — davrlararo taqqoslash uchun */
 function listSnapshots(): SnapshotInfo[] {
   if (!fs.existsSync(DATA_DIR)) return [];
@@ -79,12 +96,12 @@ function listSnapshots(): SnapshotInfo[] {
     .map((file) => {
       try {
         const full = path.join(DATA_DIR, file);
-        const raw = JSON.parse(fs.readFileSync(full, "utf-8")) as RawMetaExport;
+        const raw = JSON.parse(fs.readFileSync(full, "utf-8")) as any;
         return {
           file,
           platform: platformForFile(file),
-          accountName: raw.account?.name ?? "—",
-          periodLabel: raw.account?.period ?? "—",
+          accountName: raw.account?.name ?? raw.account_name ?? raw.Login ?? raw.name ?? "—",
+          periodLabel: raw.account?.period ?? raw.period ?? raw.date_range ?? "—",
           syncedAt: fs.statSync(full).mtime.toISOString(),
         } satisfies SnapshotInfo;
       } catch {
@@ -132,15 +149,17 @@ const CONNECTORS: Connector[] = [
     id: "google-ads",
     name: "Google Ads",
     vendor: "Google",
-    note: "Connector tayyor: Google Ads MCP ulangach, snapshot shu papkaga tushadi va dashboard avtomatik ko'radi.",
-    resolve: () => null,
+    note: "google_*.json snapshot papkaga tushganda avtomatik ulanadi (campaign_name, cost_micros, clicks, conversions maydonlari taniladi — README).",
+    latestFile: () => latestFileFor("google"),
+    resolve: () => readGenericSnapshot("google-ads"),
   },
   {
     id: "yandex-direct",
     name: "Yandex Direct",
     vendor: "Yandex",
-    note: "Connector tayyor: Yandex Direct API/MCP ulangach, normalizer shared/ qatlamga qo'shiladi.",
-    resolve: () => null,
+    note: "yandex_*.json snapshot papkaga tushganda avtomatik ulanadi (Name, Spend, Clicks, Conversions maydonlari taniladi — README).",
+    latestFile: () => latestFileFor("yandex"),
+    resolve: () => readGenericSnapshot("yandex-direct"),
   },
 ];
 

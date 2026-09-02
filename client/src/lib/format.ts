@@ -1,7 +1,17 @@
-export const money = (v: number | string | null | undefined, currency = "$") =>
+let CURRENT_CURRENCY = "$";
+/** Account valyutasi (UZS, RUB...) — snapshot yuklanganda chaqiriladi */
+export const setCurrency = (code?: string | null) => {
+  if (!code) CURRENT_CURRENCY = "$";
+  else if (code === "USD") CURRENT_CURRENCY = "$";
+  else CURRENT_CURRENCY = `${code} `;
+};
+
+export const currencyCode = () => (CURRENT_CURRENCY === "$" ? "USD" : CURRENT_CURRENCY.trim());
+
+export const money = (v: number | string | null | undefined, currency = CURRENT_CURRENCY) =>
   v == null ? "N/A" : `${currency}${Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export const moneyShort = (v: number | string | null | undefined, currency = "$") => {
+export const moneyShort = (v: number | string | null | undefined, currency = CURRENT_CURRENCY) => {
   if (v == null) return "N/A";
   const n = Number(v);
   if (n >= 1000) return `${currency}${(n / 1000).toFixed(1)}k`;

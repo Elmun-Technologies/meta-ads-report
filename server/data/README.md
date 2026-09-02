@@ -5,6 +5,47 @@ Bu papka — dashboardning yagona ma'lumot manbasi (`server/data/snapshots/`).
 > ⚠️ `amo_demo_test.json` — bu DEMO fayl (xayriy leadlar), Lead Lifecycle sahifasini
 > ko'rsatish uchun. Real AmoCRM ulanganda **o'chirib tashlang**.
 
+## Fayl nomlash qoidalari (MCP/Manus uchun)
+
+| Prefiks | Platforma | Taniladigan asosiy maydonlar |
+|---|---|---|
+| `meta_*.json` | Meta Ads (istalgan account) | account, summary, campaigns, age, ads, adInsights (MCP standart eksporti) |
+| `google_*.json` | Google Ads | rows[]: campaign_name, cost_micros, clicks, impressions, conversions |
+| `yandex_*.json` | Yandex Direct | rows[]: Name, Spend, Clicks, Impressions, Conversions |
+| `amo_*.json` | AmoCRM (lead lifecycle) | account, pipelines, stages, leads[] (utm_campaign!) |
+
+Bir nechta kabinet/davr — har biri alohida fayl (masalan `meta_act-111_jul.json`,
+`meta_act-222_aug.json`): topbar'dagi **kabinet tanlagich** ulardan birini tanlaydi,
+eng yangisi default. Google/Yandex hozir faqat eng yangi faylni ko'rsatadi.
+
+### Google Ads namuna
+
+```json
+{
+  "account_name": "Sof-Expo Google",
+  "customer_id": "123-456-7890",
+  "currency": "UZS",
+  "period": "2026-09-01 — 2026-09-30",
+  "rows": [
+    { "campaign_id": "2001", "campaign_name": "Foodera | Search | UZ", "cost_micros": 45000000, "impressions": 52000, "clicks": 1800, "conversions": 42, "ctr": 3.46 }
+  ]
+}
+```
+
+### Yandex Direct namuna
+
+```json
+{
+  "account_name": "Sof-Expo Yandex",
+  "Login": "sof-expo-uz",
+  "Currency": "UZS",
+  "period": "2026-09-01 — 2026-09-30",
+  "rows": [
+    { "Id": "3001", "Name": "Foodera | Poisk", "Spend": 3200000, "Impressions": 41000, "Clicks": 1500, "Conversions": 30, "Ctr": 3.7 }
+  ]
+}
+```
+
 ## Qanday ishlaydi
 
 - Server shu papkadagi `.json` fayllarni o'qiydi va eng yangisini (mtime bo'yicha) normalizatsiya qilib API orqali beradi.

@@ -95,6 +95,7 @@ g.fetch = async (url: string) => ({
     const u = String(url);
     if (u.includes("connections")) return connections;
     if (u.includes("/api/crm")) return { connected: true, ...crm };
+    if (u.includes("/api/snapshots")) return [{ file: "meta_test_august.json", platform: "meta", accountName: "Sof-Expo l Nazir", periodLabel: "2026-08-01 — 2026-08-31", syncedAt: new Date().toISOString() }];
     return snapshot;
   },
   text: async () => "",

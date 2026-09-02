@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Route, Switch } from "wouter";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AlertTriangle } from "lucide-react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { DashboardProvider, useDashboardContext } from "./contexts/DashboardContext";
+import { setCurrency } from "@/lib/format";
 import { CommandPalette, Sidebar, Topbar } from "./components/shell";
 import { DetailDrawer } from "./components/DetailDrawer";
 import Overview from "./pages/Overview";
@@ -48,7 +49,12 @@ function ErrorState({ error }: { error: string }) {
 
 function Shell() {
   const [navOpen, setNavOpen] = useState(false);
-  const { loading, error } = useDashboardContext();
+  const { loading, error, snapshot } = useDashboardContext();
+
+  // Account valyutasini formatlarga qo'llash (UZS/RUB bo'lsa $ o'rniga)
+  useEffect(() => {
+    setCurrency(snapshot?.meta.account.currency);
+  }, [snapshot?.meta.account.currency]);
 
   return (
     <div className="shell">
