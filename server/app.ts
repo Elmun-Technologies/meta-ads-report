@@ -11,7 +11,7 @@
  * Yangi platforma (Google Ads, Yandex Direct MCP) ulash uchun CONNECTORS ga
  * yangi connector qo'shiladi — UI umumiy NormalizedSnapshot modeli ustida ishlaydi.
  */
-import express from "express";
+import express, { type NextFunction, type Request, type Response } from "express";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -242,27 +242,27 @@ export function createApp(mode: AppMode = "server") {
   app.use(express.json({ limit: "20mb" }));
 
   // API CORS (dev proxy same-origin ishlatadi, lekin alohida deploymentda ham ishlashi uchun)
-  app.use("/api", (_req, res, next) => {
+  app.use("/api", (_req: Request, res: Response, next: NextFunction) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     next();
   });
 
-  app.get("/api/health", (_req, res) => {
+  app.get("/api/health", (_req: Request, res: Response) => {
     res.json({ ok: true, mode, at: new Date().toISOString(), snapshots: fs.existsSync(DATA_DIR) ? fs.readdirSync(DATA_DIR).filter((f) => f.endsWith(".json")).length : 0 });
   });
 
-  app.get("/api/connections", (_req, res) => {
+  app.get("/api/connections", (_req: Request, res: Response) => {
     res.json(connectionsPayload());
   });
 
-  app.get("/api/snapshots", (_req, res) => {
+  app.get("/api/snapshots", (_req: Request, res: Response) => {
     // A/B taqqoslash faqat reklama davr snapshotlari uchun (amo_* — CRM, alohida)
     res.json(listSnapshots().filter((s) => !s.file.startsWith("amo")));
   });
 
-  app.get("/api/crm", (_req, res) => {
+  app.get("/api/crm", (_req: Request, res: Response) => {
     const crm = readAmoSnapshot();
     if (!crm) {
       res.status(503).json({ connected: false, error: "AmoCRM snapshot topilmadi — server/data/snapshots/ ga amo_*.json qo'ying (format: server/data/README.md)." });
@@ -271,7 +271,7 @@ export function createApp(mode: AppMode = "server") {
     res.json({ connected: true, ...crm });
   });
 
-  app.get("/api/snapshot", (req, res) => {
+  app.get("/api/snapshot", (req: Request, res: Response) => {
     const file = req.query.file ? String(req.query.file) : undefined;
     if (file) {
       const snapshot = readMetaSnapshot(file);
@@ -296,7 +296,7 @@ export function createApp(mode: AppMode = "server") {
     res.json(snapshot);
   });
 
-  app.get("/api/stream", (req, res) => {
+  app.get("/api/stream", (req: Request, res: Response) => {
     if (mode === "serverless") {
       // Serverless funksiyalar uzoq muddatli ulanishni ushlab turolmaydi — client polling'ga o'tadi.
       res.status(501).json({ error: "SSE serverless rejimida qo'llab-quvvatlanmaydi — client polling fallback ishlatadi." });
@@ -324,7 +324,7 @@ export function createApp(mode: AppMode = "server") {
   });
 
   // Yangi snapshot yozilgach (masalan MCP tomonidan) chaqiriladi — barcha clientlarga push
-  app.post("/api/refresh", (_req, res) => {
+  app.post("/api/refresh", (_req: Request, res: Response) => {
     broadcast("sync", { at: new Date().toISOString(), source: "manual" });
     res.json({ ok: true, pushed: sseClients.size });
   });
@@ -337,7 +337,7 @@ export function createApp(mode: AppMode = "server") {
         : path.resolve(__dirname, "..", "dist", "public");
 
     app.use(express.static(staticPath));
-    app.get("*", (_req, res) => {
+    app.get("*", (_req: Request, res: Response) => {
       const indexFile = path.join(staticPath, "index.html");
       if (fs.existsSync(indexFile)) {
         res.sendFile(indexFile);
