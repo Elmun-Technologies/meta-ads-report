@@ -201,6 +201,11 @@ export default function LeadsExplorer() {
                         <span className="mono" style={{ fontSize: 11.5, fontWeight: 600 }}>
                           {money(cr.metrics.spend)}
                         </span>
+                        {cr.hasLeads && (
+                          <span className="mono" style={{ fontSize: 11.5, color: "var(--cyan)" }} title="Leads · CPL">
+                            {whole(cr.metrics.leads)} · {money(cr.metrics.cpl)}
+                          </span>
+                        )}
                         <span className="mono" style={{ fontSize: 11.5, color: "var(--text-3)" }}>
                           {pct(cr.metrics.ctr)}
                         </span>

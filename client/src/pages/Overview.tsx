@@ -363,6 +363,18 @@ export default function Overview() {
                     <small>CTR</small>
                     <b>{pct(topCreative.metrics.ctr)}</b>
                   </div>
+                  {topCreative.hasLeads && (
+                    <>
+                      <div>
+                        <small>Leads</small>
+                        <b style={{ color: "var(--cyan)" }}>{whole(topCreative.metrics.leads)}</b>
+                      </div>
+                      <div>
+                        <small>CPL</small>
+                        <b style={{ color: "var(--good)" }}>{money(topCreative.metrics.cpl)}</b>
+                      </div>
+                    </>
+                  )}
                 </div>
                 <button className="primary-btn" onClick={() => openCreative(topCreative.id)}>
                   Kreativ tafsiloti <ArrowUpRight size={13} />
@@ -371,12 +383,14 @@ export default function Overview() {
             ) : (
               <div className="empty-state">Kreativ ma'lumoti topilmadi</div>
             )}
-            <div style={{ marginTop: 12 }}>
-              <span className="kicker">ADSET CONTEXT</span>
-              <p style={{ fontSize: 11.5, color: "var(--text-2)", margin: "6px 0 0", lineHeight: 1.6 }}>
-                Ad-darajadagi lead metrikasi bu hisobotda qaytmagan — kreativ samaradorligi spend/CTR orqali o'lchanadi. Lead darajasidagi xulosa kampaniya kesimida beriladi.
-              </p>
-            </div>
+            {topCreative && !topCreative.hasLeads && (
+              <div style={{ marginTop: 12 }}>
+                <span className="kicker">ADSET CONTEXT</span>
+                <p style={{ fontSize: 11.5, color: "var(--text-2)", margin: "6px 0 0", lineHeight: 1.6 }}>
+                  Bu kreativda ad-level lead metrikasi qaytmagan — samaradorlik spend/CTR orqali o'lchanadi. Lead darajasidagi xulosa kampaniya kesimida beriladi.
+                </p>
+              </div>
+            )}
           </Panel>
         </div>
       </div>

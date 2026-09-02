@@ -137,7 +137,7 @@ check("Overview CRM strip", overview.includes("LEAD LIFECYCLE") && overview.incl
 
 const routes: [string, string[], string][] = [
   ["/campaigns", ["KAMPANIYA LEDGER", "Kampaniyalar"], ["FOODERA"]],
-  ["/creatives", ["KREATIV REYTINGI", "Kreativlar"], ["CTR"]],
+  ["/creatives", ["KREATIV REYTINGI", "Kreativlar"], ["CTR", "CPL"]],
   ["/audience", ["AUDITORIYA TAHLILI"], ["18-24"]],
   ["/leads", ["LEAD FUNNEL EXPLORER", "Expo'dan kreativgacha"], ["PROMOTORS"]],
   ["/pipeline", ["LEAD LIFECYCLE", "KANBAN DOSKA"], ["OOO Chorrak", "ROAS"]],

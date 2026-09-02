@@ -5,7 +5,7 @@ import { useDashboardContext } from "@/contexts/DashboardContext";
 import { EmptyState, Panel } from "@/components/widgets";
 import { CtrTopChart } from "@/components/charts";
 
-type Rank = "spend" | "ctr" | "clicks";
+type Rank = "spend" | "ctr" | "clicks" | "cpl";
 
 export default function Creatives() {
   const { snapshot, openCreative } = useDashboardContext();
@@ -19,7 +19,13 @@ export default function Creatives() {
       return !q || c.originalName.toLowerCase().includes(q) || c.name.toLowerCase().includes(q) || (c.adset?.originalName ?? "").toLowerCase().includes(q);
     });
     return list.sort((a, b) =>
-      rank === "spend" ? b.metrics.spend - a.metrics.spend : rank === "ctr" ? (b.metrics.ctr ?? 0) - (a.metrics.ctr ?? 0) : b.metrics.clicks - a.metrics.clicks,
+      rank === "spend"
+        ? b.metrics.spend - a.metrics.spend
+        : rank === "ctr"
+          ? (b.metrics.ctr ?? 0) - (a.metrics.ctr ?? 0)
+          : rank === "clicks"
+            ? b.metrics.clicks - a.metrics.clicks
+            : (a.metrics.cpl ?? Infinity) - (b.metrics.cpl ?? Infinity),
     );
   }, [snapshot, query, rank]);
 
@@ -27,6 +33,7 @@ export default function Creatives() {
 
   const campaignName = (id: string) => snapshot.campaigns.find((c) => c.id === id)?.originalName ?? "—";
   const maxSpend = Math.max(...snapshot.creatives.map((c) => c.metrics.spend), 1);
+  const withLeads = snapshot.creatives.filter((c) => c.hasLeads).length;
 
   const topCtrChart = [...snapshot.creatives]
     .sort((a, b) => (b.metrics.ctr ?? 0) - (a.metrics.ctr ?? 0))
@@ -42,7 +49,13 @@ export default function Creatives() {
           </span>
           <h1>Kreativlar</h1>
           <p>
-            {snapshot.creatives.length} ta ad-level kreativ. Ushbu hisobotda ad darajasida lead metrikasi qaytmagan — reyting spend, CTR va clicks orqali. Karta ustiga bosing: to'liq tafsilot.
+            {snapshot.creatives.length} ta ad-level kreativ. {withLeads > 0 ? (
+              <>
+                <b style={{ color: "var(--text)" }}>{withLeads} tasida lead ma'lumoti ham bor</b> — CPL reytingi shular uchun; qolganlari spend/CTR bo'yicha baholanadi.
+              </>
+            ) : (
+              <>Ushbu hisobotda ad darajasida lead metrikasi qaytmagan — reyting spend, CTR va clicks orqali.</>
+            )}
           </p>
         </div>
         <div className="right">
@@ -54,6 +67,7 @@ export default function Creatives() {
             <option value="spend">Reyting: Spend</option>
             <option value="ctr">Reyting: CTR</option>
             <option value="clicks">Reyting: Clicks</option>
+            <option value="cpl">Reyting: CPL (arzon)</option>
           </select>
         </div>
       </div>
@@ -99,6 +113,18 @@ export default function Creatives() {
                   <small>CTR</small>
                   <b style={{ color: (c.metrics.ctr ?? 0) >= (snapshot.totals.ctr ?? 0) ? "var(--good)" : "var(--text)" }}>{pct(c.metrics.ctr)}</b>
                 </div>
+                {c.hasLeads && (
+                  <>
+                    <div>
+                      <small>Leads</small>
+                      <b style={{ color: "var(--cyan)" }}>{whole(c.metrics.leads)}</b>
+                    </div>
+                    <div>
+                      <small>CPL</small>
+                      <b style={{ color: (c.metrics.cpl ?? 0) <= (snapshot.totals.cpl ?? Infinity) ? "var(--good)" : "var(--warn)" }}>{money(c.metrics.cpl)}</b>
+                    </div>
+                  </>
+                )}
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 10.5, color: "var(--text-3)" }}>
                 <span className="mono">CPC {money(c.metrics.cpc)} · CPM {money(c.metrics.cpm)}</span>
