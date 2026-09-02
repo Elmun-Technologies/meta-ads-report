@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Activity,
+  ArrowLeftRight,
   BarChart3,
-  Bell,
   Command,
   Gauge,
   LayoutDashboard,
@@ -17,10 +17,12 @@ import {
   Target,
   Users,
   X,
+  FileText,
 } from "lucide-react";
 import { PLATFORM_META, type PlatformId } from "@shared/types";
 import { ago } from "@/lib/format";
 import { useDashboardContext } from "@/contexts/DashboardContext";
+import { AlertsMenu } from "./AlertsMenu";
 
 export interface NavItem {
   path: string;
@@ -35,6 +37,8 @@ export const NAV: NavItem[] = [
   { path: "/creatives", label: "Kreativlar", icon: Sparkles, count: "creatives" },
   { path: "/audience", label: "Auditoriya", icon: Users },
   { path: "/leads", label: "Lead Explorer", icon: Gauge },
+  { path: "/compare", label: "Taqqoslash", icon: ArrowLeftRight },
+  { path: "/report", label: "Hisobot", icon: FileText },
   { path: "/connections", label: "Integratsiyalar", icon: Plug },
 ];
 
@@ -177,9 +181,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
         <button className="icon-btn" onClick={toggleTheme} title={theme === "dark" ? "Yorug' tema" : "Tungi tema"}>
           {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
         </button>
-        <button className="icon-btn desktop-only" title="Bildirishnomalar">
-          <Bell size={15} />
-        </button>
+        <AlertsMenu />
         <div className="avatar">NM</div>
       </div>
     </header>

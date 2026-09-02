@@ -18,15 +18,16 @@ const SORTERS: Record<SortKey, (a: CampaignNode, b: CampaignNode) => number> = {
   impressions: (a, b) => b.metrics.impressions - a.metrics.impressions,
 };
 
-const COLS: { key: SortKey | "name"; label: string }[] = [
-  { key: "name", label: "Kampaniya" },
-  { key: "spend", label: "Spend" },
-  { key: "impressions", label: "Impressions" },
-  { key: "leads", label: "Leads" },
-  { key: "cpl", label: "CPL" },
-  { key: "ctr", label: "CTR" },
-  { key: "cpm", label: "CPM" },
-  { key: "frequency", label: "Freq" },
+const COLS: { id: string; key: SortKey | null; label: string }[] = [
+  { id: "name", key: null, label: "Kampaniya" },
+  { id: "spend", key: "spend", label: "Spend" },
+  { id: "impressions", key: "impressions", label: "Impressions" },
+  { id: "leads", key: "leads", label: "Leads" },
+  { id: "cpl", key: "cpl", label: "CPL" },
+  { id: "cpl-vs-avg", key: null, label: "CPL vs o'rtacha" },
+  { id: "ctr", key: "ctr", label: "CTR" },
+  { id: "cpm", key: "cpm", label: "CPM" },
+  { id: "frequency", key: "frequency", label: "Freq" },
 ];
 
 export default function Campaigns() {
@@ -140,12 +141,12 @@ export default function Campaigns() {
             <tr>
               {COLS.map((col) => (
                 <th
-                  key={col.key}
-                  className={col.key === "name" ? "" : "sortable"}
-                  onClick={() => col.key !== "name" && setSort(col.key as SortKey)}
+                  key={col.id}
+                  className={col.key ? "sortable" : ""}
+                  onClick={() => col.key && setSort(col.key)}
                 >
                   {col.label}
-                  {sort === col.key && " ↓"}
+                  {col.key && sort === col.key && " ↓"}
                 </th>
               ))}
             </tr>
@@ -171,6 +172,13 @@ export default function Campaigns() {
                   {c.metrics.leads > 0 ? whole(c.metrics.leads) : <span className="tone-muted">—</span>}
                 </td>
                 <td className={`num ${cplTone(c.metrics.cpl)}`}>{c.metrics.cpl != null ? money(c.metrics.cpl) : "N/A"}</td>
+                <td className="num">
+                  {c.metrics.cpl != null && snapshot.totals.cpl ? (
+                    <span className={cplTone(c.metrics.cpl)}>{((c.metrics.cpl - (snapshot.totals.cpl ?? 0)) / (snapshot.totals.cpl ?? 1) >= 0 ? "+" : "") + (((c.metrics.cpl - (snapshot.totals.cpl ?? 0)) / (snapshot.totals.cpl ?? 1)) * 100).toFixed(0)}%</span>
+                  ) : (
+                    <span className="tone-muted">—</span>
+                  )}
+                </td>
                 <td className="num">{pct(c.metrics.ctr)}</td>
                 <td className="num">{money(c.metrics.cpm)}</td>
                 <td className={`num ${(c.metrics.frequency ?? 0) >= 3 ? "tone-warn" : ""}`}>{ratio(c.metrics.frequency)}</td>

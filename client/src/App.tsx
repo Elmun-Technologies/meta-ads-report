@@ -12,6 +12,8 @@ import Campaigns from "./pages/Campaigns";
 import Creatives from "./pages/Creatives";
 import Audience from "./pages/Audience";
 import LeadsExplorer from "./pages/LeadsExplorer";
+import Compare from "./pages/Compare";
+import Report from "./pages/Report";
 import Connections from "./pages/Connections";
 import NotFound from "./pages/NotFound";
 
@@ -61,6 +63,8 @@ function Shell() {
               <Route path="/creatives" component={Creatives} />
               <Route path="/audience" component={Audience} />
               <Route path="/leads" component={LeadsExplorer} />
+              <Route path="/compare" component={Compare} />
+              <Route path="/report" component={Report} />
               <Route path="/connections" component={Connections} />
               <Route component={NotFound} />
             </Switch>

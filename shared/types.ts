@@ -94,6 +94,17 @@ export interface SnapshotMeta {
   syncedAt: string; // ISO — snapshot fayli yozilgan/yangilangan vaqt
   sourceLabel: string;
   limitations: string[];
+  /** Qaysi fayldan o'qilgan (davrlararo taqqoslash uchun) */
+  file?: string;
+}
+
+/** /api/snapshots ro'yxati elementi — mavjud davrlar/eksportlar */
+export interface SnapshotInfo {
+  file: string;
+  platform: PlatformId;
+  accountName: string;
+  periodLabel: string;
+  syncedAt: string;
 }
 
 export interface NormalizedSnapshot {

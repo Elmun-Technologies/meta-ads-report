@@ -125,7 +125,7 @@ function totalsFromSummary(summary: Record<string, number>): Metrics {
 /* Snapshot builder                                                    */
 /* ------------------------------------------------------------------ */
 
-export function normalizeMetaExport(raw: RawMetaExport, opts: { syncedAt: string; sourceLabel: string; platform?: PlatformId }): NormalizedSnapshot {
+export function normalizeMetaExport(raw: RawMetaExport, opts: { syncedAt: string; sourceLabel: string; platform?: PlatformId; file?: string }): NormalizedSnapshot {
   const platform: PlatformId = opts.platform ?? "meta";
 
   const adsById = new Map<string, RawRow>();
@@ -198,6 +198,7 @@ export function normalizeMetaExport(raw: RawMetaExport, opts: { syncedAt: string
       period: { start: start || "", end: end || "", label: raw.account?.period || "" },
       syncedAt: opts.syncedAt,
       sourceLabel: opts.sourceLabel,
+      file: opts.file,
       limitations: raw.limitations || [],
     },
     totals: totalsFromSummary(raw.summary || {}),

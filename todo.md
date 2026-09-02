@@ -11,6 +11,16 @@
 - [x] ⌘K command palette, CSV eksport, detail drawer, skeleton/error holatlar.
 - [x] jsdom smoke-test (scripts/smoke-render.ts) — 21 tekshiruv.
 
+## Bajarildi (V2.1 — signal dvigateli)
+
+- [x] Signal markazi: qoidalar dvigateli (lead'siz sarf, DISAPPROVED, CPL regressiya, charchash, pauza, zaif CTR, scale imkoniyati) — qo'ng'iroq ikonkasi + Overview paneli.
+- [x] Statistik anomaliya deteksiya (robust MAD z-score ≥ 2): CPL/CPM/CTR/Frequency outayerlari.
+- [x] Pacing va prognoz: kunlik sarf/lead, 30 kunlik prognoz, scale what-if (+$100 → +N lead).
+- [x] Taqqoslash sahifasi: Expo benchmark, account benchmark (o'rtachadan yuqorida/pastda), A/B davrlar (2+ snapshot kelganda avtomatik yonadi).
+- [x] Hisobot sahifasi: chop etiladigan executive brief (print/PDF CSS bilan).
+- [x] Kampaniyalar jadvaliga CPL vs o'rtacha benchmark ustuni.
+- [x] /api/snapshots + ?file= — snapshot ro'yxati va fayl bo'yicha olish.
+
 ## Keyingi (V3 yo'l xaritasi)
 
 - [ ] Google Ads MCP normalizer + connector (snapshot shu papkaga tushadi).

@@ -98,12 +98,16 @@ check("Overview sarlavha", overview.includes("Boshqaruv paneli"));
 check("Overview KPI (CPL)", overview.includes("Cost per lead"));
 check("Overview xulosa dvigateli", overview.includes("lead manbasi") || overview.includes("xulosa") || overview.includes("XULOSA"));
 check("Overview funnel", overview.includes("Impressions") && overview.includes("Landing views"));
+check("Overview signal markazi", overview.includes("SIGNAL MARKAZI"));
+check("Overview pacing", overview.includes("BYUDJET SUR'ATI") && overview.includes("Pacing"));
 
 const routes: [string, string[], string][] = [
   ["/campaigns", ["KAMPANIYA LEDGER", "Kampaniyalar"], ["FOODERA"]],
   ["/creatives", ["KREATIV REYTINGI", "Kreativlar"], ["CTR"]],
   ["/audience", ["AUDITORIYA TAHLILI"], ["18-24"]],
   ["/leads", ["LEAD FUNNEL EXPLORER", "Expo'dan kreativgacha"], ["PROMOTORS"]],
+  ["/compare", ["TAQQOSLASH", "EXPO BENCHMARK"], ["FOODERA"]],
+  ["/report", ["EXECUTIVE BRIEF", "Chop etish"], ["voronka", "VORONKA"]],
   ["/connections", ["Integratsiyalar"], ["Google Ads"]],
   ["/not-exist", ["404"], []],
 ];

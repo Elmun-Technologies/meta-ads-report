@@ -13,7 +13,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { normalizeMetaExport, type RawMetaExport } from "@shared/normalize";
-import type { ConnectionInfo, NormalizedSnapshot, PlatformId } from "@shared/types";
+import type { ConnectionInfo, NormalizedSnapshot, PlatformId, SnapshotInfo } from "@shared/types";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,9 +31,15 @@ interface Connector {
   name: string;
   vendor: string;
   note?: string;
-  /** Papkadagi eng yangiya snapshot fayli (meta uchun) */
+  /** Papkadagi eng yangi snapshot fayli (meta uchun) */
   latestFile?: () => { file: string; mtime: Date } | null;
-  resolve: (accountId?: string) => NormalizedSnapshot | null;
+  resolve: (file?: string) => NormalizedSnapshot | null;
+}
+
+function platformForFile(file: string): PlatformId {
+  if (file.startsWith("google")) return "google-ads";
+  if (file.startsWith("yandex")) return "yandex-direct";
+  return "meta";
 }
 
 function latestMetaFile(): { file: string; mtime: Date } | null {
@@ -46,19 +52,46 @@ function latestMetaFile(): { file: string; mtime: Date } | null {
   return files[0] ?? null;
 }
 
-function readMetaSnapshot(): NormalizedSnapshot | null {
-  const latest = latestMetaFile();
-  if (!latest) return null;
+function readMetaSnapshot(file?: string): NormalizedSnapshot | null {
+  const target = file ? path.join(DATA_DIR, path.basename(file)) : latestMetaFile()?.file;
+  if (!target || !fs.existsSync(target)) return null;
   try {
-    const raw = JSON.parse(fs.readFileSync(latest.file, "utf-8")) as RawMetaExport;
+    const mtime = fs.statSync(target).mtime;
+    const raw = JSON.parse(fs.readFileSync(target, "utf-8")) as RawMetaExport;
     return normalizeMetaExport(raw, {
-      syncedAt: latest.mtime.toISOString(),
-      sourceLabel: `Meta Ads MCP snapshot · ${path.basename(latest.file)}`,
+      syncedAt: mtime.toISOString(),
+      sourceLabel: `Meta Ads MCP snapshot · ${path.basename(target)}`,
+      file: path.basename(target),
     });
   } catch (err) {
     console.error("[meta] snapshot o'qishda xato:", err);
     return null;
   }
+}
+
+/** Barcha snapshot fayllari ro'yxati — davrlararo taqqoslash uchun */
+function listSnapshots(): SnapshotInfo[] {
+  if (!fs.existsSync(DATA_DIR)) return [];
+  return fs
+    .readdirSync(DATA_DIR)
+    .filter((f) => f.endsWith(".json"))
+    .map((file) => {
+      try {
+        const full = path.join(DATA_DIR, file);
+        const raw = JSON.parse(fs.readFileSync(full, "utf-8")) as RawMetaExport;
+        return {
+          file,
+          platform: platformForFile(file),
+          accountName: raw.account?.name ?? "—",
+          periodLabel: raw.account?.period ?? "—",
+          syncedAt: fs.statSync(full).mtime.toISOString(),
+        } satisfies SnapshotInfo;
+      } catch {
+        return null;
+      }
+    })
+    .filter((s): s is SnapshotInfo => s != null)
+    .sort((a, b) => b.syncedAt.localeCompare(a.syncedAt));
 }
 
 const CONNECTORS: Connector[] = [
@@ -69,8 +102,7 @@ const CONNECTORS: Connector[] = [
     note: "Facebook Ads MCP orqali olingan real eksportga ulangan.",
     latestFile: latestMetaFile,
     resolve: () => readMetaSnapshot(),
-  },
-  {
+  },  {
     id: "google-ads",
     name: "Google Ads",
     vendor: "Google",
@@ -155,7 +187,21 @@ async function startServer() {
     res.json(connectionsPayload());
   });
 
+  app.get("/api/snapshots", (_req, res) => {
+    res.json(listSnapshots());
+  });
+
   app.get("/api/snapshot", (req, res) => {
+    const file = req.query.file ? String(req.query.file) : undefined;
+    if (file) {
+      const snapshot = readMetaSnapshot(file);
+      if (!snapshot) {
+        res.status(404).json({ error: `Snapshot topilmadi: ${file}` });
+        return;
+      }
+      res.json(snapshot);
+      return;
+    }
     const platform = String(req.query.platform || "meta") as PlatformId;
     const connector = CONNECTORS.find((c) => c.id === platform);
     if (!connector) {

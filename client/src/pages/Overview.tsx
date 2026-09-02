@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import { Link } from "wouter";
-import { ArrowUpRight, Coins, Eye, MousePointerClick, Target, Users, Zap } from "lucide-react";
+import { ArrowUpRight, Coins, Eye, MousePointerClick, Radar, Target, Users, Zap } from "lucide-react";
 import { PLATFORM_META } from "@shared/types";
 import type { Insight } from "@/lib/insights";
 import { buildInsights } from "@/lib/insights";
+import { buildAlerts, buildAnomalies, buildPacing, SEVERITY_META } from "@/lib/alerts";
 import { compact, money, pct, ratio, whole } from "@/lib/format";
 import { useDashboardContext } from "@/contexts/DashboardContext";
 import { Funnel, InsightCard, KpiCard, Panel, SpendShare } from "@/components/widgets";
@@ -15,6 +16,9 @@ export default function Overview() {
   const { snapshot, openCampaign, openCreative } = useDashboardContext();
 
   const insights = useMemo(() => (snapshot ? buildInsights(snapshot) : []), [snapshot]);
+  const alerts = useMemo(() => (snapshot ? buildAlerts(snapshot) : []), [snapshot]);
+  const anomalies = useMemo(() => (snapshot ? buildAnomalies(snapshot) : []), [snapshot]);
+  const pacing = useMemo(() => (snapshot ? buildPacing(snapshot) : null), [snapshot]);
 
   if (!snapshot) return null;
   const { totals, campaigns, creatives, age } = snapshot;
@@ -158,6 +162,93 @@ export default function Overview() {
           ))}
         </div>
       </Panel>
+
+      {/* Signallar + Pacing */}
+      <div className="grid-12" style={{ marginBottom: 14 }}>
+        <div className="col-7">
+          <Panel
+            kicker="SIGNAL MARKAZI"
+            title="Nima ga e'tibor berish kerak"
+            sub="Qoidalar dvigateli real vaqtda hisoblaydi"
+            action={<span className="chip muted">{alerts.length} signal</span>}
+          >
+            {alerts.length === 0 && <div className="empty-state">Signal yo'q — hammasi tartibda ✓</div>}
+            {alerts.slice(0, 5).map((a) => (
+              <button
+                key={a.id}
+                className="sig-row"
+                onClick={() => (a.target?.kind === "campaign" ? openCampaign(a.target.id) : a.target?.kind === "creative" ? openCreative(a.target.id) : undefined)}
+              >
+                <span className={`chip ${SEVERITY_META[a.severity].chip}`} style={{ flex: "none", minWidth: 64, justifyContent: "center" }}>
+                  {SEVERITY_META[a.severity].label}
+                </span>
+                <span style={{ minWidth: 0 }}>
+                  <b>{a.title}</b>
+                  <small>{a.body}</small>
+                </span>
+                {(a.target?.kind === "campaign" || a.target?.kind === "creative") && <ArrowUpRight size={14} style={{ flex: "none", color: "var(--text-3)" }} />}
+              </button>
+            ))}
+            {anomalies.length > 0 && (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed var(--line)" }}>
+                <span className="kicker" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <Radar size={12} /> STATISTIK ANOMALIYALAR (MAD Z-SCORE ≥ 2)
+                </span>
+                {anomalies.slice(0, 3).map((an, i) => (
+                  <button key={`${an.campaignId}-${an.metric}-${i}`} className="sig-row" onClick={() => openCampaign(an.campaignId)}>
+                    <span className={`chip ${an.direction === "high" ? "warn" : "accent"}`} style={{ flex: "none", minWidth: 64, justifyContent: "center" }}>
+                      {an.metric} {an.direction === "high" ? "↑" : "↓"}
+                    </span>
+                    <span style={{ minWidth: 0 }}>
+                      <b>
+                        {an.campaign} — {an.value}
+                      </b>
+                      <small>
+                        z = {an.z.toFixed(1)} · {an.why}
+                      </small>
+                    </span>
+                    <ArrowUpRight size={14} style={{ flex: "none", color: "var(--text-3)" }} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </Panel>
+        </div>
+        <div className="col-5">
+          <Panel kicker="BYUDJET SUR'ATI VA PROGNOZ" title="Pacing" sub={pacing?.daysNote}>
+            {pacing && (
+              <>
+                <div className="pace-grid">
+                  <div>
+                    <small>Kunlik sarf</small>
+                    <b>{money(pacing.dailySpend)}</b>
+                  </div>
+                  <div>
+                    <small>Kunlik lead</small>
+                    <b>{pacing.dailyLeads.toFixed(1)}</b>
+                  </div>
+                  <div>
+                    <small>30 kun prognoz (sarf)</small>
+                    <b>{money(pacing.projected30Spend)}</b>
+                  </div>
+                  <div>
+                    <small>30 kun prognoz (lead)</small>
+                    <b>{whole(pacing.projected30Leads)}</b>
+                  </div>
+                </div>
+                {pacing.scale && (
+                  <div className="what-if">
+                    <span className="kicker">WHAT-IF: SCALE TEST</span>
+                    <p>
+                      «{pacing.scale.name}» CPL {money(pacing.scale.cpl)} — <b>+$100 byudjet ≈ +{pacing.scale.extraLeadsPer100} lead</b>. CRM lead sifati tasdiqlasa, eng tez o'sish shu yerda.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </Panel>
+        </div>
+      </div>
 
       {/* Funnel + spend */}
       <div className="grid-12" style={{ marginBottom: 14 }}>
