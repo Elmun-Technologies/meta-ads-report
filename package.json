@@ -8,6 +8,7 @@
     "dev:web": "vite --host",
     "dev:api": "tsx server/index.ts",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "build:web": "vite build",
     "start": "NODE_ENV=production API_PORT=3000 node dist/index.js",
     "preview": "vite preview --host",
     "check": "tsc --noEmit",
