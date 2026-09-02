@@ -47,13 +47,14 @@ export default function Connections() {
 
       <div className="conn-grid" style={{ marginBottom: 14 }}>
         {connections.map((conn) => {
-          const pm = PLATFORM_META[conn.id];
+          const isCrm = conn.kind === "crm";
+          const pm = isCrm ? null : PLATFORM_META[conn.id as keyof typeof PLATFORM_META];
           const connected = conn.status === "connected";
           return (
             <div className="conn-card" key={conn.id} style={connected ? { borderColor: "color-mix(in srgb, var(--good) 40%, var(--line))" } : undefined}>
               <div className="c-head">
-                <span className="conn-logo" style={{ background: pm.color }}>
-                  {conn.id === "meta" ? "f" : conn.id === "google-ads" ? "G" : "Я"}
+                <span className="conn-logo" style={{ background: isCrm ? "#8b5cf6" : pm?.color ?? "var(--accent)" }}>
+                  {conn.id === "meta" ? "f" : conn.id === "google-ads" ? "G" : conn.id === "yandex-direct" ? "Я" : conn.id === "amocrm" ? "A" : "•"}
                 </span>
                 <div style={{ minWidth: 0 }}>
                   <b>{conn.name}</b>
@@ -66,7 +67,7 @@ export default function Connections() {
               <p>{conn.note}</p>
               <div>
                 <div className="conn-kv">
-                  <span>Kabinetlar</span>
+                  <span>{isCrm ? "Hisoblar" : "Kabinetlar"}</span>
                   <b>{conn.accounts.length ? conn.accounts.map((a) => a.name).join(", ") : "—"}</b>
                 </div>
                 <div className="conn-kv">
@@ -77,7 +78,7 @@ export default function Connections() {
                   <span>Real-time kanal</span>
                   <b>{connected ? (live ? "SSE · faol" : "Polling · 60s") : "—"}</b>
                 </div>
-                {connected && snapshot && snapshot.meta.platform === conn.id && (
+                {connected && !isCrm && snapshot && snapshot.meta.platform === conn.id && (
                   <div className="conn-kv">
                     <span>Davr</span>
                     <b>{snapshot.meta.period.label}</b>

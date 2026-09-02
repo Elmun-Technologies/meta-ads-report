@@ -3,7 +3,7 @@ import { useDashboard, type DashboardState } from "@/lib/useDashboard";
 
 export type Theme = "dark" | "light";
 
-export type DrawerTarget = { type: "campaign" | "creative"; id: string } | null;
+export type DrawerTarget = { type: "campaign" | "creative" | "lead"; id: string } | null;
 
 interface DashboardContextValue extends DashboardState {
   theme: Theme;
@@ -11,6 +11,7 @@ interface DashboardContextValue extends DashboardState {
   drawer: DrawerTarget;
   openCampaign: (id: string) => void;
   openCreative: (id: string) => void;
+  openLead: (id: string) => void;
   closeDrawer: () => void;
   paletteOpen: boolean;
   setPaletteOpen: (open: boolean) => void;
@@ -32,6 +33,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const toggleTheme = useCallback(() => setTheme((t) => (t === "dark" ? "light" : "dark")), []);
   const openCampaign = useCallback((id: string) => setDrawer({ type: "campaign", id }), []);
   const openCreative = useCallback((id: string) => setDrawer({ type: "creative", id }), []);
+  const openLead = useCallback((id: string) => setDrawer({ type: "lead", id }), []);
   const closeDrawer = useCallback(() => setDrawer(null), []);
 
   // ⌘K / Ctrl+K — command palette
@@ -48,8 +50,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<DashboardContextValue>(
-    () => ({ ...data, theme, toggleTheme, drawer, openCampaign, openCreative, closeDrawer, paletteOpen, setPaletteOpen }),
-    [data, theme, toggleTheme, drawer, openCampaign, openCreative, closeDrawer, paletteOpen],
+    () => ({ ...data, theme, toggleTheme, drawer, openCampaign, openCreative, openLead, closeDrawer, paletteOpen, setPaletteOpen }),
+    [data, theme, toggleTheme, drawer, openCampaign, openCreative, openLead, closeDrawer, paletteOpen],
   );
 
   return <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>;

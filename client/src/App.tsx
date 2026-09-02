@@ -12,6 +12,7 @@ import Campaigns from "./pages/Campaigns";
 import Creatives from "./pages/Creatives";
 import Audience from "./pages/Audience";
 import LeadsExplorer from "./pages/LeadsExplorer";
+import Pipeline from "./pages/Pipeline";
 import Compare from "./pages/Compare";
 import Report from "./pages/Report";
 import Connections from "./pages/Connections";
@@ -63,6 +64,7 @@ function Shell() {
               <Route path="/creatives" component={Creatives} />
               <Route path="/audience" component={Audience} />
               <Route path="/leads" component={LeadsExplorer} />
+              <Route path="/pipeline" component={Pipeline} />
               <Route path="/compare" component={Compare} />
               <Route path="/report" component={Report} />
               <Route path="/connections" component={Connections} />

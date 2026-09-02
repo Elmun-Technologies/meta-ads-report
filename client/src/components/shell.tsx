@@ -16,6 +16,7 @@ import {
   Sun,
   Target,
   Users,
+  Workflow,
   X,
   FileText,
 } from "lucide-react";
@@ -28,7 +29,7 @@ export interface NavItem {
   path: string;
   label: string;
   icon: typeof LayoutDashboard;
-  count?: "campaigns" | "creatives";
+  count?: "campaigns" | "creatives" | "crmLeads";
 }
 
 export const NAV: NavItem[] = [
@@ -37,6 +38,7 @@ export const NAV: NavItem[] = [
   { path: "/creatives", label: "Kreativlar", icon: Sparkles, count: "creatives" },
   { path: "/audience", label: "Auditoriya", icon: Users },
   { path: "/leads", label: "Lead Explorer", icon: Gauge },
+  { path: "/pipeline", label: "Lead Lifecycle", icon: Workflow, count: "crmLeads" },
   { path: "/compare", label: "Taqqoslash", icon: ArrowLeftRight },
   { path: "/report", label: "Hisobot", icon: FileText },
   { path: "/connections", label: "Integratsiyalar", icon: Plug },
@@ -58,9 +60,11 @@ function PlatformLogo({ id, size = 22 }: { id: PlatformId; size?: number }) {
 /* ------------------------------------------------------------------ */
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { connections, snapshot, live, lastEventAt } = useDashboardContext();
+  const { connections, snapshot, crm, crmConnected, live, lastEventAt } = useDashboardContext();
   const [location] = useLocation();
   const meta = snapshot?.meta;
+  const adsConnections = connections.filter((c) => c.kind !== "crm");
+  const crmConnection = connections.find((c) => c.kind === "crm");
 
   return (
     <aside className={`sidebar ${open ? "open" : ""}`}>
@@ -80,14 +84,14 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       <div className="side-section">
         <div className="side-caption">PLATFORMALAR</div>
         <div className="platform-switch">
-          {connections.map((conn) => {
-            const pm = PLATFORM_META[conn.id];
+          {adsConnections.map((conn) => {
+            const pm = PLATFORM_META[conn.id as PlatformId];
             const connected = conn.status === "connected";
             return (
               <Link key={conn.id} href={connected ? "/" : "/connections"} onClick={onClose} className={`platform-row ${meta?.platform === conn.id ? "active" : ""}`}>
-                <PlatformLogo id={conn.id} />
+                <PlatformLogo id={conn.id as PlatformId} />
                 <span className="p-info">
-                  <b>{pm.name}</b>
+                  <b>{pm?.name ?? conn.name}</b>
                   <small>{connected ? `${conn.accounts.length} kabinet ulangan` : "ulanmagan"}</small>
                 </span>
                 <span className={`p-status ${connected ? "on" : "off"}`}>{connected ? "LIVE" : "READY"}</span>
@@ -96,6 +100,22 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           })}
         </div>
       </div>
+
+      {crmConnection && (
+        <div className="side-section">
+          <div className="side-caption">CRM · LIFECYCLE</div>
+          <Link href="/pipeline" onClick={onClose} className={`platform-row ${location === "/pipeline" ? "active" : ""}`}>
+            <span className="p-dot" style={{ background: "#8b5cf6", width: 22, height: 22, borderRadius: 7, display: "grid", placeItems: "center", fontSize: 10, fontWeight: 800, color: "#fff" }}>
+              A
+            </span>
+            <span className="p-info">
+              <b>AmoCRM</b>
+              <small>{crmConnected ? `${crm?.leads.length ?? 0} lead kuzatilmoqda` : "ulanmagan — /pipeline"}</small>
+            </span>
+            <span className={`p-status ${crmConnected ? "on" : "off"}`}>{crmConnected ? "LIVE" : "READY"}</span>
+          </Link>
+        </div>
+      )}
 
       <div className="side-section">
         <div className="side-caption">KABINET</div>
@@ -113,7 +133,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         <nav className="side-nav">
           {NAV.map((item) => {
             const active = location === item.path;
-            const count = item.count === "campaigns" ? snapshot?.campaigns.length : item.count === "creatives" ? snapshot?.creatives.length : undefined;
+            const count = item.count === "campaigns" ? snapshot?.campaigns.length : item.count === "creatives" ? snapshot?.creatives.length : item.count === "crmLeads" ? crm?.leads.length : undefined;
             return (
               <Link key={item.path} href={item.path} onClick={onClose} className={active ? "active" : ""}>
                 <item.icon size={16.5} strokeWidth={2} />
@@ -201,7 +221,7 @@ function Chevron({ className }: { className?: string }) {
 /* ------------------------------------------------------------------ */
 
 export function CommandPalette() {
-  const { paletteOpen, setPaletteOpen, snapshot, openCampaign, openCreative, toggleTheme, theme, refresh } = useDashboardContext();
+  const { paletteOpen, setPaletteOpen, snapshot, crm, openCampaign, openCreative, openLead, toggleTheme, theme, refresh } = useDashboardContext();
   const [, navigate] = useLocation();
   const [query, setQuery] = useState("");
   const [sel, setSel] = useState(0);
@@ -235,7 +255,14 @@ export function CommandPalette() {
       meta: `$${Math.round(c.metrics.spend)}`,
       run: () => openCreative(c.id),
     }));
-    const all = [...nav, ...actions, ...campaigns, ...creatives];
+    const leads = (crm?.leads ?? []).slice(0, 25).map((l) => ({
+      group: "CRM Leadlar",
+      label: l.name,
+      icon: <Target size={13} />,
+      meta: l.stageName,
+      run: () => openLead(l.id),
+    }));
+    const all = [...nav, ...actions, ...campaigns, ...creatives, ...leads];
     if (!query.trim()) return all.slice(0, 22);
     const q = query.toLowerCase();
     return all.filter((i) => i.label.toLowerCase().includes(q)).slice(0, 22);

@@ -51,7 +51,10 @@ Batafsil: `server/data/README.md` va dashboarddagi **Integratsiyalar** sahifasi.
 | `/creatives` | Kreativ reytingi (spend/CTR/clicks), CTR liderlari charti |
 | `/audience` | Yosh segmentlari: spend/leads chart, CPL kesimi, to'liq jadval |
 | `/leads` | Expo → Kampaniya → Ad set → Kreativ hierarxiyasi |
-| `/connections` | Platforma ulanishlari, texnik arxitektura, manba cheklovlari |
+| `/pipeline` | **Lead Lifecycle (AmoCRM)**: CRM KPI (won/lost/win rate/ROAS/cost per WON), bosqich voronkasi (har qadamda konversiya+tannarx), kanban doska, manba atributsiyasi |
+| `/compare` | Davrlararo taqqoslash + Expo/account benchmark |
+| `/report` | Chop etiladigan executive brief (PDF) |
+| `/connections` | Platforma va CRM ulanishlari, texnik arxitektura, manba cheklovlari |
 
 **⌘K / Ctrl+K** — command palette: sahifalar, kampaniya/kreativ qidiruvi, tema almashish, sync.
 **Tema** — dark (default) / light, `localStorage`da saqlanadi.

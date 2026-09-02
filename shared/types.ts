@@ -17,9 +17,11 @@ export interface AccountRef {
 }
 
 export interface ConnectionInfo {
-  id: PlatformId;
+  id: string;
   name: string;
   vendor: string;
+  /** ads — reklama platformasi, crm — lead lifecycle manbasi */
+  kind?: "ads" | "crm";
   status: ConnectionStatus;
   accounts: AccountRef[];
   syncedAt: string | null;
@@ -120,3 +122,81 @@ export const PLATFORM_META: Record<PlatformId, { name: string; short: string; co
   "google-ads": { name: "Google Ads", short: "Google", color: "#4285F4" },
   "yandex-direct": { name: "Yandex Direct", short: "Yandex", color: "#FC3F1D" },
 };
+
+/* ------------------------------------------------------------------ */
+/* CRM (AmoCRM) — lead lifecycle                                       */
+/* ------------------------------------------------------------------ */
+
+export type CrmStageKind = "new" | "in_progress" | "won" | "lost";
+
+export interface CrmStage {
+  id: string;
+  name: string;
+  pipeline: string;
+  sort: number;
+  kind: CrmStageKind;
+}
+
+export interface CrmHistoryEntry {
+  at: string;
+  stage: string;
+}
+
+export interface CrmLead {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  stageId: string;
+  stageName: string;
+  pipeline: string;
+  price: number;
+  responsible: string | null;
+  contactName: string | null;
+  phone: string | null;
+  utmCampaign: string | null;
+  utmContent: string | null;
+  utmSource: string | null;
+  /** Meta kampaniyasiga match (utm_campaign bo'yicha) */
+  campaignId: string | null;
+  creativeId: string | null;
+  history: CrmHistoryEntry[];
+  lossReason: string | null;
+}
+
+export interface CrmData {
+  account: string;
+  currency: string;
+  syncedAt: string;
+  sourceLabel: string;
+  stages: CrmStage[];
+  leads: CrmLead[];
+  matchedLeads: number;
+  unmatchedLeads: number;
+}
+
+/** Bir leadsiz stage funnel qatori */
+export interface CrmStageStat {
+  stage: CrmStage;
+  /** Bu bosqichga yetib borgan leadlar (history + hozirgi holat) */
+  reached: number;
+  conversionFromPrev: number | null;
+  /** Bosqichga yetib borgan har bir leadning reklama tannarxi (pro-rata) */
+  costPerLead: number | null;
+  avgDaysInStage: number | null;
+  totalPrice: number;
+}
+
+export interface CrmSourceRow {
+  key: string;
+  label: string;
+  kind: "campaign" | "unmatched";
+  leads: number;
+  inProgress: number;
+  won: number;
+  lost: number;
+  revenue: number;
+  spend: number;
+  costPerWon: number | null;
+  roas: number | null;
+}

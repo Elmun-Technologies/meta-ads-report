@@ -5,6 +5,7 @@ import { PLATFORM_META } from "@shared/types";
 import type { Insight } from "@/lib/insights";
 import { buildInsights } from "@/lib/insights";
 import { buildAlerts, buildAnomalies, buildPacing, SEVERITY_META } from "@/lib/alerts";
+import { buildCrmSummary } from "@shared/amo";
 import { compact, money, pct, ratio, whole } from "@/lib/format";
 import { useDashboardContext } from "@/contexts/DashboardContext";
 import { Funnel, InsightCard, KpiCard, Panel, SpendShare } from "@/components/widgets";
@@ -13,12 +14,13 @@ import { LeadsCplChart, SpendByCampaignChart } from "@/components/charts";
 const shorten = (name: string, max = 22) => (name.length > max ? `${name.slice(0, max - 1)}…` : name);
 
 export default function Overview() {
-  const { snapshot, openCampaign, openCreative } = useDashboardContext();
+  const { snapshot, crm, crmConnected, openCampaign, openCreative } = useDashboardContext();
 
   const insights = useMemo(() => (snapshot ? buildInsights(snapshot) : []), [snapshot]);
   const alerts = useMemo(() => (snapshot ? buildAlerts(snapshot) : []), [snapshot]);
   const anomalies = useMemo(() => (snapshot ? buildAnomalies(snapshot) : []), [snapshot]);
   const pacing = useMemo(() => (snapshot ? buildPacing(snapshot) : null), [snapshot]);
+  const crmSummary = useMemo(() => (crmConnected && crm && snapshot ? buildCrmSummary(crm, snapshot) : null), [crmConnected, crm, snapshot]);
 
   if (!snapshot) return null;
   const { totals, campaigns, creatives, age } = snapshot;
@@ -247,6 +249,55 @@ export default function Overview() {
               </>
             )}
           </Panel>
+        </div>
+      </div>
+
+      {/* CRM lifecycle strip */}
+      <div className="grid-12">
+        <div className="col-12">
+          {crmSummary && crm ? (
+            <Panel
+              kicker="LEAD LIFECYCLE · AMOCRM"
+              title="Reklamadan bitimgacha — yopiq sikl"
+              action={
+                <Link className="panel-link" href="/pipeline">
+                  Lifecycle doskasini ochish <ArrowUpRight size={12} />
+                </Link>
+              }
+            >
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 9 }}>
+                {[
+                  { l: "Leads (CRM)", v: whole(crmSummary.totalLeads), c: "var(--accent)" },
+                  { l: "Jarayonda", v: whole(crmSummary.inProgress), c: "var(--text-2)" },
+                  { l: "Yutiq", v: whole(crmSummary.won), c: "var(--good)" },
+                  { l: "Yo'qotish", v: whole(crmSummary.lost), c: "var(--risk)" },
+                  { l: "Win rate", v: crmSummary.winRate != null ? pct(crmSummary.winRate, 1) : "N/A", c: "var(--cyan)" },
+                  { l: "Tushum", v: `${compact(crmSummary.revenue)} ${crm.currency}`, c: "var(--good)" },
+                  { l: "Cost per WON", v: crmSummary.costPerWon != null ? money(crmSummary.costPerWon) : "N/A", c: "var(--violet)" },
+                  { l: "ROAS", v: crmSummary.roas != null ? `${crmSummary.roas.toFixed(1)}×` : "N/A", c: (crmSummary.roas ?? 0) >= 1 ? "var(--good)" : "var(--risk)" },
+                ].map((k) => (
+                  <div key={k.l} style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel-2)", padding: "10px 12px" }}>
+                    <small style={{ display: "block", fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: "0.1em", color: "var(--text-3)", textTransform: "uppercase" }}>{k.l}</small>
+                    <b style={{ display: "block", fontFamily: "var(--mono)", fontSize: 17, fontWeight: 650, color: k.c, marginTop: 5 }}>{k.v}</b>
+                  </div>
+                ))}
+              </div>
+              <div className="note-strip" style={{ marginTop: 11 }}>
+                <span className="kicker" style={{ flex: "none" }}>
+                  MATCH
+                </span>
+                <span>
+                  {crm.matchedLeads}/{crm.leads.length} lead UTM orqali reklamaga bog'langan. Bog'lanmaganlari taxminiy hisobga kiritilmagan — <Link className="panel-link" href="/pipeline" style={{ display: "inline-flex" }}>batafsil</Link>.
+                </span>
+              </div>
+            </Panel>
+          ) : (
+            <Panel kicker="LEAD LIFECYCLE · AMOCRM" title="Keyingi qadam: lead'gina emas — bitimgacha" action={<Link className="panel-link" href="/pipeline">Qanday ulanadi <ArrowUpRight size={12} /></Link>}>
+              <p style={{ margin: 0, fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.6 }}>
+                AmoCRM ulanganda (amo_*.json snapshot) shu panelda win rate, tushum, cost per WON va ROAS paydo bo'ladi — har bir lead o'z kampaniyasiga UTM orqali bog'lanadi. UI to'liq tayyor: <b>/pipeline</b> sahifasida kanban doska va manba atributsiyasi kutib turibdi.
+              </p>
+            </Panel>
+          )}
         </div>
       </div>
 

@@ -5,11 +5,13 @@
  *   - SSE ishlamasa 60s polling fallback
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ConnectionInfo, NormalizedSnapshot } from "@shared/types";
+import type { ConnectionInfo, CrmData, NormalizedSnapshot } from "@shared/types";
 
 export interface DashboardState {
   snapshot: NormalizedSnapshot | null;
   connections: ConnectionInfo[];
+  crm: CrmData | null;
+  crmConnected: boolean;
   loading: boolean;
   syncing: boolean;
   error: string | null;
@@ -21,6 +23,8 @@ export interface DashboardState {
 export function useDashboard(): DashboardState {
   const [snapshot, setSnapshot] = useState<NormalizedSnapshot | null>(null);
   const [connections, setConnections] = useState<ConnectionInfo[]>([]);
+  const [crm, setCrm] = useState<CrmData | null>(null);
+  const [crmConnected, setCrmConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,13 +35,21 @@ export function useDashboard(): DashboardState {
   const load = useCallback(async (showSync = true) => {
     if (showSync) setSyncing(true);
     try {
-      const [snapRes, connRes] = await Promise.all([fetch("/api/snapshot?platform=meta"), fetch("/api/connections")]);
+      const [snapRes, connRes, crmRes] = await Promise.all([fetch("/api/snapshot?platform=meta"), fetch("/api/connections"), fetch("/api/crm")]);
       if (!snapRes.ok) {
         const body = await snapRes.json().catch(() => ({}));
         throw new Error(body.error || `Snapshot olinmadi (${snapRes.status})`);
       }
       setSnapshot(await snapRes.json());
       setConnections(connRes.ok ? await connRes.json() : []);
+      if (crmRes.ok) {
+        const crmData = await crmRes.json();
+        setCrm(crmData.connected ? crmData : null);
+        setCrmConnected(Boolean(crmData.connected));
+      } else {
+        setCrm(null);
+        setCrmConnected(false);
+      }
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -100,5 +112,5 @@ export function useDashboard(): DashboardState {
     }
   }, [load]);
 
-  return { snapshot, connections, loading, syncing, error, live, lastEventAt, refresh };
+  return { snapshot, connections, crm, crmConnected, loading, syncing, error, live, lastEventAt, refresh };
 }

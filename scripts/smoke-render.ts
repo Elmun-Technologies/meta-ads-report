@@ -52,18 +52,51 @@ g.EventSource = class {
 };
 
 const { normalizeMetaExport } = await import("../shared/normalize");
+const { normalizeAmoExport, matchLeadsToAds } = await import("../shared/amo");
 const raw = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../server/data/snapshots/meta_act-1883723989171211_august-2026.json"), "utf8"));
 const snapshot = normalizeMetaExport(raw, { syncedAt: new Date().toISOString(), sourceLabel: "smoke-test" });
+
+// AmoCRM fixture — real kampaniya IDlariga bog'langan leadlar
+const amoRaw = {
+  account: { name: "Sof-Expo AmoCRM", subdomain: "sofexpo", currency: "UZS" },
+  pipelines: [{ id: 1, name: "Savdo" }],
+  stages: [
+    { id: 101, name: "Yangi lead", pipeline_id: 1, sort: 1 },
+    { id: 102, name: "Sifatli lead", pipeline_id: 1, sort: 2 },
+    { id: 103, name: "Muzokara", pipeline_id: 1, sort: 3 },
+    { id: 104, name: "Muvaffaqiyatli", pipeline_id: 1, sort: 4, status: { kind: "won" } },
+    { id: 105, name: "Yopilgan", pipeline_id: 1, sort: 5, status: { kind: "lost" } },
+  ],
+  leads: [
+    { id: 90001, name: "OOO Chorrak", created_at: "2026-08-05T10:12:00+05:00", updated_at: "2026-08-14T09:00:00+05:00", stage_id: 104, price: 12000000, responsible: "Nazir", contact: { name: "Alisher", phone: "+998901234567" }, utm: { utm_source: "facebook", utm_campaign: "6939006462536", utm_content: "creative#1" }, history: [{ at: "2026-08-05T10:12:00+05:00", stage: "Yangi lead" }], loss_reason: null },
+    { id: 90002, name: "Chaykhona Prime", created_at: "2026-08-06T11:00:00+05:00", updated_at: "2026-08-20T16:00:00+05:00", stage_id: 104, price: 8500000, responsible: "Nazir", contact: { name: "Dilshod" }, utm: { utm_campaign: "52529634958940" }, history: [], loss_reason: null },
+    { id: 90003, name: "Kafe Baraka", created_at: "2026-08-07T09:30:00+05:00", updated_at: "2026-08-18T12:00:00+05:00", stage_id: 105, price: 3000000, responsible: "Sardor", contact: { name: "Jahon" }, utm: { utm_campaign: "6930088563936" }, history: [], loss_reason: "Byudjet yo'q" },
+    { id: 90004, name: "Bakery Sweet", created_at: "2026-08-09T14:20:00+05:00", updated_at: "2026-08-25T10:00:00+05:00", stage_id: 102, price: 5000000, responsible: "Nazir", contact: { name: "Malika" }, utm: {}, history: [], loss_reason: null },
+    { id: 90005, name: "Food Delivery UZ", created_at: "2026-08-10T08:00:00+05:00", updated_at: "2026-08-24T18:00:00+05:00", stage_id: 103, price: 15000000, responsible: "Sardor", contact: { name: "Rustam" }, utm: { utm_campaign: "Foodera Lead | Broad" }, history: [], loss_reason: null },
+  ],
+};
+const crm = matchLeadsToAds(normalizeAmoExport(amoRaw, { syncedAt: new Date().toISOString() }), snapshot);
+if (crm.matchedLeads < 3) {
+  console.log("AMO MATCH KUCHI PAST: matched =", crm.matchedLeads);
+  process.exitCode = 1;
+}
+
 const connections = [
-  { id: "meta", name: "Meta Ads", vendor: "Facebook / Instagram", status: "connected", accounts: [{ id: "act_1", name: "Sof-Expo l Nazir", currency: "USD" }], syncedAt: new Date().toISOString(), note: "test" },
-  { id: "google-ads", name: "Google Ads", vendor: "Google", status: "ready", accounts: [], syncedAt: null, note: "test" },
-  { id: "yandex-direct", name: "Yandex Direct", vendor: "Yandex", status: "ready", accounts: [], syncedAt: null, note: "test" },
+  { id: "meta", name: "Meta Ads", vendor: "Facebook / Instagram", kind: "ads", status: "connected", accounts: [{ id: "act_1", name: "Sof-Expo l Nazir", currency: "USD" }], syncedAt: new Date().toISOString(), note: "test" },
+  { id: "google-ads", name: "Google Ads", vendor: "Google", kind: "ads", status: "ready", accounts: [], syncedAt: null, note: "test" },
+  { id: "yandex-direct", name: "Yandex Direct", vendor: "Yandex", kind: "ads", status: "ready", accounts: [], syncedAt: null, note: "test" },
+  { id: "amocrm", name: "AmoCRM", vendor: "amoCRM", kind: "crm", status: "connected", accounts: [{ id: "sofexpo", name: "Sof-Expo AmoCRM", currency: "UZS" }], syncedAt: new Date().toISOString(), note: "test" },
 ];
 
 g.fetch = async (url: string) => ({
   ok: true,
   status: 200,
-  json: async () => (String(url).includes("connections") ? connections : snapshot),
+  json: async () => {
+    const u = String(url);
+    if (u.includes("connections")) return connections;
+    if (u.includes("/api/crm")) return { connected: true, ...crm };
+    return snapshot;
+  },
   text: async () => "",
 });
 
@@ -100,12 +133,14 @@ check("Overview xulosa dvigateli", overview.includes("lead manbasi") || overview
 check("Overview funnel", overview.includes("Impressions") && overview.includes("Landing views"));
 check("Overview signal markazi", overview.includes("SIGNAL MARKAZI"));
 check("Overview pacing", overview.includes("BYUDJET SUR'ATI") && overview.includes("Pacing"));
+check("Overview CRM strip", overview.includes("LEAD LIFECYCLE") && overview.includes("ROAS"));
 
 const routes: [string, string[], string][] = [
   ["/campaigns", ["KAMPANIYA LEDGER", "Kampaniyalar"], ["FOODERA"]],
   ["/creatives", ["KREATIV REYTINGI", "Kreativlar"], ["CTR"]],
   ["/audience", ["AUDITORIYA TAHLILI"], ["18-24"]],
   ["/leads", ["LEAD FUNNEL EXPLORER", "Expo'dan kreativgacha"], ["PROMOTORS"]],
+  ["/pipeline", ["LEAD LIFECYCLE", "KANBAN DOSKA"], ["OOO Chorrak", "ROAS"]],
   ["/compare", ["TAQQOSLASH", "EXPO BENCHMARK"], ["FOODERA"]],
   ["/report", ["EXECUTIVE BRIEF", "Chop etish"], ["voronka", "VORONKA"]],
   ["/connections", ["Integratsiyalar"], ["Google Ads"]],

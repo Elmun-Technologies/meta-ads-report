@@ -21,6 +21,19 @@
 - [x] Kampaniyalar jadvaliga CPL vs o'rtacha benchmark ustuni.
 - [x] /api/snapshots + ?file= — snapshot ro'yxati va fayl bo'yicha olish.
 
+## Bajarildi (V2.2 — AmoCRM lead lifecycle)
+
+- [x] shared/amo.ts: normalizer + UTM matchlash (utm_campaign → Meta kampaniya/kreativ) + lifecycle analitikasi.
+- [x] /pipeline sahifasi: CRM KPI (won/lost/win rate/ROAS/cost per WON/sikl), bosqich
+  voronkasi (har qadamda konversiya + tannarx + o'tirgan kuni), kanban doska,
+  manba atributsiyasi (qaysi kampaniya haqiqatan bitim berdi).
+- [x] Lead drawer: bosqichlar tarixi + reklama manbasi (match) + yo'qotish sababi.
+- [x] Overview'da yopiq sikl paneli (CRM ulanganda ROAS/cost per WON ko'rinadi).
+- [x] Server: GET /api/crm + AmoCRM connection (kind: crm); amo_*.json papkaga
+  tushganda hammasi avtomatik yonadi (fs.watch → SSE).
+- [x] Command palette'da CRM leadlar qidiruvi.
+- [x] amo_demo_test.json — DEMO (real ulanishda o'chiriladi).
+
 ## Keyingi (V3 yo'l xaritasi)
 
 - [ ] Google Ads MCP normalizer + connector (snapshot shu papkaga tushadi).

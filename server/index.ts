@@ -13,7 +13,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { normalizeMetaExport, type RawMetaExport } from "@shared/normalize";
-import type { ConnectionInfo, NormalizedSnapshot, PlatformId, SnapshotInfo } from "@shared/types";
+import { matchLeadsToAds, normalizeAmoExport, type RawAmoExport } from "@shared/amo";
+import type { ConnectionInfo, CrmData, NormalizedSnapshot, PlatformId, SnapshotInfo } from "@shared/types";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,7 +47,7 @@ function latestMetaFile(): { file: string; mtime: Date } | null {
   if (!fs.existsSync(DATA_DIR)) return null;
   const files = fs
     .readdirSync(DATA_DIR)
-    .filter((f) => f.endsWith(".json"))
+    .filter((f) => f.startsWith("meta") && f.endsWith(".json"))
     .map((file) => ({ file: path.join(DATA_DIR, file), mtime: fs.statSync(path.join(DATA_DIR, file)).mtime }))
     .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
   return files[0] ?? null;
@@ -94,6 +95,31 @@ function listSnapshots(): SnapshotInfo[] {
     .sort((a, b) => b.syncedAt.localeCompare(a.syncedAt));
 }
 
+/* ---------------- AmoCRM (lead lifecycle) ---------------- */
+
+function latestAmoFile(): { file: string; mtime: Date } | null {
+  if (!fs.existsSync(DATA_DIR)) return null;
+  const files = fs
+    .readdirSync(DATA_DIR)
+    .filter((f) => f.startsWith("amo") && f.endsWith(".json"))
+    .map((file) => ({ file: path.join(DATA_DIR, file), mtime: fs.statSync(path.join(DATA_DIR, file)).mtime }))
+    .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+  return files[0] ?? null;
+}
+
+function readAmoSnapshot(): CrmData | null {
+  const latest = latestAmoFile();
+  if (!latest) return null;
+  try {
+    const raw = JSON.parse(fs.readFileSync(latest.file, "utf-8")) as RawAmoExport;
+    const crm = normalizeAmoExport(raw, { syncedAt: latest.mtime.toISOString(), file: path.basename(latest.file) });
+    return matchLeadsToAds(crm, readMetaSnapshot());
+  } catch (err) {
+    console.error("[amo] snapshot o'qishda xato:", err);
+    return null;
+  }
+}
+
 const CONNECTORS: Connector[] = [
   {
     id: "meta",
@@ -118,12 +144,33 @@ const CONNECTORS: Connector[] = [
   },
 ];
 
+const CRM_CONNECTIONS: ConnectionInfo[] = [
+  {
+    id: "amocrm",
+    name: "AmoCRM",
+    vendor: "amoCRM — lead lifecycle",
+    kind: "crm",
+    status: "ready",
+    accounts: [],
+    syncedAt: null,
+    note: "amo_*.json snapshot papkaga tushganda lead lifecycle (bosqichlar, bitimlar, ROAS) avtomatik yonadi.",
+  },
+];
+
 function connectionsPayload(): ConnectionInfo[] {
-  return CONNECTORS.map((c) => {
+  const crm = readAmoSnapshot();
+  const amoInfo: ConnectionInfo = {
+    ...CRM_CONNECTIONS[0],
+    status: crm ? "connected" : "ready",
+    accounts: crm ? [{ id: crm.account, name: crm.account, currency: crm.currency }] : [],
+    syncedAt: crm?.syncedAt ?? null,
+  };
+  return [...CONNECTORS.map((c) => {
     const snapshot = c.resolve();
     const latest = c.latestFile?.();
     return {
       id: c.id,
+      kind: "ads" as const,
       name: c.name,
       vendor: c.vendor,
       status: snapshot ? "connected" : "ready",
@@ -131,7 +178,7 @@ function connectionsPayload(): ConnectionInfo[] {
       syncedAt: latest?.mtime.toISOString() ?? null,
       note: c.note,
     } satisfies ConnectionInfo;
-  });
+  }), amoInfo];
 }
 
 /* ------------------------------------------------------------------ */
@@ -188,7 +235,17 @@ async function startServer() {
   });
 
   app.get("/api/snapshots", (_req, res) => {
-    res.json(listSnapshots());
+    // A/B taqqoslash faqat reklama davr snapshotlari uchun (amo_* — CRM, alohida)
+    res.json(listSnapshots().filter((s) => !s.file.startsWith("amo")));
+  });
+
+  app.get("/api/crm", (_req, res) => {
+    const crm = readAmoSnapshot();
+    if (!crm) {
+      res.status(503).json({ connected: false, error: "AmoCRM snapshot topilmadi — server/data/snapshots/ ga amo_*.json qo'ying (format: server/data/README.md)." });
+      return;
+    }
+    res.json({ connected: true, ...crm });
   });
 
   app.get("/api/snapshot", (req, res) => {

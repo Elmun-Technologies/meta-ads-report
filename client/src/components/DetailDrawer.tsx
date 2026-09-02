@@ -1,13 +1,137 @@
-import { ArrowUpRight, X } from "lucide-react";
+import { ArrowUpRight, CircleDollarSign, X } from "lucide-react";
 import { useLocation } from "wouter";
 import { money, pct, ratio, whole } from "@/lib/format";
 import { useDashboardContext } from "@/contexts/DashboardContext";
 import { EmptyState } from "./widgets";
 
 export function DetailDrawer() {
-  const { drawer, closeDrawer, snapshot, openCreative, openCampaign } = useDashboardContext();
+  const { drawer, closeDrawer, snapshot, crm, openCreative, openCampaign } = useDashboardContext();
   const [, navigate] = useLocation();
   if (!drawer || !snapshot) return null;
+
+  /* ---------------- Lead (CRM) drawer ---------------- */
+  if (drawer.type === "lead") {
+    const lead = crm?.leads.find((l) => l.id === drawer.id);
+    if (!lead || !crm) return <EmptyState text="Lead topilmadi" />;
+    const campaign = lead.campaignId ? snapshot.campaigns.find((c) => c.id === lead.campaignId) : null;
+    const stageKind = crm.stages.find((s) => s.id === lead.stageId)?.kind ?? "in_progress";
+    const tone = stageKind === "won" ? "var(--good)" : stageKind === "lost" ? "var(--risk)" : "var(--accent)";
+    return (
+      <>
+        <div className="drawer-backdrop" onClick={closeDrawer} />
+        <aside className="drawer">
+          <div className="d-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+            <div style={{ minWidth: 0 }}>
+              <span className="kicker" style={{ color: tone }}>
+                LEAD JARAYONI · {crm.account.toUpperCase()}
+              </span>
+              <h2>{lead.name}</h2>
+              <div className="d-orig">
+                {lead.contactName ?? "Kontakt ko'rsatilmagan"} {lead.phone ? `· ${lead.phone}` : ""} · ID {lead.id}
+              </div>
+            </div>
+            <button className="icon-btn" onClick={closeDrawer} aria-label="Yopish">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 12 }}>
+            <span className={`chip ${stageKind === "won" ? "good" : stageKind === "lost" ? "risk" : "accent"}`}>{lead.stageName.toUpperCase()}</span>
+            {lead.price > 0 && (
+              <span className="chip muted">
+                <CircleDollarSign size={11} /> {whole(lead.price)} {crm.currency}
+              </span>
+            )}
+            {lead.responsible && <span className="chip muted">{lead.responsible}</span>}
+          </div>
+
+          <div className="d-stats">
+            <div>
+              <small>Yaratilgan</small>
+              <b style={{ fontSize: 13 }}>{new Date(lead.createdAt).toLocaleDateString("uz-UZ")}</b>
+            </div>
+            <div>
+              <small>Summa</small>
+              <b>
+                {whole(lead.price)} {crm.currency}
+              </b>
+            </div>
+            <div>
+              <small>Manba</small>
+              <b style={{ fontSize: campaign ? 11 : 13 }}>{campaign ? campaign.originalName.slice(0, 30) : "UTM yo'q"}</b>
+            </div>
+            <div>
+              <small>Oxirgi harakat</small>
+              <b style={{ fontSize: 13 }}>{new Date(lead.updatedAt).toLocaleDateString("uz-UZ")}</b>
+            </div>
+          </div>
+
+          {campaign && (
+            <div className="d-section">
+              <span className="kicker">REKLAMA MANBASI (MATCH: UTM)</span>
+              <div className="d-kv">
+                <span>Kampaniya</span>
+                <button className="panel-link" onClick={() => openCampaign(campaign.id)} style={{ fontSize: 11 }}>
+                  {campaign.originalName}
+                </button>
+              </div>
+              <div className="d-kv">
+                <span>Kampaniya CPL</span>
+                <b>{campaign.metrics.cpl != null ? money(campaign.metrics.cpl) : "N/A"}</b>
+              </div>
+              <div className="d-kv">
+                <span>CTR / Freq</span>
+                <b>
+                  {pct(campaign.metrics.ctr)} · {ratio(campaign.metrics.frequency)}
+                </b>
+              </div>
+              {lead.creativeId && (
+                <div className="d-kv">
+                  <span>Kreativ</span>
+                  <button className="panel-link" onClick={() => openCreative(lead.creativeId!)} style={{ fontSize: 11 }}>
+                    {snapshot.creatives.find((c) => c.id === lead.creativeId)?.originalName ?? "—"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="d-section">
+            <span className="kicker">BOSQICHLAR TARIXI</span>
+            {lead.history.length ? (
+              lead.history.map((h, i) => (
+                <div className="d-kv" key={`${h.at}-${i}`}>
+                  <span>{h.stage}</span>
+                  <b style={{ fontSize: 10.5 }}>{h.at ? new Date(h.at).toLocaleString("uz-UZ", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}</b>
+                </div>
+              ))
+            ) : (
+              <p style={{ margin: 0, fontSize: 12, color: "var(--text-3)" }}>Stage tarixi eksportda yo'q — faqat hozirgi holat: {lead.stageName}</p>
+            )}
+            {lead.lossReason && (
+              <div className="note-strip" style={{ marginTop: 10 }}>
+                <span className="kicker" style={{ flex: "none", color: "var(--risk)" }}>
+                  YO'QOTISH SABABI
+                </span>
+                <span>{lead.lossReason}</span>
+              </div>
+            )}
+          </div>
+
+          <button
+            className="primary-btn"
+            style={{ width: "100%", justifyContent: "center", marginTop: 16 }}
+            onClick={() => {
+              navigate("/pipeline");
+              closeDrawer();
+            }}
+          >
+            Lead Lifecycle doskasiga o'tish <ArrowUpRight size={14} />
+          </button>
+        </aside>
+      </>
+    );
+  }
 
   const campaign = drawer.type === "campaign" ? snapshot.campaigns.find((c) => c.id === drawer.id) : null;
   const creative = drawer.type === "creative" ? snapshot.creatives.find((c) => c.id === drawer.id) : campaign?.creatives.find((c) => c.id === drawer.id);
