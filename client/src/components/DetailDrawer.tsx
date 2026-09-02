@@ -241,6 +241,53 @@ export function DetailDrawer() {
           )}
         </div>
 
+        {!isCreative && campaign && ((row.metrics.postEngagement ?? 0) > 0 || (row.metrics.videoViews ?? 0) > 0 || (row.metrics.messagingConversations ?? 0) > 0) && (
+          <div className="d-section">
+            <span className="kicker">INTERAKSIYA VA VIDEO</span>
+            {(row.metrics.postEngagement ?? 0) > 0 && (
+              <div className="d-kv">
+                <span>Post interaksiyasi</span>
+                <b>{whole(row.metrics.postEngagement)} · ${((row.metrics.spend / (row.metrics.postEngagement || 1)) as number).toFixed(3)}/inter</b>
+              </div>
+            )}
+            {(row.metrics.reactions ?? 0) > 0 && (
+              <div className="d-kv">
+                <span>Reaksiyalar</span>
+                <b>{whole(row.metrics.reactions)}</b>
+              </div>
+            )}
+            {(row.metrics.comments ?? 0) > 0 && (
+              <div className="d-kv">
+                <span>Kommentlar</span>
+                <b>{whole(row.metrics.comments)}</b>
+              </div>
+            )}
+            {(row.metrics.saves ?? 0) > 0 && (
+              <div className="d-kv">
+                <span>Saqlanganlar</span>
+                <b>{whole(row.metrics.saves)}</b>
+              </div>
+            )}
+            {(row.metrics.videoViews ?? 0) > 0 && (
+              <div className="d-kv">
+                <span>Video views</span>
+                <b>
+                  {whole(row.metrics.videoViews)} · {money(row.metrics.spend / (row.metrics.videoViews || 1))}/view
+                </b>
+              </div>
+            )}
+            {(row.metrics.messagingConversations ?? 0) > 0 && (
+              <div className="d-kv">
+                <span>Messaging suhbat</span>
+                <b>
+                  {whole(row.metrics.messagingConversations)}
+                  {row.metrics.messagingFirstReply ? ` → ${whole(row.metrics.messagingFirstReply)} javob` : ""}
+                </b>
+              </div>
+            )}
+          </div>
+        )}
+
         {!isCreative && campaign && (
           <div className="d-section">
             <span className="kicker">TAHLILIY XULOSA</span>

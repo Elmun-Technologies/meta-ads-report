@@ -134,6 +134,7 @@ check("Overview funnel", overview.includes("Impressions") && overview.includes("
 check("Overview signal markazi", overview.includes("SIGNAL MARKAZI"));
 check("Overview pacing", overview.includes("BYUDJET SUR'ATI") && overview.includes("Pacing"));
 check("Overview CRM strip", overview.includes("LEAD LIFECYCLE") && overview.includes("ROAS"));
+check("Overview interaksiya+video", overview.includes("INTERAKSIYA REYTINGI") && overview.includes("VIDEO VA MESSAGING"));
 
 const routes: [string, string[], string][] = [
   ["/campaigns", ["KAMPANIYA LEDGER", "Kampaniyalar"], ["FOODERA"]],

@@ -81,6 +81,17 @@ for (const cr of snap.creatives.slice(0, 3)) {
 check("Kreativ → kampaniya bog'lanishi (referential integrity)", orphanCreatives.length === 0);
 check("Kreativ darajasida CPL (ad-level leads)", creativeLeadData > 0, creativeLeadData === 0 ? "Meta bu eksportda bermagan — keyingi snapshotda qo'shilishi kerak" : "");
 
+/* 5b. Interaksiya va video metrikalari */
+const eng = snap.campaigns.reduce((s, c) => s + (c.metrics.postEngagement ?? 0), 0);
+const react = snap.campaigns.reduce((s, c) => s + (c.metrics.reactions ?? 0), 0);
+const saves = snap.campaigns.reduce((s, c) => s + (c.metrics.saves ?? 0), 0);
+const vid = snap.campaigns.reduce((s, c) => s + (c.metrics.videoViews ?? 0), 0);
+const msgReply = snap.campaigns.reduce((s, c) => s + (c.metrics.messagingFirstReply ?? 0), 0);
+console.log(`\n[5b] INTERAKSIYA METRIKALARI: post ${eng} · reaksiya ${react} · saqlash ${saves} · video ${vid} · msg javob ${msgReply}`);
+check("Interaksiya oilasi (post_engagement, reaksiya, saqlash)", eng > 0 && react > 0);
+check("Video metrikalari (30s views)", vid > 0);
+check("Messaging chuqurligi (first reply)", msgReply > 0);
+
 /* 6. CRM (agar amo fayl bo'lsa) */
 console.log(`\n[6] CRM LIFECYCLE ${amoFile ? "(" + amoFile + ")" : "(ulanmagan)"}`);
 if (amoFile) {

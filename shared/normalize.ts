@@ -94,7 +94,13 @@ function metricsFromInsight(row: RawRow): { metrics: Metrics; hasLeads: boolean 
       cpl: leads > 0 ? spend / leads : null,
       landingPageViews: action(row, "landing_page_view") || action(row, "omni_landing_page_view") || null,
       messagingConversations: action(row, "onsite_conversion.messaging_conversation_started_7d") || null,
-      videoViews: num(row.video_30_sec_watched_actions?.[0]?.value),
+      messagingFirstReply: action(row, "onsite_conversion.messaging_first_reply"),
+      videoViews: num(row.video_30_sec_watched_actions?.[0]?.value) ?? action(row, "video_view"),
+      reactions: action(row, "post_reaction") || action(row, "like"),
+      comments: action(row, "comment"),
+      shares: action(row, "share"),
+      saves: action(row, "onsite_conversion.post_save"),
+      postEngagement: action(row, "post_engagement"),
     },
   };
 }

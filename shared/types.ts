@@ -44,6 +44,14 @@ export interface Metrics {
   landingPageViews: number | null;
   messagingConversations: number | null;
   videoViews: number | null;
+  /** Ijtimoiy interaksiya (actions kesimidan) */
+  reactions?: number;
+  comments?: number;
+  shares?: number;
+  saves?: number;
+  postEngagement?: number;
+  /** Messaging chuqurligi: birinchi javob */
+  messagingFirstReply?: number;
 }
 
 export interface AdSetRef {

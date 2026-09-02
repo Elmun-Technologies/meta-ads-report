@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "wouter";
-import { ArrowUpRight, Coins, Eye, MousePointerClick, Radar, Target, Users, Zap } from "lucide-react";
-import { PLATFORM_META } from "@shared/types";
+import { ArrowUpRight, Coins, Eye, MessageSquare, MousePointerClick, Radar, Target, Users, Video, Zap } from "lucide-react";
+import { PLATFORM_META, type CampaignNode } from "@shared/types";
 import type { Insight } from "@/lib/insights";
 import { buildInsights } from "@/lib/insights";
 import { buildAlerts, buildAnomalies, buildPacing, SEVERITY_META } from "@/lib/alerts";
@@ -21,6 +21,28 @@ export default function Overview() {
   const anomalies = useMemo(() => (snapshot ? buildAnomalies(snapshot) : []), [snapshot]);
   const pacing = useMemo(() => (snapshot ? buildPacing(snapshot) : null), [snapshot]);
   const crmSummary = useMemo(() => (crmConnected && crm && snapshot ? buildCrmSummary(crm, snapshot) : null), [crmConnected, crm, snapshot]);
+  const engagement = useMemo(() => {
+    if (!snapshot) return null;
+    const sum = (f: (c: CampaignNode) => number) => snapshot.campaigns.reduce((s, c) => s + f(c), 0);
+    const postEngagement = sum((c) => c.metrics.postEngagement ?? 0);
+    const videoViews = sum((c) => c.metrics.videoViews ?? 0);
+    const messaging = snapshot.totals.messagingConversations ?? sum((c) => c.metrics.messagingConversations ?? 0);
+    const firstReply = sum((c) => c.metrics.messagingFirstReply ?? 0);
+    const top = snapshot.campaigns
+      .filter((c) => (c.metrics.postEngagement ?? 0) > 0)
+      .sort((a, b) => (b.metrics.postEngagement ?? 0) - (a.metrics.postEngagement ?? 0))
+      .slice(0, 5);
+    return {
+      postEngagement,
+      reactions: sum((c) => c.metrics.reactions ?? 0),
+      comments: sum((c) => c.metrics.comments ?? 0),
+      saves: sum((c) => c.metrics.saves ?? 0),
+      videoViews,
+      messaging,
+      firstReply,
+      top,
+    };
+  }, [snapshot]);
 
   if (!snapshot) return null;
   const { totals, campaigns, creatives, age } = snapshot;
@@ -325,6 +347,96 @@ export default function Overview() {
           </Panel>
         </div>
       </div>
+
+      {/* Interaksiya va video */}
+      {engagement && engagement.postEngagement > 0 && (
+        <div className="grid-12" style={{ marginBottom: 14 }}>
+          <div className="col-7">
+            <Panel kicker="INTERAKSIYA REYTINGI" title="Auditoriya qanday javob berdi" sub="Post interaksiyasi (reaksiya, komment, saqlash, barcha bosishlar) bo'yicha top-5">
+              <div className="tbl-wrap">
+                <table className="tbl" style={{ minWidth: 620 }}>
+                  <thead>
+                    <tr>
+                      <th>Kampaniya</th>
+                      <th>Interaksiya</th>
+                      <th>Reaksiya</th>
+                      <th>Komm.</th>
+                      <th>Saqlash</th>
+                      <th>Eng. rate</th>
+                      <th>Sarf/inter</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {engagement.top.map((c) => {
+                      const er = c.metrics.impressions ? ((c.metrics.postEngagement ?? 0) / c.metrics.impressions) * 100 : null;
+                      const cpe = c.metrics.postEngagement ? c.metrics.spend / c.metrics.postEngagement : null;
+                      return (
+                        <tr key={c.id} onClick={() => openCampaign(c.id)}>
+                          <td>
+                            <div className="cell-name">
+                              <span className="n">
+                                <b>{c.originalName}</b>
+                                <small>{c.expo}</small>
+                              </span>
+                            </div>
+                          </td>
+                          <td className="num" style={{ fontWeight: 600 }}>
+                            {whole(c.metrics.postEngagement)}
+                          </td>
+                          <td className="num">{whole(c.metrics.reactions ?? 0)}</td>
+                          <td className="num">{whole(c.metrics.comments ?? 0)}</td>
+                          <td className="num">{whole(c.metrics.saves ?? 0)}</td>
+                          <td className="num">{er != null ? pct(er, 2) : "N/A"}</td>
+                          <td className="num">{cpe != null ? `$${cpe.toFixed(3)}` : "N/A"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
+          </div>
+          <div className="col-5">
+            <Panel kicker="VIDEO VA MESSAGING" title="Chuqurroq jalb qilish">
+              <div className="pace-grid">
+                <div>
+                  <small>
+                    <Video size={10} style={{ display: "inline", marginRight: 4 }} /> Video 30s views
+                  </small>
+                  <b>{compact(engagement.videoViews)}</b>
+                </div>
+                <div>
+                  <small>Sarf / 30s view</small>
+                  <b>{engagement.videoViews ? money(totals.spend / engagement.videoViews) : "N/A"}</b>
+                </div>
+                <div>
+                  <small>
+                    <MessageSquare size={10} style={{ display: "inline", marginRight: 4 }} /> Suhbat boshlandi
+                  </small>
+                  <b>{whole(engagement.messaging)}</b>
+                </div>
+                <div>
+                  <small>Birinchi javob berguncha</small>
+                  <b>
+                    {engagement.messaging ? `${whole(engagement.firstReply)} (${pct((engagement.firstReply / engagement.messaging) * 100, 0)})` : "N/A"}
+                  </b>
+                </div>
+              </div>
+              <div className="what-if" style={{ marginTop: 11 }}>
+                <span className="kicker">INTERAKSIYA HISOBI</span>
+                <p>
+                  Jami <b>{whole(engagement.postEngagement)}</b> post interaksiyasi: <b>{whole(engagement.reactions)}</b> reaksiya · <b>{whole(engagement.comments)}</b> komment · <b>{whole(engagement.saves)}</b> saqlash. Har bir interaksiya uchun o'rtacha <b>{money(totals.spend / engagement.postEngagement)}</b> sarf.
+                  {engagement.messaging > 0 && engagement.firstReply > 0 && (
+                    <>
+                      {" "}Messaging kanalida suhbatlarning <b>{pct((engagement.firstReply / engagement.messaging) * 100, 0)}</b> javob olgan — qolganlari javobsiz qolgan.
+                    </>
+                  )}
+                </p>
+              </div>
+            </Panel>
+          </div>
+        </div>
+      )}
 
       {/* Leads/CPL + top creative */}
       <div className="grid-12">
