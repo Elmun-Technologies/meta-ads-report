@@ -32,6 +32,37 @@ eng yangisi default. Google/Yandex hozir faqat eng yangi faylni ko'rsatadi.
 }
 ```
 
+### Google Ads API orqali batafsil pull (Variant A)
+
+Google Ads API'dan **jonli, batafsil** ma'lumotni tortib, snapshot yozish ham mumkin —
+`pnpm google:pull` (sozlash uchun `docs/google-ads-api-setup.md`). U har bir customer
+uchun quyidagilarni tortadi va `google_<cid>_<sana>.json` shaklida yozadi:
+
+```jsonc
+{
+  "source": "google-ads-api",
+  "account_name": "...",
+  "customer_id": "...",
+  "currency": "USD",
+  "period": "google_123_2026-09-03.json",
+  "date_range": "last 30 days",
+  "rows": [ /* kampaniya darajasi — legacy generic normalizer taniydi */ ],
+  "campaigns": [ /* kampaniya + status + KPI */ ],
+  "ads":      [ /* ad_group_ad darajasi → creatives ga bog'lanadi */ ],
+  "daily":    [ /* kampaniya × kun — trend */ ],
+  "devices":  [ /* kampaniya × qurilma */ ],
+  "keywords": [ /* kalit so'z (Search) */ ]
+}
+```
+
+- `rows[]` — kampaniya satrlari: `campaign_id, campaign_name, status, cost_micros,
+  impressions, clicks, conversions, ctr`. Buni eski normalizer ham taniydi.
+- `ads[]` — reklama darajasi: `campaign_id, ad_group_id/name, ad_id/name, status,
+  cost_micros, impressions, clicks, conversions`. Kelganda normalizer ularni
+  kampaniyalarga **creatives** (reklama) qilib bog'laydi.
+- `daily`, `devices`, `keywords` — kunlik trend / qurilma / kalit so'z kesimlari
+  (batafsil UI bularni ko'rsatadigan qo'shimcha — keyingi qadam).
+
 ### Yandex Direct namuna
 
 ```json

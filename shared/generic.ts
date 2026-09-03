@@ -5,7 +5,14 @@
  * boshqacha kelsa ham ko'p hollarda ishlaydi; tanilmagan maydonlar
  * haqida API aniq xato qaytaradi.
  */
-import type { CampaignNode, Metrics, NormalizedSnapshot, PlatformId } from "./types";
+import type {
+  AdSetRef,
+  CampaignNode,
+  CreativeNode,
+  Metrics,
+  NormalizedSnapshot,
+  PlatformId,
+} from "./types";
 
 type RawRow = Record<string, any>;
 
@@ -73,10 +80,24 @@ function rowsOf(raw: any): RawRow[] {
   return [];
 }
 
+/** Xom valyuta maydonini o'qiydi. Google Ads `cost_micros`/`costMicros` har doim
+ * mikro birlikda keladi va kattaligidan qat'iy nazar 1e6 ga bo'linadi (kichik
+ * ad'lar mikrosi <100000 bo'lsa ham to'g'ri ishlash uchun). Boshqa aliaslar
+ * (spend/cost/amount) — allaqachon valyuta birligida deb qabul qilinadi. */
+function pickSpend(row: RawRow, aliases: string[]): number {
+  for (const key of aliases) {
+    const v = row[key];
+    if (v == null || v === "") continue;
+    const n = Number(v);
+    if (!Number.isFinite(n)) continue;
+    if (key === "cost_micros" || key === "costMicros") return n / 1_000_000;
+    return n;
+  }
+  return 0;
+}
+
 function metricsFrom(row: RawRow, m: AliasMap): Metrics {
-  let spend = pick(row, m.spend) ?? 0;
-  // Google Ads cost_micros — mikro birlikda keladi
-  if (m.micros && spend > 100000) spend = spend / 1_000_000;
+  const spend = pickSpend(row, m.spend);
   const impressions = pick(row, m.impressions) ?? 0;
   const clicks = pick(row, m.clicks) ?? 0;
   const leads = pick(row, m.leads) ?? 0;
@@ -131,6 +152,43 @@ export function normalizeGenericAds(raw: any, opts: { platform: PlatformId; sync
   });
   campaigns.sort((a, b) => b.metrics.spend - a.metrics.spend);
 
+  /* -------- Ad (kreativ) darajasi: `ads[]` kelganda kampaniyalarga bog'lanadi
+   * (google-ads-api pull snapshotida har bir satr bitta ad: campaign_id,
+   * ad_group_name, ad_name/ad_id, status, cost_micros ...) ------- */
+  const creativesByCampaign = new Map<string, CreativeNode[]>();
+  if (isGoogle && Array.isArray(raw.ads)) {
+    for (const ad of raw.ads) {
+      const metrics = metricsFrom(ad, m);
+      const campaignId = String(ad.campaign_id ?? ad.campaignId ?? "");
+      if (!campaignId) continue;
+      const adset: AdSetRef | null = ad.ad_group_name
+        ? {
+            id: String(ad.ad_group_id ?? ad.adGroupId ?? `ag-${campaignId}`),
+            name: String(ad.ad_group_name ?? "AD GROUP").toUpperCase(),
+            originalName: String(ad.ad_group_name ?? "—"),
+          }
+        : null;
+      const original = String(ad.ad_name ?? ad.adName ?? ad.ad_id ?? `AD ${campaignId}`);
+      const creative: CreativeNode = {
+        id: String(ad.ad_id ?? ad.adId ?? `ad-${campaignId}-${creativesByCampaign.get(campaignId)?.length ?? 0}`),
+        name: original.toUpperCase(),
+        originalName: original,
+        campaignId,
+        adset,
+        status: ad.status ?? ad.ad_status ?? null,
+        effectiveStatus: ad.status ?? null,
+        createdTime: null,
+        metrics,
+        hasLeads: metrics.leads > 0,
+      };
+      const list = creativesByCampaign.get(campaignId) || [];
+      list.push(creative);
+      creativesByCampaign.set(campaignId, list);
+    }
+    for (const list of creativesByCampaign.values()) list.sort((a, b) => b.metrics.spend - a.metrics.spend);
+    for (const c of campaigns) c.creatives = creativesByCampaign.get(c.id) || [];
+  }
+
   const sum = (f: (c: CampaignNode) => number) => campaigns.reduce((s, c) => s + f(c), 0);
   const spend = sum((c) => c.metrics.spend);
   const impressions = sum((c) => c.metrics.impressions);
@@ -139,6 +197,7 @@ export function normalizeGenericAds(raw: any, opts: { platform: PlatformId; sync
 
   const period = pickStr(raw, ["period", "date_range", "Period"]) ?? (typeof raw.period === "object" ? `${raw.period?.start ?? ""} — ${raw.period?.end ?? ""}` : "");
 
+  const hasAds = isGoogle && creativesByCampaign.size > 0;
   return {
     meta: {
       platform: opts.platform,
@@ -151,7 +210,9 @@ export function normalizeGenericAds(raw: any, opts: { platform: PlatformId; sync
       syncedAt: opts.syncedAt,
       sourceLabel: `${isGoogle ? "Google Ads" : "Yandex Direct"} snapshot · ${opts.file}`,
       file: opts.file,
-      limitations: ["Ad (kreativ) darajasi bu eksportda yo'q — hisobot kampaniya darajasida."],
+      limitations: hasAds
+        ? []
+        : ["Ad (kreativ) darajasi bu eksportda yo'q — hisobot kampaniya darajasida."],
     },
     totals: {
       spend,
@@ -171,7 +232,7 @@ export function normalizeGenericAds(raw: any, opts: { platform: PlatformId; sync
       videoViews: sum((c) => c.metrics.videoViews ?? 0),
     },
     campaigns,
-    creatives: [],
+    creatives: hasAds ? [...creativesByCampaign.values()].flat() : [],
     age: [],
   };
 }

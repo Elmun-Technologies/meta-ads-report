@@ -13,6 +13,9 @@
     "preview": "vite preview --host",
     "check": "tsc --noEmit",
     "smoke": "tsx scripts/smoke-render.ts",
+    "google:oauth": "tsx scripts/google-ads-oauth.ts",
+    "google:pull": "tsx scripts/pull-google-ads.ts",
+    "google:test:normalize": "tsx scripts/google-normalizer-check.ts",
     "format": "prettier --write ."
   },
   "dependencies": {
