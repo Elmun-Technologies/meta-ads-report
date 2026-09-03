@@ -110,19 +110,18 @@ export function readMetaSnapshot(file?: string): NormalizedSnapshot | null {
   }
 }
 
-/** Google Ads / Yandex Direct — universal alias normalizer orqali */
-function readGenericSnapshot(
-  platform: "google-ads" | "yandex-direct"
+/** Google Ads / Yandex Direct — universal alias normalizer orqali, aniq fayl bo'yicha */
+function readGenericSnapshotFile(
+  platform: "google-ads" | "yandex-direct",
+  target: string,
+  mtime: Date
 ): NormalizedSnapshot | null {
-  const prefix = platform === "google-ads" ? "google" : "yandex";
-  const latest = latestFileFor(prefix);
-  if (!latest) return null;
   try {
-    const raw = JSON.parse(fs.readFileSync(latest.file, "utf-8"));
+    const raw = JSON.parse(fs.readFileSync(target, "utf-8"));
     return normalizeGenericAds(raw, {
       platform,
-      syncedAt: latest.mtime.toISOString(),
-      file: path.basename(latest.file),
+      syncedAt: mtime.toISOString(),
+      file: path.basename(target),
     });
   } catch (err) {
     console.error(
@@ -131,6 +130,16 @@ function readGenericSnapshot(
     );
     return null;
   }
+}
+
+/** Google Ads / Yandex Direct — eng yangi snapshot */
+function readGenericSnapshot(
+  platform: "google-ads" | "yandex-direct"
+): NormalizedSnapshot | null {
+  const prefix = platform === "google-ads" ? "google" : "yandex";
+  const latest = latestFileFor(prefix);
+  if (!latest) return null;
+  return readGenericSnapshotFile(platform, latest.file, latest.mtime);
 }
 
 /** Barcha snapshot fayllari ro'yxati — davrlararo taqqoslash uchun */
@@ -371,7 +380,16 @@ export function createApp(mode: AppMode = "server") {
   app.get("/api/snapshot", (req, res) => {
     const file = req.query.file ? String(req.query.file) : undefined;
     if (file) {
-      const snapshot = readMetaSnapshot(file);
+      const platform = platformForFile(path.basename(file));
+      let snapshot: NormalizedSnapshot | null;
+      if (platform === "meta") {
+        snapshot = readMetaSnapshot(file);
+      } else {
+        const target = path.join(DATA_DIR, path.basename(file));
+        snapshot = fs.existsSync(target)
+          ? readGenericSnapshotFile(platform, target, fs.statSync(target).mtime)
+          : null;
+      }
       if (!snapshot) {
         res.status(404).json({ error: `Snapshot topilmadi: ${file}` });
         return;

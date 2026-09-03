@@ -13,6 +13,7 @@ import type {
   ConnectionInfo,
   CrmData,
   NormalizedSnapshot,
+  PlatformId,
   SnapshotInfo,
 } from "@shared/types";
 
@@ -28,6 +29,9 @@ export interface DashboardState {
   /** Tanlangan snapshot fayli (null = eng yangi) */
   snapshotFile: string | null;
   setSnapshotFile: (file: string | null) => void;
+  /** Tanlangan platforma (file tanlanmagan bo'lsa shu platformaning eng yangi snapshoti ko'rsatiladi) */
+  platform: PlatformId;
+  setPlatform: (platform: PlatformId) => void;
   loading: boolean;
   syncing: boolean;
   error: string | null;
@@ -62,6 +66,7 @@ export function useDashboard(): DashboardState {
   const [crmConnected, setCrmConnected] = useState(false);
   const [snapshots, setSnapshots] = useState<SnapshotInfo[]>([]);
   const [snapshotFile, setSnapshotFile] = useState<string | null>(null);
+  const [platform, setPlatformState] = useState<PlatformId>("meta");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,12 +76,12 @@ export function useDashboard(): DashboardState {
   const esRef = useRef<EventSource | null>(null);
 
   const load = useCallback(
-    async (showSync = true, file = snapshotFile) => {
+    async (showSync = true, file = snapshotFile, plat = platform) => {
       if (showSync) setSyncing(true);
       try {
         const snapUrl = file
           ? `/api/snapshot?file=${encodeURIComponent(file)}`
-          : "/api/snapshot?platform=meta";
+          : `/api/snapshot?platform=${encodeURIComponent(plat)}`;
         const [snapRes, connRes, crmRes, snapsRes] = await Promise.all([
           fetchJson<NormalizedSnapshot>(snapUrl).catch(() => null),
           fetchJson<ConnectionInfo[]>("/api/connections").catch(() => []),
@@ -128,7 +133,7 @@ export function useDashboard(): DashboardState {
         setSyncing(false);
       }
     },
-    [snapshotFile]
+    [snapshotFile, platform]
   );
 
   useEffect(() => {
@@ -192,6 +197,15 @@ export function useDashboard(): DashboardState {
     [load]
   );
 
+  const selectPlatform = useCallback(
+    (plat: PlatformId) => {
+      setPlatformState(plat);
+      setSnapshotFile(null);
+      void load(true, null, plat);
+    },
+    [load]
+  );
+
   return {
     snapshot,
     connections,
@@ -200,6 +214,8 @@ export function useDashboard(): DashboardState {
     snapshots,
     snapshotFile,
     setSnapshotFile: selectFile,
+    platform,
+    setPlatform: selectPlatform,
     loading,
     syncing,
     error,
