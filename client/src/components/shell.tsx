@@ -137,6 +137,7 @@ export function Sidebar({
     live,
     lastEventAt,
     source,
+    setPlatform,
   } = useDashboardContext();
   const [location] = useLocation();
   const meta = snapshot?.meta;
@@ -173,7 +174,10 @@ export function Sidebar({
               <Link
                 key={conn.id}
                 href={connected ? "/" : "/connections"}
-                onClick={onClose}
+                onClick={() => {
+                  if (connected) setPlatform(conn.id as PlatformId);
+                  onClose();
+                }}
                 className={`platform-row ${meta?.platform === conn.id ? "active" : ""}`}
               >
                 <PlatformLogo id={conn.id as PlatformId} />
