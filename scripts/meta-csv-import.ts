@@ -68,6 +68,7 @@ const num = (v: string | undefined): number => {
 
 const LEAD_RESULT_TYPES = new Set(["Leads (form)", "Leads", "Website leads"]);
 const MESSAGING_RESULT_TYPES = new Set(["Messaging conversations started"]);
+const CALL_RESULT_TYPES = new Set(["Phone calls placed"]);
 
 function slug(...parts: string[]): string {
   return parts
@@ -89,11 +90,12 @@ interface Agg {
   linkClicks: number;
   leads: number;
   messaging: number;
+  calls: number;
   rows: number;
 }
 
 function emptyAgg(): Agg {
-  return { spend: 0, impressions: 0, reach: 0, clicksAll: 0, linkClicks: 0, leads: 0, messaging: 0, rows: 0 };
+  return { spend: 0, impressions: 0, reach: 0, clicksAll: 0, linkClicks: 0, leads: 0, messaging: 0, calls: 0, rows: 0 };
 }
 
 function addRow(agg: Agg, r: Row) {
@@ -107,6 +109,7 @@ function addRow(agg: Agg, r: Row) {
   const results = num(r["Results"]);
   if (LEAD_RESULT_TYPES.has(resultType)) agg.leads += results;
   if (MESSAGING_RESULT_TYPES.has(resultType)) agg.messaging += results;
+  if (CALL_RESULT_TYPES.has(resultType)) agg.calls += results;
 }
 
 /** Insight-shaped raw row (matches shared/normalize.ts metricsFromInsight expectations) */
@@ -120,6 +123,9 @@ function toInsightRow(agg: Agg, extra: Record<string, unknown>) {
     { action_type: "link_click", value: String(agg.linkClicks) },
     ...(agg.messaging > 0
       ? [{ action_type: "onsite_conversion.messaging_conversation_started_7d", value: String(agg.messaging) }]
+      : []),
+    ...(agg.calls > 0
+      ? [{ action_type: "click_to_call_native_call_placed", value: String(agg.calls) }]
       : []),
   ];
   return {
@@ -275,7 +281,7 @@ function main() {
     ads,
     adInsights,
     limitations: [
-      "Bu snapshot Meta Ads Manager CSV eksportidan (Manus/MCP emas) qurilgan — video views, reaction/comment/share kabi ba'zi harakat turlari CSV'da yo'q, faqat spend/impressions/reach/clicks/leads mavjud.",
+      "Bu snapshot Meta Ads Manager CSV eksportidan (Manus/MCP emas) qurilgan — video views, reaction/comment/share kabi ba'zi harakat turlari CSV'da yo'q, faqat spend/impressions/reach/clicks/leads/calls mavjud.",
       "campaign_id / ad_id / adset_id — CSV'da haqiqiy Meta ID yo'qligi sababli nom asosida generatsiya qilingan (barqaror, lekin Meta'ning o'zidagi ID bilan mos emas).",
     ],
   };
@@ -286,7 +292,7 @@ function main() {
   fs.writeFileSync(outFile, JSON.stringify(raw, null, 2));
   console.log(`Yozildi: ${outFile}`);
   console.log(
-    `Kampaniyalar: ${campaigns.length}, ad'lar: ${ads.length}, yosh guruhlari: ${age.length}, jami xarajat: $${summary.spend}, leads: ${summary.leads}`
+    `Kampaniyalar: ${campaigns.length}, ad'lar: ${ads.length}, yosh guruhlari: ${age.length}, jami xarajat: $${summary.spend}, leads: ${summary.leads}, calls: ${totalAgg.calls}`
   );
 }
 

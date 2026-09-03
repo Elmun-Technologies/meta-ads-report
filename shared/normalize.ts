@@ -2,7 +2,7 @@
  * Meta Ads xom eksportini (MCP orqali olingan JSON) NormalizedSnapshot'ga aylantiradi.
  * Kelajakda google-ads.ts / yandex-direct.ts normalizerlari ham shu interfeysga yoziladi.
  */
-import type { AdSetRef, AgeRow, CampaignNode, CreativeNode, Metrics, NormalizedSnapshot, PlatformId } from "./types";
+import { inferGoal, type AdSetRef, type AgeRow, type CampaignNode, type CreativeNode, type Metrics, type NormalizedSnapshot, type PlatformId } from "./types";
 
 type RawRow = Record<string, any>;
 export interface RawMetaExport {
@@ -72,6 +72,10 @@ const action = (row: RawRow, type: string): number => Number((row.actions || [])
 export const leadsOf = (row: RawRow): number =>
   action(row, "lead") || action(row, "onsite_conversion.lead_grouped") || action(row, "offsite_complete_registration_add_meta_leads");
 
+/** "Qo'ng'iroq qilish" tugmasi bosilgan soni (click-to-call) */
+export const callsOf = (row: RawRow): number =>
+  action(row, "click_to_call_native_call_placed") || action(row, "click_to_call_call_confirm") || action(row, "call_confirm_grouped");
+
 function metricsFromInsight(row: RawRow): { metrics: Metrics; hasLeads: boolean } {
   const leads = leadsOf(row);
   const spend = numOr(row.spend, 0);
@@ -101,6 +105,7 @@ function metricsFromInsight(row: RawRow): { metrics: Metrics; hasLeads: boolean 
       shares: action(row, "share"),
       saves: action(row, "onsite_conversion.post_save"),
       postEngagement: action(row, "post_engagement"),
+      calls: callsOf(row),
     },
   };
 }
@@ -155,6 +160,7 @@ export function normalizeMetaExport(raw: RawMetaExport, opts: { syncedAt: string
       createdTime: adMeta?.created_time ?? null,
       metrics,
       hasLeads,
+      goal: inferGoal(metrics),
     };
     const list = creativesByCampaign.get(String(insight.campaign_id)) || [];
     list.push(creative);
@@ -176,6 +182,7 @@ export function normalizeMetaExport(raw: RawMetaExport, opts: { syncedAt: string
       platform,
       metrics,
       creatives: creativesByCampaign.get(String(row.campaign_id)) || [],
+      goal: inferGoal(metrics),
     };
   });
   campaigns.sort((a, b) => b.metrics.spend - a.metrics.spend);

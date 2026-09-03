@@ -52,7 +52,12 @@ export interface Metrics {
   postEngagement?: number;
   /** Messaging chuqurligi: birinchi javob */
   messagingFirstReply?: number;
+  /** "Qo'ng'iroq qilish" tugmasi bosilgan soni (click-to-call) */
+  calls?: number;
 }
+
+/** Kampaniya/kreativ qaysi natija uchun optimallashtirilgani (leads > calls > engagement ustuvorligida aniqlanadi) */
+export type CampaignGoal = "leads" | "calls" | "engagement" | "other";
 
 export interface AdSetRef {
   id: string;
@@ -72,6 +77,7 @@ export interface CreativeNode {
   metrics: Metrics;
   /** Ad darajasida lead qaytmagan bo'lsa false — UI buni "N/A" deb ko'rsatadi */
   hasLeads: boolean;
+  goal: CampaignGoal;
 }
 
 export interface CampaignNode {
@@ -83,7 +89,23 @@ export interface CampaignNode {
   platform: PlatformId;
   metrics: Metrics;
   creatives: CreativeNode[];
+  goal: CampaignGoal;
 }
+
+/** Metrics'dan maqsad turini aniqlaydi: leads > calls > engagement > other ustuvorligida */
+export function inferGoal(m: Metrics): CampaignGoal {
+  if (m.leads > 0) return "leads";
+  if ((m.calls ?? 0) > 0) return "calls";
+  if ((m.postEngagement ?? 0) > 0 || (m.messagingConversations ?? 0) > 0) return "engagement";
+  return "other";
+}
+
+export const GOAL_META: Record<CampaignGoal, { label: string; short: string }> = {
+  leads: { label: "Murojaat (Lead)", short: "Lead" },
+  calls: { label: "Qo'ng'iroq (Call)", short: "Call" },
+  engagement: { label: "Faollik (Engagement)", short: "Engagement" },
+  other: { label: "Aniqlanmagan", short: "—" },
+};
 
 export interface AgeRow {
   age: string;
