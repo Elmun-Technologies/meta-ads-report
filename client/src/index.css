@@ -1069,6 +1069,54 @@ table.tbl {
   background: var(--surface-2, rgba(127, 127, 127, 0.12));
 }
 
+.goal-summary {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 13px;
+}
+.goal-summary-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 150px;
+  padding: 10px 13px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  text-align: left;
+  transition:
+    border-color 0.14s var(--ease),
+    background 0.14s var(--ease);
+}
+.goal-summary-card:hover {
+  background: var(--panel-hover);
+}
+.goal-summary-card b {
+  font-size: 15px;
+  color: var(--text);
+}
+.goal-summary-card small {
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+.goal-summary-card.active {
+  border-color: currentColor;
+}
+.goal-summary-card.goal-leads.active {
+  color: var(--accent);
+}
+.goal-summary-card.goal-calls.active {
+  color: var(--cyan);
+}
+.goal-summary-card.goal-engagement.active {
+  color: var(--violet);
+}
+.goal-summary-card.goal-other.active {
+  color: var(--text-2);
+}
+
 /* Toolbar (filters) */
 .toolbar {
   display: flex;
