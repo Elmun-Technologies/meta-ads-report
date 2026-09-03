@@ -5,13 +5,14 @@
  * boshqacha kelsa ham ko'p hollarda ishlaydi; tanilmagan maydonlar
  * haqida API aniq xato qaytaradi.
  */
-import type {
-  AdSetRef,
-  CampaignNode,
-  CreativeNode,
-  Metrics,
-  NormalizedSnapshot,
-  PlatformId,
+import {
+  inferGoal,
+  type AdSetRef,
+  type CampaignNode,
+  type CreativeNode,
+  type Metrics,
+  type NormalizedSnapshot,
+  type PlatformId,
 } from "./types";
 
 type RawRow = Record<string, any>;
@@ -49,6 +50,7 @@ const GOOGLE = {
   cpc: ["cpc", "average_cpc", "avg_cpc", "AvgCpc"],
   cpm: ["cpm", "average_cpm", "avg_cpm", "AvgCpm"],
   leads: ["conversions", "all_conversions", "leads", "Conversions"],
+  calls: ["phone_calls", "call_clicks", "phone_through_rate"],
   videoViews: ["video_views", "video_views_15s"],
   landingPageViews: ["landing_page_views"],
 };
@@ -66,6 +68,7 @@ const YANDEX = {
   cpc: ["AvgCpc", "cpc"],
   cpm: ["Cpm", "CPM"],
   leads: ["Conversions", "Leads", "conversions", "GoalsConversionRate"],
+  calls: ["Calls", "PhoneCalls"],
   videoViews: ["VideoViews", "video_views"],
   landingPageViews: ["LandingViews"],
 };
@@ -120,6 +123,7 @@ function metricsFrom(row: RawRow, m: AliasMap): Metrics {
     landingPageViews: pick(row, m.landingPageViews),
     messagingConversations: null,
     videoViews: pick(row, m.videoViews),
+    calls: pick(row, m.calls) ?? undefined,
   };
 }
 
@@ -148,6 +152,7 @@ export function normalizeGenericAds(raw: any, opts: { platform: PlatformId; sync
       platform: opts.platform,
       metrics,
       creatives: [],
+      goal: inferGoal(metrics),
     };
   });
   campaigns.sort((a, b) => b.metrics.spend - a.metrics.spend);
@@ -180,6 +185,7 @@ export function normalizeGenericAds(raw: any, opts: { platform: PlatformId; sync
         createdTime: null,
         metrics,
         hasLeads: metrics.leads > 0,
+        goal: inferGoal(metrics),
       };
       const list = creativesByCampaign.get(campaignId) || [];
       list.push(creative);

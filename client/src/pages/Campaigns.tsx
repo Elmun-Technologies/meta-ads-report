@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { Download, Filter, Search } from "lucide-react";
-import type { CampaignNode } from "@shared/types";
+import { GOAL_META, type CampaignGoal, type CampaignNode } from "@shared/types";
 import { money, pct, ratio, whole, downloadCsv } from "@/lib/format";
 import { useDashboardContext } from "@/contexts/DashboardContext";
 import { EmptyState, SpendShare } from "@/components/widgets";
@@ -16,10 +16,25 @@ type SortKey =
   | "frequency"
   | "impressions";
 
+/** Maqsadga qarab qaysi son "natija" hisoblanadi: lead kampaniyada — leads,
+ * call kampaniyada — qo'ng'iroqlar, engagement kampaniyada — faollik. */
+function resultCount(c: CampaignNode): number {
+  if (c.goal === "calls") return c.metrics.calls ?? 0;
+  if (c.goal === "engagement")
+    return c.metrics.postEngagement ?? c.metrics.messagingConversations ?? 0;
+  return c.metrics.leads;
+}
+
+function resultCost(c: CampaignNode): number | null {
+  if (c.goal === "leads") return c.metrics.cpl;
+  const n = resultCount(c);
+  return n > 0 ? c.metrics.spend / n : null;
+}
+
 const SORTERS: Record<SortKey, (a: CampaignNode, b: CampaignNode) => number> = {
   spend: (a, b) => b.metrics.spend - a.metrics.spend,
-  leads: (a, b) => b.metrics.leads - a.metrics.leads,
-  cpl: (a, b) => (a.metrics.cpl ?? Infinity) - (b.metrics.cpl ?? Infinity),
+  leads: (a, b) => resultCount(b) - resultCount(a),
+  cpl: (a, b) => (resultCost(a) ?? Infinity) - (resultCost(b) ?? Infinity),
   ctr: (a, b) => (b.metrics.ctr ?? 0) - (a.metrics.ctr ?? 0),
   cpm: (a, b) => (b.metrics.cpm ?? 0) - (a.metrics.cpm ?? 0),
   frequency: (a, b) => (b.metrics.frequency ?? 0) - (a.metrics.frequency ?? 0),
@@ -29,6 +44,7 @@ const SORTERS: Record<SortKey, (a: CampaignNode, b: CampaignNode) => number> = {
 const COLS: { id: string; key: SortKey | null; label: string; en?: string }[] =
   [
     { id: "name", key: null, label: "Kampaniya" },
+    { id: "goal", key: null, label: "Maqsad", en: "Goal" },
     { id: "spend", key: "spend", label: "Sarf", en: "Spend" },
     {
       id: "impressions",
@@ -36,8 +52,8 @@ const COLS: { id: string; key: SortKey | null; label: string; en?: string }[] =
       label: "Ko'rsatuvlar",
       en: "Impressions",
     },
-    { id: "leads", key: "leads", label: "Murojaatlar", en: "Leads" },
-    { id: "cpl", key: "cpl", label: "Murojaat narxi", en: "CPL" },
+    { id: "leads", key: "leads", label: "Natija", en: "Result" },
+    { id: "cpl", key: "cpl", label: "Natija narxi", en: "Cost / result" },
     { id: "cpl-vs-avg", key: null, label: "O'rtachaga nisbatan" },
     { id: "ctr", key: "ctr", label: "Bosish ulushi", en: "CTR" },
     { id: "cpm", key: "cpm", label: "1000 ko'rsatuv narxi", en: "CPM" },
@@ -49,6 +65,13 @@ const COLS: { id: string; key: SortKey | null; label: string; en?: string }[] =
     },
   ];
 
+const GOAL_TONE: Record<CampaignGoal, string> = {
+  leads: "goal-leads",
+  calls: "goal-calls",
+  engagement: "goal-engagement",
+  other: "goal-other",
+};
+
 export default function Campaigns() {
   const { snapshot, openCampaign } = useDashboardContext();
   const [location] = useLocation();
@@ -56,6 +79,7 @@ export default function Campaigns() {
   const [sort, setSort] = useState<SortKey>("spend");
   const [onlyLeads, setOnlyLeads] = useState(false);
   const [expo, setExpo] = useState("all");
+  const [goalFilter, setGoalFilter] = useState<"all" | CampaignGoal>("all");
 
   const focus = useMemo(
     () => new URLSearchParams(location.split("?")[1] || "").get("focus"),
@@ -74,8 +98,9 @@ export default function Campaigns() {
     ...Array.from(new Set(snapshot.campaigns.map(c => c.expo))),
   ];
   const rows = snapshot.campaigns
-    .filter(c => (onlyLeads ? c.metrics.leads > 0 : true))
+    .filter(c => (onlyLeads ? resultCount(c) > 0 : true))
     .filter(c => (expo === "all" ? true : c.expo === expo))
+    .filter(c => (goalFilter === "all" ? true : c.goal === goalFilter))
     .filter(c => {
       const q = search.toLowerCase();
       return (
@@ -106,12 +131,15 @@ export default function Campaigns() {
           "Original name",
           "Canonical name",
           "Expo",
+          "Goal",
           "Spend",
           "Impressions",
           "Clicks",
           "Link clicks",
           "Leads",
-          "CPL",
+          "Calls",
+          "Result",
+          "Cost per result",
           "CTR %",
           "CPM",
           "Frequency",
@@ -121,12 +149,15 @@ export default function Campaigns() {
           c.originalName,
           c.name,
           c.expo,
+          GOAL_META[c.goal].short,
           c.metrics.spend.toFixed(2),
           c.metrics.impressions,
           c.metrics.clicks,
           c.metrics.linkClicks,
           c.metrics.leads,
-          c.metrics.cpl?.toFixed(2) ?? "N/A",
+          c.metrics.calls ?? 0,
+          resultCount(c),
+          resultCost(c)?.toFixed(2) ?? "N/A",
           c.metrics.ctr?.toFixed(3) ?? "N/A",
           c.metrics.cpm?.toFixed(2) ?? "N/A",
           c.metrics.frequency?.toFixed(2) ?? "N/A",
@@ -190,12 +221,23 @@ export default function Campaigns() {
         </select>
         <select
           className="select-btn"
+          value={goalFilter}
+          onChange={e => setGoalFilter(e.target.value as "all" | CampaignGoal)}
+        >
+          <option value="all">Barcha maqsadlar</option>
+          <option value="leads">{GOAL_META.leads.label}</option>
+          <option value="calls">{GOAL_META.calls.label}</option>
+          <option value="engagement">{GOAL_META.engagement.label}</option>
+          <option value="other">{GOAL_META.other.label}</option>
+        </select>
+        <select
+          className="select-btn"
           value={sort}
           onChange={e => setSort(e.target.value as SortKey)}
         >
           <option value="spend">Tartib: sarf bo'yicha</option>
-          <option value="leads">Tartib: murojaat soni</option>
-          <option value="cpl">Tartib: murojaat narxi (arzonidan)</option>
+          <option value="leads">Tartib: natija soni</option>
+          <option value="cpl">Tartib: natija narxi (arzonidan)</option>
           <option value="ctr">Tartib: bosish ulushi</option>
           <option value="cpm">Tartib: 1000 ko'rsatuv narxi</option>
           <option value="frequency">Tartib: takroriylik</option>
@@ -205,7 +247,7 @@ export default function Campaigns() {
           className={`tf-btn ${onlyLeads ? "on" : ""}`}
           onClick={() => setOnlyLeads(v => !v)}
         >
-          <Filter size={13} /> Faqat lead berganlar
+          <Filter size={13} /> Faqat natija berganlar
         </button>
       </div>
 
@@ -243,20 +285,32 @@ export default function Campaigns() {
                     <SpendShare share={c.metrics.spend / maxSpend} />
                   </div>
                 </td>
+                <td>
+                  <span className={`goal-badge ${GOAL_TONE[c.goal]}`}>
+                    {GOAL_META[c.goal].short}
+                  </span>
+                  {c.goal === "calls" && (
+                    <small className="tone-muted" style={{ display: "block" }}>
+                      {whole(c.metrics.calls ?? 0)} qo'ng'iroq
+                    </small>
+                  )}
+                </td>
                 <td className="num">{money(c.metrics.spend)}</td>
                 <td className="num">{whole(c.metrics.impressions)}</td>
                 <td className="num" style={{ fontWeight: 600 }}>
-                  {c.metrics.leads > 0 ? (
-                    whole(c.metrics.leads)
+                  {resultCount(c) > 0 ? (
+                    whole(resultCount(c))
                   ) : (
                     <span className="tone-muted">—</span>
                   )}
                 </td>
-                <td className={`num ${cplTone(c.metrics.cpl)}`}>
-                  {c.metrics.cpl != null ? money(c.metrics.cpl) : "N/A"}
+                <td className={`num ${cplTone(resultCost(c))}`}>
+                  {resultCost(c) != null ? money(resultCost(c)) : "N/A"}
                 </td>
                 <td className="num">
-                  {c.metrics.cpl != null && snapshot.totals.cpl ? (
+                  {c.goal === "leads" &&
+                  c.metrics.cpl != null &&
+                  snapshot.totals.cpl ? (
                     <span className={cplTone(c.metrics.cpl)}>
                       {((c.metrics.cpl - (snapshot.totals.cpl ?? 0)) /
                         (snapshot.totals.cpl ?? 1) >=
@@ -295,10 +349,14 @@ export default function Campaigns() {
           Qanday hisoblanadi
         </span>
         <span>
-          Murojaat narxi = sarf ÷ murojaatlar soni (murojaat qaytmagan
-          kampaniyalarda “N/A”). O'ngdagi chiziq — sarfning jadvaldagi eng katta
-          sarfga nisbatan ulushi. Takroriylik 3 va undan yuqori bo'lsa sariq
-          rangda: bu auditoriya charchashining belgisi.
+          <b>Maqsad</b> — kampaniya asosan qaysi natijaga ishlaganini
+          ko'rsatadi: <b>Lead</b> (forma to'ldirish), <b>Call</b> (qo'ng'iroq
+          tugmasi bosilishi) yoki <b>Engagement</b> (post bilan o'zaro
+          ta'sir) — leadlar bo'lmasa keyingi ustuvor natija turi tanlanadi.
+          Natija narxi = sarf ÷ shu maqsaddagi natija soni (natija qaytmagan
+          kampaniyalarda “N/A”). O'ngdagi chiziq — sarfning jadvaldagi eng
+          katta sarfga nisbatan ulushi. Takroriylik 3 va undan yuqori bo'lsa
+          sariq rangda: bu auditoriya charchashining belgisi.
         </span>
       </div>
     </>
