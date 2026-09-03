@@ -109,11 +109,19 @@ export function useDashboard(): DashboardState {
         try {
           const boot = await fetchJson<{
             snapshot: NormalizedSnapshot;
+            snapshotsByPlatform?: Partial<Record<PlatformId, NormalizedSnapshot>>;
             connections: ConnectionInfo[];
             snapshots: SnapshotInfo[];
             crm: CrmData | null;
           }>("/data/bootstrap.json");
-          setSnapshot(boot.snapshot);
+          // file tanlangan bo'lsa — o'sha faylning platformasini topib, statik
+          // to'plamdan mos snapshot beriladi; aks holda joriy `plat` bo'yicha.
+          // Ikkalasi ham topilmasa (eski build) — meta'ga tushadi, lekin
+          // hech bo'lmasa doim BIR XIL snapshot ko'rsatilmaydi.
+          const targetPlatform = file
+            ? boot.snapshots?.find(s => s.file === file)?.platform ?? plat
+            : plat;
+          setSnapshot(boot.snapshotsByPlatform?.[targetPlatform] ?? boot.snapshot);
           setConnections(boot.connections ?? []);
           setSnapshots(Array.isArray(boot.snapshots) ? boot.snapshots : []);
           if (boot.crm) {

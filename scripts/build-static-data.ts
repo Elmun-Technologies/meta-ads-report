@@ -16,6 +16,7 @@ import {
   listSnapshots,
   readAmoSnapshot,
   connectionsPayload,
+  readSnapshotsByPlatform,
   DATA_DIR,
 } from "../server/app";
 
@@ -28,6 +29,10 @@ function main() {
   const connections = connectionsPayload();
   const snapshots = listSnapshots().filter(s => !s.file.startsWith("amo"));
   const crm = readAmoSnapshot();
+  /** Har bir ulangan platforma (meta/google-ads/yandex-direct) uchun eng yangi
+   * snapshot — API ishlamay qolsa ham client platforma almashtirsa to'g'ri
+   * ma'lumot ko'rsatilishi uchun (aks holda doim faqat Meta qaytardi). */
+  const snapshotsByPlatform = readSnapshotsByPlatform();
 
   if (!snapshot) {
     console.warn(
@@ -41,6 +46,7 @@ function main() {
   const payload = {
     generatedAt: new Date().toISOString(),
     snapshot,
+    snapshotsByPlatform,
     connections,
     snapshots,
     crm,
@@ -51,7 +57,7 @@ function main() {
 
   const kb = (fs.statSync(OUT_FILE).size / 1024).toFixed(0);
   console.log(
-    `[static-data] data/bootstrap.json yozildi (${kb} KB) · ${snapshots.length} ta snapshot · CRM: ${crm ? "bor" : "yo'q"}`
+    `[static-data] data/bootstrap.json yozildi (${kb} KB) · ${snapshots.length} ta snapshot · platformalar: ${Object.keys(snapshotsByPlatform).join(", ")} · CRM: ${crm ? "bor" : "yo'q"}`
   );
 }
 
