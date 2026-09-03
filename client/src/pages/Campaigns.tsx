@@ -199,6 +199,32 @@ export default function Campaigns() {
         Qatorni bossangiz — kampaniya ichidagi barcha kreativlar ochiladi.
       </PageHint>
 
+      <div className="goal-summary">
+        {(["leads", "calls", "engagement", "other"] as CampaignGoal[]).map(g => {
+          const inGoal = snapshot.campaigns.filter(c => c.goal === g);
+          if (!inGoal.length) return null;
+          const gSpend = inGoal.reduce((s, c) => s + c.metrics.spend, 0);
+          const gResult = inGoal.reduce((s, c) => s + resultCount(c), 0);
+          const active = goalFilter === g;
+          return (
+            <button
+              key={g}
+              className={`goal-summary-card ${GOAL_TONE[g]} ${active ? "active" : ""}`}
+              onClick={() => setGoalFilter(active ? "all" : g)}
+            >
+              <span className={`goal-badge ${GOAL_TONE[g]}`}>
+                {GOAL_META[g].short}
+              </span>
+              <b>{inGoal.length} ta kampaniya</b>
+              <small>
+                {money(gSpend)} · {whole(gResult)}{" "}
+                {g === "calls" ? "qo'ng'iroq" : g === "engagement" ? "faollik" : "murojaat"}
+              </small>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="toolbar" style={{ marginBottom: 13 }}>
         <label className="search-box">
           <Search size={14} />
