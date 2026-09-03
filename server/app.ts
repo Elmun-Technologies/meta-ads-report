@@ -233,6 +233,16 @@ const CONNECTORS: Connector[] = [
   },
 ];
 
+/** Har bir ulangan platforma uchun eng yangi snapshot — statik bootstrap uchun (build-static-data.ts) */
+export function readSnapshotsByPlatform(): Partial<Record<PlatformId, NormalizedSnapshot>> {
+  const out: Partial<Record<PlatformId, NormalizedSnapshot>> = {};
+  for (const c of CONNECTORS) {
+    const snap = c.resolve();
+    if (snap) out[c.id] = snap;
+  }
+  return out;
+}
+
 const CRM_CONNECTIONS: ConnectionInfo[] = [
   {
     id: "amocrm",
