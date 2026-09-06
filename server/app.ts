@@ -29,6 +29,9 @@ import type {
   PlatformId,
   SnapshotInfo,
 } from "@shared/types";
+import { webhooksRouter } from "./routes/webhooks";
+import { offlineChannelsRouter } from "./routes/offline-channels";
+import { prisma } from "./db";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -300,7 +303,7 @@ export function connectionsPayload(): ConnectionInfo[] {
 
 const sseClients = new Set<import("http").ServerResponse>();
 
-function broadcast(event: string, data: unknown = {}) {
+export function broadcast(event: string, data: unknown = {}) {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const res of sseClients) {
     try {
@@ -337,6 +340,9 @@ export type AppMode = "server" | "serverless";
 export function createApp(mode: AppMode = "server") {
   const app = express();
   app.use(express.json({ limit: "20mb" }));
+
+  app.use("/api/webhooks", webhooksRouter);
+  app.use("/api/channels/offline", offlineChannelsRouter);
 
   // API CORS (dev proxy same-origin ishlatadi, lekin alohida deploymentda ham ishlashi uchun)
   app.use("/api", (_req, res, next) => {
@@ -387,7 +393,119 @@ export function createApp(mode: AppMode = "server") {
     res.json({ connected: true, ...crm });
   });
 
-  app.get("/api/snapshot", (req, res) => {
+async function buildUnifiedSnapshot(): Promise<NormalizedSnapshot | null> {
+  const snapshots: NormalizedSnapshot[] = [];
+  const metaC = CONNECTORS.find(c => c.id === "meta");
+  if (metaC) {
+    const metaSnap = metaC.resolve(undefined);
+    if (metaSnap) snapshots.push(metaSnap);
+  }
+  const googleC = CONNECTORS.find(c => c.id === "google-ads");
+  if (googleC) {
+    const googleSnap = googleC.resolve(undefined);
+    if (googleSnap) snapshots.push(googleSnap);
+  }
+  const yandexC = CONNECTORS.find(c => c.id === "yandex-direct");
+  if (yandexC) {
+    const yandexSnap = yandexC.resolve(undefined);
+    if (yandexSnap) snapshots.push(yandexSnap);
+  }
+
+  const offlineCampaigns = await prisma.campaign.findMany({
+    where: { platform: "offline" },
+    include: { metrics: true }
+  });
+
+  if (offlineCampaigns.length > 0) {
+    const offSnap: NormalizedSnapshot = {
+      meta: {
+        platform: "offline" as PlatformId,
+        period: { start: "", end: "", label: "Umumiy" },
+        account: { id: "offline", name: "Offline", currency: "UZS" },
+        sourceLabel: "Offline",
+        syncedAt: new Date().toISOString(),
+        limitations: []
+      },
+      totals: { spend: 0, leads: 0, cpl: 0, impressions: 0, clicks: 0, ctr: 0, reach: 0, cpm: 0, cpc: 0, landingPageViews: 0, linkClicks: 0, videoViews: 0, messagingConversations: 0, frequency: 0, linkCtr: 0 },
+      campaigns: offlineCampaigns.map(c => ({
+        id: c.id,
+        name: c.name,
+        originalName: c.originalName,
+        objective: "offline",
+        platform: "offline",
+        expo: c.expo,
+        goal: c.goal as any,
+        status: "active",
+        effectiveStatus: "active",
+        metrics: {
+          spend: c.metrics.spend,
+          leads: c.metrics.leadsCount,
+          cpl: c.metrics.leadsCount > 0 ? c.metrics.spend / c.metrics.leadsCount : 0,
+          impressions: c.metrics.impressions,
+          clicks: c.metrics.clicks
+        } as any,
+        hasLeads: c.metrics.leadsCount > 0,
+        creatives: []
+      })),
+      creatives: [],
+      age: []
+    };
+    
+    offSnap.campaigns.forEach(c => {
+      offSnap.totals.spend += c.metrics.spend;
+      offSnap.totals.leads += c.metrics.leads;
+    });
+    if (offSnap.totals.leads > 0) offSnap.totals.cpl = offSnap.totals.spend / offSnap.totals.leads;
+    snapshots.push(offSnap);
+  }
+
+  if (snapshots.length === 0) return null;
+
+  const totals = { spend: 0, leads: 0, cpl: 0, impressions: 0, clicks: 0, ctr: 0, reach: 0, cpm: 0, cpc: 0, landingPageViews: 0, linkClicks: 0, videoViews: 0, messagingConversations: 0, postEngagement: 0, reactions: 0, comments: 0, saves: 0, messagingFirstReply: 0 };
+  const campaigns: any[] = [];
+  const creatives: any[] = [];
+  const age: any[] = [];
+
+  for (const s of snapshots) {
+    totals.spend += s.totals.spend || 0;
+    totals.leads += s.totals.leads || 0;
+    totals.impressions += s.totals.impressions || 0;
+    totals.clicks += s.totals.clicks || 0;
+    totals.reach += s.totals.reach || 0;
+    totals.landingPageViews += s.totals.landingPageViews || 0;
+    totals.linkClicks += s.totals.linkClicks || 0;
+    totals.videoViews += s.totals.videoViews || 0;
+    
+    // safe property adds
+    if ("messagingConversations" in s.totals) totals.messagingConversations += s.totals.messagingConversations as number || 0;
+    
+    campaigns.push(...s.campaigns);
+    creatives.push(...s.creatives);
+    age.push(...s.age);
+  }
+
+  if (totals.leads > 0) totals.cpl = totals.spend / totals.leads;
+  if (totals.impressions > 0) totals.ctr = (totals.clicks / totals.impressions) * 100;
+  if (totals.impressions > 0) totals.cpm = (totals.spend / totals.impressions) * 1000;
+  if (totals.clicks > 0) totals.cpc = totals.spend / totals.clicks;
+
+  return {
+    meta: {
+      platform: "all" as PlatformId,
+      period: snapshots[0].meta.period,
+      account: { id: "all", name: "Jami Barcha Manbalar", currency: snapshots[0].meta.account.currency },
+      sourceLabel: "Yagona Oyna (Unified)",
+      syncedAt: new Date().toISOString(),
+      limitations: []
+    },
+    totals: totals as any,
+    campaigns,
+    creatives,
+    age
+  };
+}
+
+  app.get("/api/snapshot", async (req, res) => {
     const file = req.query.file ? String(req.query.file) : undefined;
     if (file) {
       const platform = platformForFile(path.basename(file));
@@ -397,7 +515,7 @@ export function createApp(mode: AppMode = "server") {
       } else {
         const target = path.join(DATA_DIR, path.basename(file));
         snapshot = fs.existsSync(target)
-          ? readGenericSnapshotFile(platform, target, fs.statSync(target).mtime)
+          ? readGenericSnapshotFile(platform as any, target, fs.statSync(target).mtime)
           : null;
       }
       if (!snapshot) {
@@ -408,6 +526,17 @@ export function createApp(mode: AppMode = "server") {
       return;
     }
     const platform = String(req.query.platform || "meta") as PlatformId;
+    
+    if (platform === "all") {
+      const unified = await buildUnifiedSnapshot();
+      if (!unified) {
+         res.status(503).json({ error: "Hali hech qanday manba ulanmagan" });
+         return;
+      }
+      res.json(unified);
+      return;
+    }
+
     const connector = CONNECTORS.find(c => c.id === platform);
     if (!connector) {
       res.status(404).json({ error: `Unknown platform: ${platform}` });

@@ -8,6 +8,7 @@ import {
   Gauge,
   LayoutDashboard,
   Menu,
+  Megaphone,
   Moon,
   Plug,
   RefreshCw,
@@ -75,6 +76,12 @@ export const NAV: NavItem[] = [
     count: "crmLeads",
   },
   {
+    path: "/offline",
+    label: "Offlayn Manbalar",
+    hint: "Banner, QR kod, flayer va h.k oflayn manbalarni qoshish",
+    icon: Megaphone,
+  },
+  {
     path: "/compare",
     label: "Taqqoslash",
     hint: "Ikki davr yoki kampaniyalarni solishtirish",
@@ -113,7 +120,7 @@ function PlatformLogo({ id, size = 22 }: { id: PlatformId; size?: number }) {
         borderRadius: size / 3.2,
       }}
     >
-      {id === "meta" ? "f" : id === "google-ads" ? "G" : "Я"}
+      {id === "meta" ? "f" : id === "google-ads" ? "G" : id === "all" ? "Σ" : "Я"}
     </span>
   );
 }
@@ -167,6 +174,20 @@ export function Sidebar({
       <div className="side-section">
         <div className="side-caption">Platformalar</div>
         <div className="platform-switch">
+          <Link
+            href="/"
+            onClick={() => {
+              setPlatform("all");
+              onClose();
+            }}
+            className={`platform-row ${meta?.platform === "all" ? "active" : ""}`}
+          >
+            <PlatformLogo id="all" />
+            <span className="p-info">
+              <b>{PLATFORM_META["all"].name}</b>
+              <small>Birlashtirilgan ko'rsatkichlar</small>
+            </span>
+          </Link>
           {adsConnections.map(conn => {
             const pm = PLATFORM_META[conn.id as PlatformId];
             const connected = conn.status === "connected";

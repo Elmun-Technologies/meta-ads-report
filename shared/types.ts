@@ -4,7 +4,7 @@
  * dashboard UI faqat shu tiplar bilan ishlaydi.
  */
 
-export type PlatformId = "meta" | "google-ads" | "yandex-direct";
+export type PlatformId = "all" | "meta" | "google-ads" | "yandex-direct" | "offline";
 
 export type ConnectionStatus = "connected" | "ready" | "planned";
 
@@ -148,9 +148,11 @@ export interface NormalizedSnapshot {
 }
 
 export const PLATFORM_META: Record<PlatformId, { name: string; short: string; color: string }> = {
+  all: { name: "Barcha Manbalar", short: "Jami", color: "var(--text)" },
   meta: { name: "Meta Ads", short: "Meta", color: "#0866FF" },
   "google-ads": { name: "Google Ads", short: "Google", color: "#4285F4" },
   "yandex-direct": { name: "Yandex Direct", short: "Yandex", color: "#FC3F1D" },
+  offline: { name: "Offline", short: "Offline", color: "#10b981" },
 };
 
 /* ------------------------------------------------------------------ */

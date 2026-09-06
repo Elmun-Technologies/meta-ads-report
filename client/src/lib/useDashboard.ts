@@ -66,7 +66,7 @@ export function useDashboard(): DashboardState {
   const [crmConnected, setCrmConnected] = useState(false);
   const [snapshots, setSnapshots] = useState<SnapshotInfo[]>([]);
   const [snapshotFile, setSnapshotFile] = useState<string | null>(null);
-  const [platform, setPlatformState] = useState<PlatformId>("meta");
+  const [platform, setPlatformState] = useState<PlatformId>("all");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);

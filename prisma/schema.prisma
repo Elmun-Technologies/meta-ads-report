@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Campaign {
+  id           String     @id
+  name         String
+  originalName String
+  objective    String?
+  expo         String
+  platform     String     // "meta", "google-ads", "yandex-direct", "offline"
+  metricsId    String     @unique
+  metrics      Metrics    @relation(fields: [metricsId], references: [id])
+  goal         String
+  creatives    Creative[]
+  leads        Lead[]
+}
+
+model Creative {
+  id              String    @id
+  name            String
+  originalName    String
+  campaignId      String
+  campaign        Campaign  @relation(fields: [campaignId], references: [id])
+  status          String?
+  effectiveStatus String?
+  createdTime     String?
+  metricsId       String    @unique
+  metrics         Metrics   @relation(fields: [metricsId], references: [id])
+  hasLeads        Boolean
+  goal            String
+  leads           Lead[]
+}
+
+model Metrics {
+  id                     String    @id @default(cuid())
+  spend                  Float     @default(0)
+  impressions            Int       @default(0)
+  reach                  Int?
+  frequency              Float?
+  clicks                 Int       @default(0)
+  linkClicks             Int       @default(0)
+  ctr                    Float?
+  linkCtr                Float?
+  cpc                    Float?
+  cpm                    Float?
+  leadsCount             Int       @default(0)
+  cpl                    Float?
+  landingPageViews       Int?
+  messagingConversations Int?
+  videoViews             Int?
+  reactions              Int?
+  comments               Int?
+  shares                 Int?
+  saves                  Int?
+  postEngagement         Int?
+  messagingFirstReply    Int?
+  calls                  Int?
+
+  campaign Campaign?
+  creative Creative?
+}
+
+model Lead {
+  id           String        @id
+  name         String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  stageId      String
+  stageName    String
+  pipeline     String
+  price        Float         @default(0)
+  responsible  String?
+  contactName  String?
+  phone        String?
+  utmCampaign  String?
+  utmContent   String?
+  utmSource    String?
+  
+  campaignId   String?
+  campaign     Campaign?     @relation(fields: [campaignId], references: [id])
+  creativeId   String?
+  creative     Creative?     @relation(fields: [creativeId], references: [id])
+  
+  lossReason   String?
+  history      LeadHistory[]
+}
+
+model LeadHistory {
+  id       String   @id @default(cuid())
+  leadId   String
+  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  stage    String
+  at       DateTime @default(now())
+}

@@ -20,6 +20,7 @@ const Creatives = lazy(() => import("./pages/Creatives"));
 const Audience = lazy(() => import("./pages/Audience"));
 const LeadsExplorer = lazy(() => import("./pages/LeadsExplorer"));
 const Pipeline = lazy(() => import("./pages/Pipeline"));
+const OfflineSources = lazy(() => import("./pages/OfflineSources"));
 const Compare = lazy(() => import("./pages/Compare"));
 const Report = lazy(() => import("./pages/Report"));
 const Connections = lazy(() => import("./pages/Connections"));
@@ -124,6 +125,7 @@ function Shell() {
                 <Route path="/audience" component={Audience} />
                 <Route path="/leads" component={LeadsExplorer} />
                 <Route path="/pipeline" component={Pipeline} />
+                <Route path="/offline" component={OfflineSources} />
                 <Route path="/compare" component={Compare} />
                 <Route path="/report" component={Report} />
                 <Route path="/connections" component={Connections} />
