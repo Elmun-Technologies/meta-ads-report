@@ -20,6 +20,7 @@ import {
   Workflow,
   X,
   FileText,
+  Send,
 } from "lucide-react";
 import { PLATFORM_META, type PlatformId } from "@shared/types";
 import { ago } from "@/lib/format";
@@ -82,6 +83,12 @@ export const NAV: NavItem[] = [
     icon: Megaphone,
   },
   {
+    path: "/telegram",
+    label: "Telegram",
+    hint: "TGStat orqali kanal statistikasi va reklamalar",
+    icon: Send,
+  },
+  {
     path: "/compare",
     label: "Taqqoslash",
     hint: "Ikki davr yoki kampaniyalarni solishtirish",
@@ -120,7 +127,7 @@ function PlatformLogo({ id, size = 22 }: { id: PlatformId; size?: number }) {
         borderRadius: size / 3.2,
       }}
     >
-      {id === "meta" ? "f" : id === "google-ads" ? "G" : id === "all" ? "Σ" : "Я"}
+      {id === "meta" ? "f" : id === "google-ads" ? "G" : id === "all" ? "Σ" : id === "telegram" ? "TG" : "Я"}
     </span>
   );
 }

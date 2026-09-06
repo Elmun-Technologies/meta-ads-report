@@ -31,6 +31,7 @@ import type {
 } from "@shared/types";
 import { webhooksRouter } from "./routes/webhooks";
 import { offlineChannelsRouter } from "./routes/offline-channels";
+import { telegramRouter, getTelegramStats } from "./routes/telegram";
 import { prisma } from "./db";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -343,6 +344,7 @@ export function createApp(mode: AppMode = "server") {
 
   app.use("/api/webhooks", webhooksRouter);
   app.use("/api/channels/offline", offlineChannelsRouter);
+  app.use("/api/telegram", telegramRouter);
 
   // API CORS (dev proxy same-origin ishlatadi, lekin alohida deploymentda ham ishlashi uchun)
   app.use("/api", (_req, res, next) => {
@@ -457,6 +459,67 @@ async function buildUnifiedSnapshot(): Promise<NormalizedSnapshot | null> {
     });
     if (offSnap.totals.leads > 0) offSnap.totals.cpl = offSnap.totals.spend / offSnap.totals.leads;
     snapshots.push(offSnap);
+  }
+
+  // Telegram kanallar va postlarni qo'shish
+  const tgChannels = await getTelegramStats();
+  if (tgChannels.length > 0) {
+    const tgCampaigns: any[] = [];
+    let tgSpend = 0;
+    let tgViews = 0;
+    let tgReactions = 0;
+
+    for (const ch of tgChannels) {
+      // Har bir kanalni "kampaniya" sifatida ko'rsatish
+      const chSpend = ch.posts.reduce((s: number, p: any) => s + (p.cost || 0), 0);
+      const chViews = ch.posts.reduce((s: number, p: any) => s + (p.views || 0), 0);
+      const chReactions = ch.posts.reduce((s: number, p: any) => s + (p.reactions || 0), 0);
+      
+      tgSpend += chSpend;
+      tgViews += chViews;
+      tgReactions += chReactions;
+
+      tgCampaigns.push({
+        id: `tg-${ch.id}`,
+        name: `${ch.name} (${ch.username})`,
+        originalName: ch.name,
+        objective: "telegram",
+        platform: "telegram",
+        expo: `${ch.subscribers} obunachi · ERR ${ch.errPercent}%`,
+        goal: "engagement" as any,
+        status: "active",
+        effectiveStatus: "active",
+        metrics: {
+          spend: chSpend,
+          leads: 0,
+          cpl: 0,
+          impressions: chViews,
+          clicks: chReactions,
+          reach: ch.avgPostReach,
+          postEngagement: chReactions,
+        } as any,
+        hasLeads: false,
+        creatives: [],
+      });
+    }
+
+    if (tgCampaigns.length > 0) {
+      const tgSnap: NormalizedSnapshot = {
+        meta: {
+          platform: "telegram" as PlatformId,
+          period: { start: "", end: "", label: "Telegram" },
+          account: { id: "telegram", name: "Telegram Kanallar", currency: "UZS" },
+          sourceLabel: "TGStat API",
+          syncedAt: new Date().toISOString(),
+          limitations: []
+        },
+        totals: { spend: tgSpend, leads: 0, cpl: 0, impressions: tgViews, clicks: tgReactions, ctr: 0, reach: 0, cpm: 0, cpc: 0, landingPageViews: 0, linkClicks: 0, videoViews: 0, messagingConversations: 0, frequency: 0, linkCtr: 0 } as any,
+        campaigns: tgCampaigns,
+        creatives: [],
+        age: []
+      };
+      snapshots.push(tgSnap);
+    }
   }
 
   if (snapshots.length === 0) return null;

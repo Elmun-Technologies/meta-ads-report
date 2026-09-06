@@ -98,3 +98,40 @@ model LeadHistory {
   stage    String
   at       DateTime @default(now())
 }
+
+model TelegramChannel {
+  id              String          @id @default(cuid())
+  username        String          @unique  // @channelname
+  name            String                   // kanal nomi
+  subscribers     Int             @default(0)
+  avgPostReach    Int             @default(0)
+  advReach12h     Int             @default(0)
+  advReach24h     Int             @default(0)
+  advReach48h     Int             @default(0)
+  errPercent      Float           @default(0)  // Engagement Rate %
+  dailyReach      Int             @default(0)
+  forwardsCount   Int             @default(0)
+  mentionsCount   Int             @default(0)
+  postsCount      Int             @default(0)
+  tgstatId        Int?                     // TGStat internal ID
+  syncedAt        DateTime        @default(now())
+  createdAt       DateTime        @default(now())
+  posts           TelegramPost[]
+}
+
+model TelegramPost {
+  id              String          @id @default(cuid())
+  tgstatPostId    String?         // TGStat post ID
+  channelId       String
+  channel         TelegramChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  text            String          @default("")
+  date            DateTime        @default(now())
+  views           Int             @default(0)
+  shares          Int             @default(0)
+  forwards        Int             @default(0)
+  reactions       Int             @default(0)
+  commentsCount   Int             @default(0)
+  link            String          @default("")  // t.me/channel/123
+  cost            Float           @default(0)   // qo'lda kiritilgan reklama narxi
+  syncedAt        DateTime        @default(now())
+}

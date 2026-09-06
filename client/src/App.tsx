@@ -22,6 +22,7 @@ const LeadsExplorer = lazy(() => import("./pages/LeadsExplorer"));
 const Pipeline = lazy(() => import("./pages/Pipeline"));
 const OfflineSources = lazy(() => import("./pages/OfflineSources"));
 const Compare = lazy(() => import("./pages/Compare"));
+const TelegramChannels = lazy(() => import("./pages/TelegramChannels"));
 const Report = lazy(() => import("./pages/Report"));
 const Connections = lazy(() => import("./pages/Connections"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -126,6 +127,7 @@ function Shell() {
                 <Route path="/leads" component={LeadsExplorer} />
                 <Route path="/pipeline" component={Pipeline} />
                 <Route path="/offline" component={OfflineSources} />
+                <Route path="/telegram" component={TelegramChannels} />
                 <Route path="/compare" component={Compare} />
                 <Route path="/report" component={Report} />
                 <Route path="/connections" component={Connections} />
