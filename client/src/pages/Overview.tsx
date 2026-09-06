@@ -97,28 +97,26 @@ export default function Overview() {
             {snapshot.meta.period.label} ·{" "}
             {PLATFORM_META[snapshot.meta.platform].name}
           </span>
-          <h1>Umumiy natijalar</h1>
-          <p>
-            {snapshot.meta.account.name} kabineti: {campaigns.length} ta
-            kampaniya, {creatives.length} ta kreativ,{" "}
-            {whole(totals.impressions)} ta ko‘rsatuv. Barcha raqamlar{" "}
-            {snapshot.meta.sourceLabel} manbasidan olingan — taxminiy
-            hisob-kitob yo‘q.
-          </p>
+        <h1>Общие результаты</h1>
+        <p>
+          Кабинет {snapshot.meta.account.name}: {campaigns.length} кампаний, {creatives.length} креативов,{" "}
+          {whole(totals.impressions)} показов. Все цифры получены из источника{" "}
+          {snapshot.meta.sourceLabel} — никаких приблизительных расчетов.
+        </p>
         </div>
         <div className="right">
           <span className="chip good">
-            <i /> Ma’lumot ulangan
+            <i /> Данные подключены
           </span>
           <span className="chip muted">
-            {snapshot.meta.account.currency} valyutasi
+            Валюта {snapshot.meta.account.currency}
           </span>
         </div>
       </div>
 
       <PageHint>
-        Oltita asosiy ko‘rsatkich, diqqat talab qiladigan kampaniyalar va
-        murojaatgacha bo‘lgan yo‘l — bitta sahifada.
+        Шесть ключевых показателей, кампании, требующие внимания, и
+        воронка лидов — всё на одной странице.
       </PageHint>
 
       {/* KPI ledger */}
@@ -127,19 +125,19 @@ export default function Overview() {
           <KpiCard
             label={
               <>
-                Sarf <i>(Spend)</i>
+                Расход <i>(Spend)</i>
               </>
             }
             value={money(totals.spend)}
             sub={
               <>
-                Jami sarf · <b>{campaigns.length}</b> ta kampaniya bo‘yicha
+                Общий расход · по <b>{campaigns.length}</b> кампаниям
               </>
             }
             foot={
               <>
                 <span>
-                  Eng katta: {money(campaigns[0]?.metrics.spend ?? 0)}
+                  Макс: {money(campaigns[0]?.metrics.spend ?? 0)}
                 </span>
                 <SpendShare
                   share={
@@ -155,39 +153,39 @@ export default function Overview() {
           <KpiCard
             label={
               <>
-                Murojaatlar <i>(Leads)</i>
+                Лиды <i>(Leads)</i>
               </>
             }
             value={whole(totals.leads)}
             tone="var(--cyan)"
             sub={
               <>
-                Murojaat qaytgan kampaniyalar:{" "}
+                Кампании с лидами:{" "}
                 <b>{campaigns.filter(c => c.metrics.leads > 0).length}</b> /{" "}
                 {campaigns.length}
               </>
             }
-            foot={<span>Bir kampaniyadan eng ko‘pi: {whole(maxLeads)}</span>}
+            foot={<span>Максимум с одной: {whole(maxLeads)}</span>}
           />
         </div>
         <div className="col-4">
           <KpiCard
             label={
               <>
-                Murojaat narxi <i>(CPL)</i>
+                Стоимость лида <i>(CPL)</i>
               </>
             }
             value={money(totals.cpl)}
             tone="var(--violet)"
             sub={
               <>
-                Hisob bo‘yicha o‘rtacha · eng arzon{" "}
+                Среднее по аккаунту · самый дешевый{" "}
                 <b>{bestCpl != null ? money(bestCpl) : "N/A"}</b>
               </>
             }
             foot={
               <span>
-                Video ko‘rish: {compact(totals.videoViews)}
+                Просмотры видео: {compact(totals.videoViews)}
               </span>
             }
           />
@@ -196,71 +194,70 @@ export default function Overview() {
           <KpiCard
             label={
               <>
-                Bosish ulushi <i>(CTR)</i>
+                Кликабельность <i>(CTR)</i>
               </>
             }
             value={pct(totals.ctr)}
             tone="var(--warn)"
             sub={
               <>
-                <b>{whole(totals.clicks)}</b> ta bosish ·{" "}
-                <b>{whole(totals.linkClicks)}</b> ta havola bosish
+                <b>{whole(totals.clicks)}</b> кликов ·{" "}
+                <b>{whole(totals.linkClicks)}</b> по ссылке
               </>
             }
-            foot={<span>Havola bosish ulushi: {pct(totals.linkCtr)}</span>}
+            foot={<span>CTR ссылок: {pct(totals.linkCtr)}</span>}
           />
         </div>
         <div className="col-4">
           <KpiCard
             label={
               <>
-                1000 ko‘rsatuv narxi <i>(CPM)</i>
+                Цена 1000 показов <i>(CPM)</i>
               </>
             }
             value={money(totals.cpm)}
             tone="var(--good)"
             sub={
               <>
-                Bosish narxi (CPC) <b>{money(totals.cpc)}</b>
+                Цена клика (CPC) <b>{money(totals.cpc)}</b>
               </>
             }
-            foot={<span>Takroriylik: {ratio(totals.frequency)}</span>}
+            foot={<span>Частота: {ratio(totals.frequency)}</span>}
           />
         </div>
         <div className="col-4">
           <KpiCard
             label={
               <>
-                Qamrov <i>(Reach)</i>
+                Охват <i>(Reach)</i>
               </>
             }
             value={whole(totals.reach)}
             tone="var(--risk)"
             sub={
               <>
-                Noyob odamlar · <b>{compact(totals.impressions)}</b> ta
-                ko‘rsatuv
+                Уникальных людей · <b>{compact(totals.impressions)}</b> показов
               </>
             }
-            foot={<span>Eng faol yosh: {bestAge?.age ?? "—"}</span>}
+            foot={<span>Активный возраст: {bestAge?.age ?? "—"}</span>}
           />
         </div>
       </div>
 
-      {/* Signallar + Pacing */}
+      {/* Сигналы + Pacing */}
       <div className="grid-12" style={{ marginBottom: 14 }}>
         <div className="col-7">
           <Panel
-            kicker="Diqqat"
-            title="Nimaga e’tibor berish kerak"
-            sub="Quyidagi holatlar raqamlar bo‘yicha avtomatik aniqlangan. Qatorni bossangiz — kampaniya ochiladi"
+            kicker="Внимание"
+            title="На что обратить внимание"
+            sub="Следующие ситуации определены автоматически. Нажмите на строку, чтобы открыть кампанию"
             action={
-              <span className="chip muted">{alerts.length} ta holat</span>
+              <span className="chip muted">{alerts.length} событий</span>
             }
           >
             {alerts.length === 0 && (
               <div className="empty-state">
-                Muammo topilmadi — hammasi me’yorida
+                Проблем не найдено — всё в норме
               </div>
             )}
             {alerts.slice(0, 5).map(a => (
@@ -302,27 +299,27 @@ export default function Overview() {
         </div>
         <div className="col-5">
           <Panel
-            kicker="Sarf sur’ati"
-            title="Shu ketishda oy oxiriga qancha bo‘ladi?"
+            kicker="Темп расхода"
+            title="Сколько будет к концу месяца при таком темпе?"
             sub={pacing?.daysNote}
           >
             {pacing && (
               <>
                 <div className="pace-grid">
                   <div>
-                    <small>Kunlik sarf</small>
+                    <small>Дневной расход</small>
                     <b>{money(pacing.dailySpend)}</b>
                   </div>
                   <div>
-                    <small>Kunlik murojaat</small>
+                    <small>Лидов в день</small>
                     <b>{pacing.dailyLeads.toFixed(1)}</b>
                   </div>
                   <div>
-                    <small>30 kunlik prognoz — sarf</small>
+                    <small>Прогноз на 30 дней — расход</small>
                     <b>{money(pacing.projected30Spend)}</b>
                   </div>
                   <div>
-                    <small>30 kunlik prognoz — murojaat</small>
+                    <small>Прогноз на 30 дней — лиды</small>
                     <b>{whole(pacing.projected30Leads)}</b>
                   </div>
                 </div>
@@ -337,11 +334,11 @@ export default function Overview() {
         <div className="col-12">
           {crmSummary && crm ? (
             <Panel
-              kicker="AmoCRM · murojaatdan bitimgacha"
-              title="Reklama haqiqatan bitim olib keldimi?"
+              kicker="AmoCRM · от лида к сделке"
+              title="Принесла ли реклама реальные сделки?"
               action={
                 <Link className="panel-link" href="/pipeline">
-                  Lifecycle doskasini ochish <ArrowUpRight size={12} />
+                  Открыть доску воронки <ArrowUpRight size={12} />
                 </Link>
               }
             >

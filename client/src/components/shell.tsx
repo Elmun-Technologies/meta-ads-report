@@ -39,71 +39,71 @@ export interface NavItem {
 export const NAV: NavItem[] = [
   {
     path: "/",
-    label: "Umumiy natijalar",
-    hint: "Sarf, murojaat narxi va diqqat talab qiladigan kampaniyalar",
+    label: "Общие результаты",
+    hint: "Затраты, стоимость лида и кампании, требующие внимания",
     icon: LayoutDashboard,
   },
   {
     path: "/campaigns",
-    label: "Kampaniyalar",
-    hint: "Har bir kampaniya kesimida to'liq jadval va tafsilot",
+    label: "Кампании",
+    hint: "Полная таблица и детали в разрезе каждой кампании",
     icon: Target,
     count: "campaigns",
   },
   {
     path: "/creatives",
-    label: "Kreativlar",
-    hint: "Qaysi rasm/video ko'proq ishladi",
+    label: "Креативы",
+    hint: "Какие изображения/видео работают лучше",
     icon: Sparkles,
     count: "creatives",
   },
   {
     path: "/audience",
-    label: "Auditoriya",
-    hint: "Yosh bo'yicha sarf, murojaat va narx",
+    label: "Аудитория",
+    hint: "Затраты, лиды и их стоимость по возрасту",
     icon: Users,
   },
   {
     path: "/leads",
-    label: "Kampaniya tuzilmasi",
-    hint: "Expo → kampaniya → guruh → kreativ qatlamlari",
+    label: "Структура кампаний",
+    hint: "Структура: Expo → кампания → группа → креатив",
     icon: Gauge,
   },
   {
     path: "/pipeline",
-    label: "Murojaat yo'li (CRM)",
-    hint: "Murojaat bitimga aylandimi, qayerda to'xtadi",
+    label: "Воронка (CRM)",
+    hint: "Статус лидов, на каком этапе они находятся",
     icon: Workflow,
     count: "crmLeads",
   },
   {
     path: "/offline",
-    label: "Offlayn Manbalar",
-    hint: "Banner, QR kod, flayer va h.k oflayn manbalarni qoshish",
+    label: "Офлайн источники",
+    hint: "Баннеры, QR-коды, флаеры и другие офлайн-ресурсы",
     icon: Megaphone,
   },
   {
     path: "/telegram",
     label: "Telegram",
-    hint: "TGStat orqali kanal statistikasi va reklamalar",
+    hint: "Статистика каналов и рекламы через TGStat",
     icon: Send,
   },
   {
     path: "/compare",
-    label: "Taqqoslash",
-    hint: "Ikki davr yoki kampaniyalarni solishtirish",
+    label: "Сравнение",
+    hint: "Сравнение двух периодов или кампаний",
     icon: ArrowLeftRight,
   },
   {
     path: "/report",
-    label: "Hisobot",
-    hint: "Rahbariyat uchun bir sahifalik qisqa hisobot (chop etish/PDF)",
+    label: "Отчет",
+    hint: "Краткий одностраничный отчет для руководства (печать/PDF)",
     icon: FileText,
   },
   {
     path: "/connections",
-    label: "Ulanishlar",
-    hint: "Qaysi platforma ulangan, ma'lumot qayerdan keladi",
+    label: "Подключения",
+    hint: "Подключенные платформы и источники данных",
     icon: Plug,
   },
 ];
@@ -166,20 +166,20 @@ export function Sidebar({
         </span>
         <div style={{ minWidth: 0 }}>
           <b>SOF·EXPO</b>
-          <small>Reklama hisobotlari</small>
+          <small>Рекламные отчеты</small>
         </div>
         <button
           className="icon-btn mobile-only"
           style={{ marginLeft: "auto", width: 30, height: 30 }}
           onClick={onClose}
-          aria-label="Yopish"
+          aria-label="Закрыть"
         >
           <X size={16} />
         </button>
       </div>
 
       <div className="side-section">
-        <div className="side-caption">Platformalar</div>
+        <div className="side-caption">Платформы</div>
         <div className="platform-switch">
           <Link
             href="/"
@@ -192,7 +192,7 @@ export function Sidebar({
             <PlatformLogo id="all" />
             <span className="p-info">
               <b>{PLATFORM_META["all"].name}</b>
-              <small>Birlashtirilgan ko'rsatkichlar</small>
+              <small>Объединенные показатели</small>
             </span>
           </Link>
           {adsConnections.map(conn => {
@@ -213,12 +213,12 @@ export function Sidebar({
                   <b>{pm?.name ?? conn.name}</b>
                   <small>
                     {connected
-                      ? `${conn.accounts.length} ta kabinet ulangan`
-                      : "ulanmagan"}
+                      ? `${conn.accounts.length} каб. подключено`
+                      : "не подключено"}
                   </small>
                 </span>
                 <span className={`p-status ${connected ? "on" : "off"}`}>
-                  {connected ? "Ulangan" : "Kutilyapti"}
+                  {connected ? "Подключено" : "Ожидается"}
                 </span>
               </Link>
             );
@@ -228,7 +228,7 @@ export function Sidebar({
 
       {crmConnection && (
         <div className="side-section">
-          <div className="side-caption">CRM · bitimgacha</div>
+          <div className="side-caption">CRM · до сделки</div>
           <Link
             href="/pipeline"
             onClick={onClose}
@@ -254,19 +254,19 @@ export function Sidebar({
               <b>AmoCRM</b>
               <small>
                 {crmConnected
-                  ? `${crm?.leads.length ?? 0} ta murojaat kuzatilmoqda`
-                  : "ulanmagan — /pipeline sahifasi"}
+                  ? `${crm?.leads.length ?? 0} лидов отслеживается`
+                  : "не подключено — страница /pipeline"}
               </small>
             </span>
             <span className={`p-status ${crmConnected ? "on" : "off"}`}>
-              {crmConnected ? "Ulangan" : "Kutilyapti"}
+              {crmConnected ? "Подключено" : "Ожидается"}
             </span>
           </Link>
         </div>
       )}
 
       <div className="side-section">
-        <div className="side-caption">Kabinet</div>
+        <div className="side-caption">Кабинет</div>
         <div className="account-card">
           <span
             className="a-dot"
@@ -274,13 +274,13 @@ export function Sidebar({
           />
           <div className="a-info">
             <small>{meta?.account.externalId ?? "—"}</small>
-            <b>{meta?.account.name ?? "Kabinet ulanmagan"}</b>
+            <b>{meta?.account.name ?? "Кабинет не подключен"}</b>
           </div>
         </div>
       </div>
 
       <div className="side-section">
-        <div className="side-caption">Bo'limlar</div>
+        <div className="side-caption">Разделы</div>
         <nav className="side-nav">
           {NAV.map(item => {
             const active = location === item.path;
@@ -314,20 +314,20 @@ export function Sidebar({
           <span className={`live-dot ${live ? "pulse" : "off"}`} />
           <b style={{ fontSize: 11.5, fontWeight: 600 }}>
             {source === "static"
-              ? "Ma'lumot: o'zgarmas nusxa"
+              ? "Данные: статичная копия"
               : live
-                ? "Avtomatik yangilanish yoqilgan"
-                : "Vaqti-vaqti bilan tekshiriladi"}
+                ? "Автообновление включено"
+                : "Проверяется периодически"}
           </b>
         </div>
         <div className="s-meta">
-          Manba: <b>{meta?.sourceLabel ?? "—"}</b>
+          Источник: <b>{meta?.sourceLabel ?? "—"}</b>
           <br />
-          Yangilangan: <b>{ago(meta?.syncedAt ?? lastEventAt)}</b>
+          Обновлено: <b>{ago(meta?.syncedAt ?? lastEventAt)}</b>
           {meta && (
             <>
               <br />
-              Davr: <b>{meta.period.label || "—"}</b>
+              Период: <b>{meta.period.label || "—"}</b>
             </>
           )}
         </div>
@@ -371,19 +371,19 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
       <button
         className="icon-btn mobile-only"
         onClick={onMenu}
-        aria-label="Menyu"
+        aria-label="Меню"
       >
         <Menu size={17} />
       </button>
       <div className="crumb">
         <span>{platformName}</span>
         <Chevron className="sep" />
-        <b title={PAGE_HINTS[location]}>{PAGE_TITLES[location] ?? "Sahifa"}</b>
+        <b title={PAGE_HINTS[location]}>{PAGE_TITLES[location] ?? "Страница"}</b>
       </div>
       <div className="top-actions">
         <button className="search-trigger" onClick={() => setPaletteOpen(true)}>
           <Search size={14} />
-          <span className="st-label">Qidiruv va buyruqlar…</span>
+          <span className="st-label">Поиск и команды…</span>
           <span className="kbd">⌘K</span>
         </button>
         {snapshots.length > 1 && (
@@ -391,7 +391,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
             className="select-btn snap-select desktop-only"
             value={snapshotFile ?? snapshots[0]?.file ?? ""}
             onChange={e => setSnapshotFile(e.target.value)}
-            title="Kabinet / davr tanlash"
+            title="Выбор кабинета / периода"
           >
             {snapshots.map(s => (
               <option key={s.file} value={s.file}>
@@ -403,7 +403,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
         <button
           className={`icon-btn ${syncing ? "spin" : ""}`}
           onClick={() => void refresh()}
-          title="Ma'lumotni yangilash"
+          title="Обновить данные"
         >
           <RefreshCw size={15} />
         </button>
@@ -412,27 +412,27 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
             className={`live-dot ${live ? "pulse" : "off"}`}
             style={{ width: 6, height: 6 }}
           />
-          {snapshot?.meta.period.label || "davr ko'rsatilmagan"}
+          {snapshot?.meta.period.label || "период не указан"}
         </span>
         {source === "static" && (
           <span
             className="src-badge static desktop-only"
-            title="Server (API) javob bermadi — build vaqtida saqlangan ma'lumot ko'rsatilmoqda. Yangilash uchun loyihani qayta deploy qiling."
+            title="Сервер (API) не ответил — отображаются данные, сохраненные при сборке (build). Для обновления сделайте deploy проекта заново."
           >
-            Build vaqtidagi ma'lumot
+            Данные во время сборки
           </span>
         )}
         <button
           className="icon-btn"
           onClick={toggleTheme}
-          title={theme === "dark" ? "Yorug' tema" : "Tungi tema"}
+          title={theme === "dark" ? "Светлая тема" : "Темная тема"}
         >
           {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
         </button>
         <AlertsMenu />
         <div
           className="avatar"
-          title={snapshot?.meta.account.name ?? "Kabinet ulanmagan"}
+          title={snapshot?.meta.account.name ?? "Кабинет не подключен"}
         >
           {initials}
         </div>
