@@ -43,14 +43,12 @@ function NotConnected() {
       </div>
 
       <PageHint>
-      <PageHint>
         Эта страница сейчас пуста, так как AmoCRM не подключена. После подключения здесь появится{" "}
         <b>путь лид → сделка</b>, потери на каждом этапе и кампании, которые
         реально принесли деньги.
       </PageHint>
       <div className="grid-12">
         <div className="col-7">
-          <Panel
           <Panel
             kicker="Зачем это нужно"
             title="Что появится после подключения AmoCRM"
@@ -90,7 +88,6 @@ function NotConnected() {
           </Panel>
         </div>
         <div className="col-5">
-          <Panel
           <Panel
             kicker="Как подключить"
             title="3 шага"
