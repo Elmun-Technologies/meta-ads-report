@@ -33,8 +33,15 @@ export const standardCampaignName = (name: string) => {
   if (n.includes("promo show")) return "PROMOTORS SHOW | LEADS | TASHKENT | UZ | AUG26";
   if (n.includes("promotors-show")) return `PROMOTORS SHOW | LEADS | ${name.replace(/promotors-show daily 5\$ /i, "").toUpperCase()} | UZ | AUG26`;
   if (n.includes("engagement")) return "FOODERA EXPO 2026 | ENGAGEMENT | BROAD | UZ | AUG26";
-  if (n.includes("new leads")) return "EXPO NOT SPECIFIED | LEADS | AUDIENCE NOT SPECIFIED | MARKET NOT SPECIFIED | AUG26";
-  return `EXPO NOT SPECIFIED | ${name.toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim()} | AUG26`;
+  if (n.includes("new leads")) return "YANGI KAMPANIYA | LEADS | NO AUDIENCE | UZ | AUG26";
+  
+  // Agar standart formatda (Kompaniya | Maqsad | Auditoriya) yozilgan bo'lsa, o'zini qaytaramiz
+  if (name.includes("|")) {
+    return name.toUpperCase();
+  }
+  
+  // Aks holda shunchaki toza nomini qoldiramiz
+  return name.toUpperCase().replace(/[^A-Z0-9 ]+/g, " ").trim() || "NOMSIZ KAMPANIYA";
 };
 
 export const standardAdsetName = (name: string) => {
@@ -54,10 +61,20 @@ export const standardCreativeName = (name: string, index = 1) => {
 
 export const expoFor = (name: string) => {
   const n = name.toLowerCase();
-  if (n.includes("foodera")) return "FOODERA EXPO 2026";
-  if (n.includes("build pro")) return "BUILD PRO EXPO";
-  if (n.includes("promo show") || n.includes("promotors-show")) return "PROMOTORS SHOW";
-  return "EXPO NOMI ANIQLANMAGAN";
+  if (n.includes("foodera")) return "FOODERA EXPO";
+  if (n.includes("build pro") || n.includes("buildpro")) return "BUILD PRO EXPO";
+  if (n.includes("promo show") || n.includes("promotors")) return "PROMOTORS SHOW";
+  if (n.includes("tashkent fashion")) return "TASHKENT FASHION";
+  if (n.includes("agrotech")) return "AGROTECH EXPO";
+  
+  // Agar nomida | belgisi bo'lsa, birinchi qismini (Expo nomini) olamiz
+  if (name.includes("|")) {
+    return name.split("|")[0].trim().toUpperCase();
+  }
+
+  // Google Ads yoki boshqa noodatiy nomlar uchun shunchaki o'z nomini qaytaramiz
+  const clean = name.toUpperCase().replace(/[^A-Z0-9 ]+/g, " ").trim();
+  return clean.length > 25 ? clean.substring(0, 25) + "..." : (clean || "BOSHQA");
 };
 
 /* ------------------------------------------------------------------ */
