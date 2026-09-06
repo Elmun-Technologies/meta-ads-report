@@ -34,18 +34,69 @@ function main() {
    * ma'lumot ko'rsatilishi uchun (aks holda doim faqat Meta qaytardi). */
   const snapshotsByPlatform = readSnapshotsByPlatform();
 
-  if (!snapshot) {
+  if (!snapshot && Object.keys(snapshotsByPlatform).length === 0) {
     console.warn(
-      "[static-data] Meta snapshot topilmadi — bootstrap.json yozilmadi (" +
+      "[static-data] Hech qanday snapshot topilmadi — bootstrap.json yozilmadi (" +
         DATA_DIR +
         ")"
     );
     return;
   }
 
+  /** Barcha platformalarni birlashtirgan "all" snapshot yaratish */
+  const allSnapshots = Object.values(snapshotsByPlatform).filter(Boolean) as typeof snapshot[];
+  let allSnapshot: typeof snapshot | null = null;
+  if (allSnapshots.length > 0) {
+    const totals = { spend: 0, leads: 0, cpl: 0, impressions: 0, clicks: 0, ctr: 0, reach: 0, cpm: 0, cpc: 0, landingPageViews: 0, linkClicks: 0, videoViews: 0, messagingConversations: 0, frequency: 0, linkCtr: 0, postEngagement: 0, reactions: 0, comments: 0, saves: 0, messagingFirstReply: 0 };
+    const allCampaigns: any[] = [];
+    const allCreatives: any[] = [];
+    const allAge: any[] = [];
+
+    for (const s of allSnapshots) {
+      if (!s) continue;
+      totals.spend += s.totals.spend || 0;
+      totals.leads += s.totals.leads || 0;
+      totals.impressions += s.totals.impressions || 0;
+      totals.clicks += s.totals.clicks || 0;
+      totals.reach += s.totals.reach || 0;
+      totals.landingPageViews += s.totals.landingPageViews || 0;
+      totals.linkClicks += s.totals.linkClicks || 0;
+      totals.videoViews += s.totals.videoViews || 0;
+      totals.postEngagement = (totals.postEngagement || 0) + ((s.totals as any).postEngagement || 0);
+      totals.reactions = (totals.reactions || 0) + ((s.totals as any).reactions || 0);
+      totals.comments = (totals.comments || 0) + ((s.totals as any).comments || 0);
+      totals.saves = (totals.saves || 0) + ((s.totals as any).saves || 0);
+      allCampaigns.push(...s.campaigns);
+      allCreatives.push(...s.creatives);
+      allAge.push(...s.age);
+    }
+
+    if (totals.leads > 0) totals.cpl = totals.spend / totals.leads;
+    if (totals.impressions > 0) totals.ctr = (totals.clicks / totals.impressions) * 100;
+    if (totals.impressions > 0) totals.cpm = (totals.spend / totals.impressions) * 1000;
+    if (totals.clicks > 0) totals.cpc = totals.spend / totals.clicks;
+
+    allSnapshot = {
+      meta: {
+        platform: "all" as any,
+        period: allSnapshots[0]!.meta.period,
+        account: { id: "all", name: "Jami Barcha Manbalar", currency: allSnapshots[0]!.meta.account.currency },
+        sourceLabel: "Yagona Oyna — barcha platformalar birlashtirilgan",
+        syncedAt: new Date().toISOString(),
+        limitations: []
+      },
+      totals: totals as any,
+      campaigns: allCampaigns,
+      creatives: allCreatives,
+      age: allAge
+    };
+
+    snapshotsByPlatform["all" as any] = allSnapshot;
+  }
+
   const payload = {
     generatedAt: new Date().toISOString(),
-    snapshot,
+    snapshot: allSnapshot ?? snapshot,
     snapshotsByPlatform,
     connections,
     snapshots,
