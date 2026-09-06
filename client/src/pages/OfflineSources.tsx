@@ -24,14 +24,14 @@ export default function OfflineSources() {
         })
       });
       if (res.ok) {
-        toast.success("Oflayn manba qo'shildi!");
+        toast.success("Офлайн источник добавлен!");
         e.currentTarget.reset();
         await refresh();
       } else {
-        toast.error("Xatolik yuz berdi");
+        toast.error("Произошла ошибка");
       }
     } catch (err) {
-      toast.error("Tarmoq xatosi");
+      toast.error("Ошибка сети");
     } finally {
       setLoading(false);
     }
@@ -40,7 +40,7 @@ export default function OfflineSources() {
   return (
     <div className="fade-in">
       <PageHint>
-        Bu yerda siz onlayn bo'lmagan kanallar (masalan ko'rgazmadagi stend, QR kodli flayer, banner yoki vizitkalar) samaradorligini o'lchashingiz mumkin.
+        Здесь вы можете измерить эффективность офлайн-каналов (например, стенд на выставке, флаер с QR-кодом, баннер или визитки).
       </PageHint>
 
       <div className="grid-12" style={{ marginTop: 24 }}>
@@ -50,26 +50,26 @@ export default function OfflineSources() {
               <Megaphone size={24} style={{ color: "var(--text)" }} />
             </div>
             <div>
-              <h2 style={{ fontSize: 22, fontWeight: 600, margin: "0 0 4px", color: "var(--text)" }}>Oflayn manba qo'shish</h2>
-              <p style={{ margin: 0, fontSize: 13, color: "var(--text-2)" }}>Yangi oflayn kanal yarating va unga qilingan xarajatni kiriting</p>
+              <h2 style={{ fontSize: 22, fontWeight: 600, margin: "0 0 4px", color: "var(--text)" }}>Добавить офлайн источник</h2>
+              <p style={{ margin: 0, fontSize: 13, color: "var(--text-2)" }}>Создайте новый офлайн-канал и введите сумму расходов на него</p>
             </div>
           </div>
 
           <form onSubmit={handleAddCampaign} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 16, alignItems: "end" }}>
             <div>
-              <label style={{ display: "block", fontSize: 12, marginBottom: 8, color: "var(--text-2)", fontWeight: 500 }}>Manba nomi (Masalan: Expo Banner)</label>
-              <input name="name" required placeholder="Nomi" className="panel" style={{ width: "100%", padding: "10px 14px", border: "1px solid var(--border)", background: "var(--bg)", borderRadius: 6, color: "var(--text)" }} />
+              <label style={{ display: "block", fontSize: 12, marginBottom: 8, color: "var(--text-2)", fontWeight: 500 }}>Название источника (Например: Expo Banner)</label>
+              <input name="name" required placeholder="Название" className="panel" style={{ width: "100%", padding: "10px 14px", border: "1px solid var(--border)", background: "var(--bg)", borderRadius: 6, color: "var(--text)" }} />
             </div>
             <div>
-              <label style={{ display: "block", fontSize: 12, marginBottom: 8, color: "var(--text-2)", fontWeight: 500 }}>Umumiy xarajat (so'm/$)</label>
+              <label style={{ display: "block", fontSize: 12, marginBottom: 8, color: "var(--text-2)", fontWeight: 500 }}>Общий расход (сум/$)</label>
               <input name="spend" type="number" required placeholder="0" className="panel" style={{ width: "100%", padding: "10px 14px", border: "1px solid var(--border)", background: "var(--bg)", borderRadius: 6, color: "var(--text)" }} />
             </div>
             <div>
-              <label style={{ display: "block", fontSize: 12, marginBottom: 8, color: "var(--text-2)", fontWeight: 500 }}>Ko'rgazma (Expo)</label>
+              <label style={{ display: "block", fontSize: 12, marginBottom: 8, color: "var(--text-2)", fontWeight: 500 }}>Выставка (Expo)</label>
               <input name="expo" defaultValue="General" className="panel" style={{ width: "100%", padding: "10px 14px", border: "1px solid var(--border)", background: "var(--bg)", borderRadius: 6, color: "var(--text)" }} />
             </div>
             <button type="submit" disabled={loading} className="primary-btn" style={{ padding: "10px 20px", height: 42, display: "flex", gap: 8, alignItems: "center" }}>
-              <Plus size={16} /> Qo'shish
+              <Plus size={16} /> Добавить
             </button>
           </form>
         </div>
@@ -77,8 +77,8 @@ export default function OfflineSources() {
         <div className="col-12">
           <div className="empty-state" style={{ padding: 60, textAlign: "center", border: "1px dashed var(--border)", borderRadius: 12 }}>
             <BarChart3 size={40} style={{ color: "var(--text-3)", margin: "0 auto 16px" }} />
-            <h3 style={{ margin: "0 0 8px", color: "var(--text)" }}>Hozircha ma'lumot yo'q</h3>
-            <p style={{ margin: 0, color: "var(--text-2)", fontSize: 14 }}>Manbalar ro'yxati bazaga ulangandan keyin bu yerda ko'rinadi.</p>
+            <h3 style={{ margin: "0 0 8px", color: "var(--text)" }}>Пока нет данных</h3>
+            <p style={{ margin: 0, color: "var(--text-2)", fontSize: 14 }}>Список источников появится здесь после подключения к базе.</p>
           </div>
         </div>
       </div>

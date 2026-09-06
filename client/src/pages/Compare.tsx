@@ -221,43 +221,43 @@ export default function Compare() {
     <>
       <div className="page-head">
         <div>
-          <span className="kicker">Solishtirish</span>
-          <h1>Nima o'zgardi?</h1>
+          <span className="kicker">Сравнение</span>
+          <h1>Что изменилось?</h1>
           <p>
-            Ikki davr, yo'nalishlar (Expo) va hisob bo'yicha o'rtacha
-            ko'rsatkichlar asosida taqqoslash. Ikkinchi davr ma'lumoti tushganda
-            A/B taqqoslash o'zi ochiladi.
+            Сравнение на основе средних показателей за два периода, по направлениям
+            (Expo) и аккаунту. Сравнение A/B откроется автоматически, когда появятся
+            данные за второй период.
           </p>
         </div>
       </div>
 
       <PageHint>
-        Bu sahifa <b>o'tgan davrga nisbatan nima yaxshilandi/yomonlashdi</b>{" "}
-        degan savolga javob beradi. Yashil — yaxshilanish, qizil — yomonlashish.
-        Yo'nalishlar va kampaniyalar o'rtachaga nisbatan qayerdaligi pastda
-        ko'rsatilgan.
+        Эта страница отвечает на вопрос{" "}
+        <b>что улучшилось/ухудшилось по сравнению с прошлым периодом</b>.{" "}
+        Зеленый — улучшение, красный — ухудшение. Где находятся направления и
+        кампании относительно среднего, показано ниже.
       </PageHint>
 
       {/* A/B davrlar */}
       <Panel
-        kicker="Ikki davr"
-        title="Nima o'zgardi?"
+        kicker="Два периода"
+        title="Что изменилось?"
         style={{ marginBottom: 14 }}
       >
         {snapList == null ? (
-          <EmptyState text="Snapshot ro'yxati yuklanmoqda…" />
+          <EmptyState text="Загрузка списка снапшотов…" />
         ) : !canCompare ? (
           <div className="note-strip">
             <Info size={15} style={{ flex: "none", color: "var(--accent)" }} />
             <span>
-              A/B taqqoslash uchun kamida <b>2 ta davr snapshoti</b> kerak.
-              Hozir <b>{snapList.length}</b> ta bor (
+              Для A/B сравнения нужно как минимум <b>2 снапшота периодов</b>.
+              Сейчас есть <b>{snapList.length}</b> (
               {snapList.map(s => s.periodLabel).join(", ") || "—"}).
               <br />
-              Manus/MCP keyingi oy eksportini <b>server/data/snapshots/</b>{" "}
-              papkaga tushirsa (masalan{" "}
+              Если Manus/MCP экспортирует следующий месяц в папку <b>server/data/snapshots/</b>{" "}
+              (например,{" "}
               <span className="mono">meta_act-..._september-2026.json</span>),
-              bu panel o'zi % delta bilan ochiladi — UI tarafi tayyor.
+              эта панель сама откроется с % дельты — UI готов.
             </span>
           </div>
         ) : (
@@ -286,7 +286,7 @@ export default function Compare() {
                   </option>
                 ))}
               </select>
-              {loading && <span className="chip muted">yuklanmoqda…</span>}
+              {loading && <span className="chip muted">загрузка…</span>}
             </div>
             {snapA && snapB && (
               <>
@@ -295,9 +295,9 @@ export default function Compare() {
                     <thead>
                       <tr>
                         <th>KPI</th>
-                        <th>Davr A</th>
-                        <th>Davr B</th>
-                        <th>O'zgarish</th>
+                        <th>Период A</th>
+                        <th>Период B</th>
+                        <th>Изменение</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -318,12 +318,12 @@ export default function Compare() {
                 </div>
                 {campaignDeltas.length > 0 && (
                   <div style={{ marginTop: 14 }}>
-                    <span className="kicker">Eng katta o'zgarishlar</span>
+                    <span className="kicker">Наибольшие изменения</span>
                     <div className="tbl-wrap" style={{ marginTop: 8 }}>
                       <table className="tbl" style={{ minWidth: 640 }}>
                         <thead>
                           <tr>
-                            <th>Kampaniya</th>
+                            <th>Кампания</th>
                             <th>Spend (A)</th>
                             <th>Spend Δ</th>
                             <th>Leads (A)</th>
@@ -363,9 +363,9 @@ export default function Compare() {
 
       {/* Expo benchmark — hozir ishlaydi */}
       <Panel
-        kicker="Yo'nalishlar taqqoslash"
-        title="Expo guruhlari"
-        sub={`Hisob bo'yicha o'rtacha murojaat narxi: ${money(avgCpl)} — undan farq foizda ko'rsatilgan`}
+        kicker="Сравнение направлений"
+        title="Группы Expo"
+        sub={`Средняя стоимость лида по аккаунту: ${money(avgCpl)} — разница от нее показана в процентах`}
         style={{ marginBottom: 14 }}
       >
         <div className="tbl-wrap">
@@ -373,12 +373,12 @@ export default function Compare() {
             <thead>
               <tr>
                 <th>Expo</th>
-                <th>Kampaniya</th>
+                <th>Кампания</th>
                 <th>Spend</th>
-                <th>Spend ulushi</th>
+                <th>Доля расхода</th>
                 <th>Leads</th>
                 <th>CPL</th>
-                <th>CPL vs o'rtacha</th>
+                <th>CPL vs средний</th>
               </tr>
             </thead>
             <tbody>
@@ -424,14 +424,14 @@ export default function Compare() {
 
       {/* Kampaniya benchmark */}
       <Panel
-        kicker="O'rtachaga nisbatan"
-        title="O'rtacha chiziqdan yuqorida va pastda"
-        sub="Murojaat narxi bo'yicha eng yaxshi 5 va eng qimmat 5 kampaniya (kamida 3 ta murojaat bo'lganlar)"
+        kicker="Относительно среднего"
+        title="Выше и ниже средней линии"
+        sub="Топ-5 лучших и 5 самых дорогих кампаний по стоимости лида (минимум 3 лида)"
       >
         <div className="grid-12">
           <div className="col-6">
             <span className="kicker" style={{ color: "var(--good)" }}>
-              ✓ O'RTACHADAN ARZON (scale kandidatlari)
+              ✓ ДЕШЕВЛЕ СРЕДНЕГО (кандидаты на scale)
             </span>
             {snapshot.campaigns
               .filter(
@@ -465,7 +465,7 @@ export default function Compare() {
           </div>
           <div className="col-6">
             <span className="kicker" style={{ color: "var(--risk)" }}>
-              ✕ O'RTACHADAN QIMMAT (ko'chirish/tahlil)
+              ✕ ДОРОЖЕ СРЕДНЕГО (отключение/анализ)
             </span>
             {snapshot.campaigns
               .filter(

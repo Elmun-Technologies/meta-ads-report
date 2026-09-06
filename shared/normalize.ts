@@ -41,7 +41,7 @@ export const standardCampaignName = (name: string) => {
   }
   
   // Aks holda shunchaki toza nomini qoldiramiz
-  return name.toUpperCase().replace(/[^A-Z0-9 ]+/g, " ").trim() || "NOMSIZ KAMPANIYA";
+  return name.toUpperCase().replace(/[^A-Z0-9 ]+/g, " ").trim() || "НЕИЗВЕСТНАЯ КАМПАНИЯ";
 };
 
 export const standardAdsetName = (name: string) => {
@@ -74,7 +74,7 @@ export const expoFor = (name: string) => {
 
   // Google Ads yoki boshqa noodatiy nomlar uchun shunchaki o'z nomini qaytaramiz
   const clean = name.toUpperCase().replace(/[^A-Z0-9 ]+/g, " ").trim();
-  return clean.length > 25 ? clean.substring(0, 25) + "..." : (clean || "BOSHQA");
+  return clean.length > 25 ? clean.substring(0, 25) + "..." : (clean || "ДРУГИЕ");
 };
 
 /* ------------------------------------------------------------------ */

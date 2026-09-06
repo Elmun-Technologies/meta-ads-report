@@ -89,15 +89,15 @@ export default function TelegramChannels() {
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(`${data.channel?.name ?? newUsername} qo'shildi!`);
+        toast.success(`${data.channel?.name ?? newUsername} добавлен!`);
         setNewUsername("");
         await loadChannels();
         void refresh();
       } else {
-        toast.error(data.error ?? "Xato yuz berdi");
+        toast.error(data.error ?? "Произошла ошибка");
       }
     } catch {
-      toast.error("Server bilan aloqa yo'q");
+      toast.error("Нет связи с сервером");
     } finally {
       setAdding(false);
     }
@@ -108,13 +108,13 @@ export default function TelegramChannels() {
     try {
       const res = await fetch(`/api/telegram/channels/${id}/sync`);
       if (res.ok) {
-        toast.success("Ma'lumotlar yangilandi!");
+        toast.success("Данные обновлены!");
         await loadChannels();
       } else {
-        toast.error("Sync xatosi");
+        toast.error("Ошибка синхронизации");
       }
     } catch {
-      toast.error("Server bilan aloqa yo'q");
+      toast.error("Нет связи с сервером");
     } finally {
       setSyncing(null);
     }
@@ -128,17 +128,17 @@ export default function TelegramChannels() {
         body: JSON.stringify({ cost }),
       });
       if (res.ok) {
-        toast.success("Narx saqlandi");
+        toast.success("Цена сохранена");
         await loadChannels();
         setEditCost(null);
       }
     } catch {
-      toast.error("Xato");
+      toast.error("Ошибка");
     }
   };
 
   if (loading) {
-    return <div className="empty-state">Yuklanmoqda…</div>;
+    return <div className="empty-state">Загрузка…</div>;
   }
 
   const totalPosts = channels.reduce((s, ch) => s + ch.posts.length, 0);
@@ -160,12 +160,12 @@ export default function TelegramChannels() {
       <div className="page-head">
         <div>
           <span className="kicker">Telegram · TGStat API</span>
-          <h1>Telegram Kanallar</h1>
+          <h1>Telegram Каналы</h1>
           <p>
-            {channels.length} ta kanal ulangan · {totalPosts} ta post kuzatilmoqda
+            {channels.length} каналов подключено · отслеживается {totalPosts} постов
             {!hasToken && (
               <span style={{ color: "var(--warn)", marginLeft: 8 }}>
-                ⚠ TGSTAT_TOKEN sozlanmagan — .env faylga qo'shing
+                ⚠ TGSTAT_TOKEN не настроен — добавьте в файл .env
               </span>
             )}
           </p>
@@ -173,8 +173,8 @@ export default function TelegramChannels() {
       </div>
 
       <PageHint>
-        Telegram kanalingizning @username sini qo'shing — TGStat API orqali
-        obunachilar, qamrov, postlar va reaksiyalar avtomatik olinadi.
+        Добавьте @username вашего Telegram канала — через TGStat API
+        автоматически загрузятся подписчики, охваты, посты и реакции.
       </PageHint>
 
       {/* Kanal qo'shish */}
@@ -196,7 +196,7 @@ export default function TelegramChannels() {
             value={newUsername}
             onChange={(e) => setNewUsername(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addChannel()}
-            placeholder="@channelname yoki username kiriting"
+            placeholder="Введите @channelname или username"
             style={{
               flex: 1,
               minWidth: 200,
@@ -215,7 +215,7 @@ export default function TelegramChannels() {
             style={{ gap: 6 }}
           >
             <Plus size={14} />
-            {adding ? "Qo'shilmoqda…" : "Kanal qo'shish"}
+            {adding ? "Добавление…" : "Добавить канал"}
           </button>
         </div>
       </div>
@@ -227,7 +227,7 @@ export default function TelegramChannels() {
             <div className="kpi-card">
               <small className="kpi-label">
                 <Users size={11} style={{ display: "inline", marginRight: 4 }} />
-                Jami Obunachilar
+                Всего подписчиков
               </small>
               <b className="kpi-value" style={{ color: "#0088cc" }}>
                 {compact(channels.reduce((s, ch) => s + ch.subscribers, 0))}
@@ -238,7 +238,7 @@ export default function TelegramChannels() {
             <div className="kpi-card">
               <small className="kpi-label">
                 <Eye size={11} style={{ display: "inline", marginRight: 4 }} />
-                Jami Ko'rishlar
+                Всего просмотров
               </small>
               <b className="kpi-value" style={{ color: "var(--cyan)" }}>
                 {compact(totalViews)}
@@ -249,7 +249,7 @@ export default function TelegramChannels() {
             <div className="kpi-card">
               <small className="kpi-label">
                 <Heart size={11} style={{ display: "inline", marginRight: 4 }} />
-                Jami Reaksiyalar
+                Всего реакций
               </small>
               <b className="kpi-value" style={{ color: "var(--violet)" }}>
                 {compact(totalReactions)}
@@ -260,7 +260,7 @@ export default function TelegramChannels() {
             <div className="kpi-card">
               <small className="kpi-label">
                 <DollarSign size={11} style={{ display: "inline", marginRight: 4 }} />
-                Jami Xarajat
+                Общий расход
               </small>
               <b className="kpi-value" style={{ color: "var(--good)" }}>
                 {totalCost > 0 ? money(totalCost) : "—"}
@@ -279,10 +279,10 @@ export default function TelegramChannels() {
       {channels.length === 0 ? (
         <div className="panel" style={{ padding: 32, textAlign: "center" }}>
           <Send size={32} style={{ color: "var(--text-3)", marginBottom: 12 }} />
-          <h3 style={{ margin: "0 0 6px" }}>Telegram kanal hali qo'shilmagan</h3>
+          <h3 style={{ margin: "0 0 6px" }}>Telegram каналы еще не добавлены</h3>
           <p style={{ color: "var(--text-2)", fontSize: 13, margin: 0 }}>
-            Yuqoridagi maydon orqali @username kiritib kanallarni qo'shing.
-            TGStat API ulangan bo'lsa, statistika avtomatik olinadi.
+            Добавьте каналы, введя @username в поле выше.
+            Если TGStat API подключен, статистика будет загружаться автоматически.
           </p>
         </div>
       ) : (
@@ -317,15 +317,15 @@ export default function TelegramChannels() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <b style={{ fontSize: 15 }}>{ch.name}</b>
                 <div style={{ fontSize: 11, color: "var(--text-3)" }}>
-                  {ch.username} · {compact(ch.subscribers)} obunachi · ERR{" "}
-                  {pct(ch.errPercent, 1)} · O'rtacha qamrov{" "}
+                  {ch.username} · {compact(ch.subscribers)} подписчиков · ERR{" "}
+                  {pct(ch.errPercent, 1)} · Средний охват{" "}
                   {compact(ch.avgPostReach)}
                 </div>
               </div>
               <button
                 className={`icon-btn ${syncing === ch.id ? "spin" : ""}`}
                 onClick={() => syncChannel(ch.id)}
-                title="TGStat dan yangilash"
+                title="Обновить из TGStat"
               >
                 <RefreshCw size={15} />
               </button>
@@ -341,12 +341,12 @@ export default function TelegramChannels() {
               }}
             >
               {[
-                { l: "Obunachilar", v: compact(ch.subscribers), c: "#0088cc" },
-                { l: "O'rtacha qamrov", v: compact(ch.avgPostReach), c: "var(--cyan)" },
-                { l: "Reklama 24s", v: compact(ch.advReach24h), c: "var(--violet)" },
+                { l: "Подписчики", v: compact(ch.subscribers), c: "#0088cc" },
+                { l: "Средний охват", v: compact(ch.avgPostReach), c: "var(--cyan)" },
+                { l: "Рекламный 24ч", v: compact(ch.advReach24h), c: "var(--violet)" },
                 { l: "ERR %", v: pct(ch.errPercent, 1), c: "var(--warn)" },
-                { l: "Kunlik qamrov", v: compact(ch.dailyReach), c: "var(--good)" },
-                { l: "Repostlar", v: whole(ch.forwardsCount), c: "var(--text-2)" },
+                { l: "Дневной охват", v: compact(ch.dailyReach), c: "var(--good)" },
+                { l: "Репосты", v: whole(ch.forwardsCount), c: "var(--text-2)" },
               ].map((k) => (
                 <div key={k.l} className="mini-stat">
                   <small>{k.l}</small>
@@ -361,22 +361,22 @@ export default function TelegramChannels() {
                 <table className="tbl" style={{ minWidth: 600 }}>
                   <thead>
                     <tr>
-                      <th>Post</th>
-                      <th>Sana</th>
+                      <th>Пост</th>
+                      <th>Дата</th>
                       <th>
-                        <Eye size={11} /> Ko'rishlar
+                        <Eye size={11} /> Просмотры
                       </th>
                       <th>
-                        <Heart size={11} /> Reaksiya
+                        <Heart size={11} /> Реакции
                       </th>
                       <th>
-                        <Share2 size={11} /> Ulashish
+                        <Share2 size={11} /> Поделились
                       </th>
                       <th>
-                        <MessageCircle size={11} /> Izoh
+                        <MessageCircle size={11} /> Комментарии
                       </th>
                       <th>
-                        <DollarSign size={11} /> Narx
+                        <DollarSign size={11} /> Цена
                       </th>
                       <th>CPV</th>
                     </tr>
@@ -405,7 +405,7 @@ export default function TelegramChannels() {
                             </div>
                           </td>
                           <td className="num" style={{ fontSize: 11 }}>
-                            {new Date(p.date).toLocaleDateString("uz")}
+                            {new Date(p.date).toLocaleDateString("ru")}
                           </td>
                           <td className="num" style={{ fontWeight: 600 }}>
                             {compact(p.views)}
@@ -465,9 +465,9 @@ export default function TelegramChannels() {
                                       ? "var(--good)"
                                       : "var(--text-3)",
                                 }}
-                                title="Narxni o'zgartirish uchun bosing"
+                                title="Нажмите, чтобы изменить цену"
                               >
-                                {p.cost > 0 ? money(p.cost) : "kiritish"}
+                                {p.cost > 0 ? money(p.cost) : "ввести"}
                               </button>
                             )}
                           </td>
@@ -493,8 +493,8 @@ export default function TelegramChannels() {
                 className="empty-state"
                 style={{ padding: 16, fontSize: 12 }}
               >
-                Postlar hali yuklanmagan — "Yangilash" tugmasini bosing yoki
-                TGStat tokenni .env ga qo'shing
+                Посты еще не загружены — нажмите кнопку «Обновить» или добавьте
+                токен TGStat в .env
               </div>
             )}
           </div>

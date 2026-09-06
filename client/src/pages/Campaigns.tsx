@@ -43,24 +43,24 @@ const SORTERS: Record<SortKey, (a: CampaignNode, b: CampaignNode) => number> = {
 
 const COLS: { id: string; key: SortKey | null; label: string; en?: string }[] =
   [
-    { id: "name", key: null, label: "Kampaniya" },
-    { id: "goal", key: null, label: "Maqsad", en: "Goal" },
-    { id: "spend", key: "spend", label: "Sarf", en: "Spend" },
+    { id: "name", key: null, label: "Кампания" },
+    { id: "goal", key: null, label: "Цель", en: "Goal" },
+    { id: "spend", key: "spend", label: "Расход", en: "Spend" },
     {
       id: "impressions",
       key: "impressions",
-      label: "Ko'rsatuvlar",
+      label: "Показы",
       en: "Impressions",
     },
-    { id: "leads", key: "leads", label: "Natija", en: "Result" },
-    { id: "cpl", key: "cpl", label: "Natija narxi", en: "Cost / result" },
-    { id: "cpl-vs-avg", key: null, label: "O'rtachaga nisbatan" },
-    { id: "ctr", key: "ctr", label: "Bosish ulushi", en: "CTR" },
-    { id: "cpm", key: "cpm", label: "1000 ko'rsatuv narxi", en: "CPM" },
+    { id: "leads", key: "leads", label: "Результат", en: "Result" },
+    { id: "cpl", key: "cpl", label: "Стоимость рез-та", en: "Cost / result" },
+    { id: "cpl-vs-avg", key: null, label: "К среднему" },
+    { id: "ctr", key: "ctr", label: "Кликабельность", en: "CTR" },
+    { id: "cpm", key: "cpm", label: "Цена 1000 показов", en: "CPM" },
     {
       id: "frequency",
       key: "frequency",
-      label: "Takroriylik",
+      label: "Частота",
       en: "Frequency",
     },
   ];
@@ -176,27 +176,27 @@ export default function Campaigns() {
     <>
       <div className="page-head">
         <div>
-          <span className="kicker">Batafsil jadval</span>
-          <h1>Kampaniyalar</h1>
+          <span className="kicker">Детальная таблица</span>
+          <h1>Кампании</h1>
           <p>
-            Jadvalda {rows.length} ta kampaniya · jami sarf{" "}
-            {money(totals.spend)} · {whole(totals.leads)} ta murojaat ·{" "}
-            {whole(totals.impressions)} ta ko'rsatuv. Har bir qatorni bossangiz
-            — kampaniyaning to'liq tafsiloti ochiladi.
+            В таблице {rows.length} кампаний · общий расход{" "}
+            {money(totals.spend)} · {whole(totals.leads)} лидов ·{" "}
+            {whole(totals.impressions)} показов. Нажмите на любую строку,
+            чтобы открыть полную детализацию кампании.
           </p>
         </div>
         <div className="right">
           <button className="tf-btn" onClick={exportCsv}>
-            <Download size={13} /> CSV eksport
+            <Download size={13} /> Экспорт CSV
           </button>
         </div>
       </div>
 
       <PageHint>
-        Bu hisobning asosiy jadvali:{" "}
-        <b>har bir kampaniya qancha pul yeb, qancha murojaat olib keldi.</b>{" "}
-        “Murojaat narxi” ustunidagi yashil — o'rtachadan arzon, qizil — qimmat.
-        Qatorni bossangiz — kampaniya ichidagi barcha kreativlar ochiladi.
+        Это основная таблица аккаунта:{" "}
+        <b>сколько потратила каждая кампания и сколько лидов принесла.</b>{" "}
+        Зеленый цвет в столбце «Стоимость рез-та» означает дешевле среднего, красный — дороже.
+        Нажмите на строку, чтобы увидеть все креативы внутри кампании.
       </PageHint>
 
       <div className="goal-summary">
@@ -215,10 +215,10 @@ export default function Campaigns() {
               <span className={`goal-badge ${GOAL_TONE[g]}`}>
                 {GOAL_META[g].short}
               </span>
-              <b>{inGoal.length} ta kampaniya</b>
+              <b>{inGoal.length} кампаний</b>
               <small>
                 {money(gSpend)} · {whole(gResult)}{" "}
-                {g === "calls" ? "qo'ng'iroq" : g === "engagement" ? "faollik" : "murojaat"}
+                {g === "calls" ? "звонков" : g === "engagement" ? "вовлеченность" : "лидов"}
               </small>
             </button>
           );
@@ -231,7 +231,7 @@ export default function Campaigns() {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Nom yoki ID bo'yicha qidirish…"
+            placeholder="Поиск по имени или ID…"
           />
         </label>
         <select
@@ -241,7 +241,7 @@ export default function Campaigns() {
         >
           {expos.map(x => (
             <option key={x} value={x}>
-              {x === "all" ? "Barcha Expo'lar" : x}
+              {x === "all" ? "Все Expo" : x}
             </option>
           ))}
         </select>
@@ -250,7 +250,7 @@ export default function Campaigns() {
           value={goalFilter}
           onChange={e => setGoalFilter(e.target.value as "all" | CampaignGoal)}
         >
-          <option value="all">Barcha maqsadlar</option>
+          <option value="all">Все цели</option>
           <option value="leads">{GOAL_META.leads.label}</option>
           <option value="calls">{GOAL_META.calls.label}</option>
           <option value="engagement">{GOAL_META.engagement.label}</option>
@@ -261,19 +261,19 @@ export default function Campaigns() {
           value={sort}
           onChange={e => setSort(e.target.value as SortKey)}
         >
-          <option value="spend">Tartib: sarf bo'yicha</option>
-          <option value="leads">Tartib: natija soni</option>
-          <option value="cpl">Tartib: natija narxi (arzonidan)</option>
-          <option value="ctr">Tartib: bosish ulushi</option>
-          <option value="cpm">Tartib: 1000 ko'rsatuv narxi</option>
-          <option value="frequency">Tartib: takroriylik</option>
-          <option value="impressions">Tartib: ko'rsatuvlar soni</option>
+          <option value="spend">Сортировка: по расходу</option>
+          <option value="leads">Сортировка: по результату</option>
+          <option value="cpl">Сортировка: по цене рез-та</option>
+          <option value="ctr">Сортировка: по кликабельности</option>
+          <option value="cpm">Сортировка: по цене 1000 показов</option>
+          <option value="frequency">Сортировка: по частоте</option>
+          <option value="impressions">Сортировка: по кол-ву показов</option>
         </select>
         <button
           className={`tf-btn ${onlyLeads ? "on" : ""}`}
           onClick={() => setOnlyLeads(v => !v)}
         >
-          <Filter size={13} /> Faqat natija berganlar
+          <Filter size={13} /> Только с результатами
         </button>
       </div>
 
@@ -317,7 +317,7 @@ export default function Campaigns() {
                   </span>
                   {c.goal === "calls" && (
                     <small className="tone-muted" style={{ display: "block" }}>
-                      {whole(c.metrics.calls ?? 0)} qo'ng'iroq
+                      {whole(c.metrics.calls ?? 0)} звонков
                     </small>
                   )}
                 </td>

@@ -55,7 +55,7 @@ async function fetchJson<T>(url: string): Promise<T> {
     throw new Error(message);
   }
   if (!type.includes("application/json"))
-    throw new Error("JSON emas javob (HTML?)");
+    throw new Error("Ответ не в формате JSON (HTML?)");
   return (await res.json()) as T;
 }
 
@@ -91,7 +91,7 @@ export function useDashboard(): DashboardState {
           fetchJson<SnapshotInfo[]>("/api/snapshots").catch(() => []),
         ]);
 
-        if (!snapRes) throw new Error("API javob bermadi");
+        if (!snapRes) throw new Error("API не ответил");
         setSnapshot(snapRes);
         setConnections(connRes);
         if (crmRes?.connected) {

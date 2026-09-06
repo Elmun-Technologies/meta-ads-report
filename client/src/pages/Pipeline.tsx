@@ -32,45 +32,47 @@ function NotConnected() {
     <>
       <div className="page-head">
         <div>
-          <span className="kicker">AmoCRM · ulanmagan</span>
-          <h1>Murojaatdan bitimgacha</h1>
+          <span className="kicker">AmoCRM · не подключена</span>
+          <h1>От лида до сделки</h1>
           <p>
-            Har bir murojaat qaysi reklamadan kelganini, AmoCRM'da qaysi
-            bosqichda turganini, qaysi biri bitimga aylanganini va qancha tushum
-            berganini bitta joyda ko'rish uchun AmoCRM ulanishi kerak.
+            Чтобы видеть в одном месте, с какой рекламы пришел каждый лид,
+            на каком он этапе в AmoCRM, какие лиды стали сделками и сколько дохода
+            принесли, необходимо подключить AmoCRM.
           </p>
         </div>
       </div>
 
       <PageHint>
-        Bu sahifa hozir bo'sh, chunki AmoCRM ulanmagan. Ulanganda shu yerda{" "}
-        <b>murojaat → bitim</b> yo'li, har bosqichdagi yo'qotishlar va qaysi
-        kampaniya haqiqatan pul olib kelgani ko'rinadi.
+      <PageHint>
+        Эта страница сейчас пуста, так как AmoCRM не подключена. После подключения здесь появится{" "}
+        <b>путь лид → сделка</b>, потери на каждом этапе и кампании, которые
+        реально принесли деньги.
       </PageHint>
       <div className="grid-12">
         <div className="col-7">
           <Panel
-            kicker="Nima uchun kerak"
-            title="AmoCRM ulanganda nima ochiladi"
-            sub="Ulangach quyidagilar avtomatik paydo bo'ladi"
+          <Panel
+            kicker="Зачем это нужно"
+            title="Что появится после подключения AmoCRM"
+            sub="После подключения автоматически появится следующее"
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
               {[
                 [
-                  "To'liq yo'l (voronka)",
-                  "Ko'rsatuv → murojaat → AmoCRM bosqichlari → bitim/bekor, har qadamda o'tish foizi va tannarx",
+                  "Полный путь (воронка)",
+                  "Показы → лиды → этапы AmoCRM → сделка/отказ, процент перехода и стоимость на каждом шаге",
                 ],
                 [
-                  "Doska (kanban)",
-                  "Har bosqichda kimlar turibdi: qaysi kampaniyadan kelgan, summa, mas'ul, bosqichda turgan kuni",
+                  "Доска (канбан)",
+                  "Кто на каком этапе: с какой кампании пришел, сумма, ответственный, дней на этапе",
                 ],
                 [
-                  "Manba tahlili",
-                  "Qaysi kampaniya/kreativ nechta haqiqiy bitim bergan — murojaat narxi emas, bitim tannarxi bo'yicha",
+                  "Анализ источников",
+                  "Сколько реальных сделок принесла каждая кампания/креатив — по стоимости сделки, а не лида",
                 ],
                 [
                   "ROAS",
-                  "Reklama sarfi vs yopilgan bitimlar summasi, kampaniya kesimida",
+                  "Расход на рекламу vs сумма закрытых сделок в разрезе кампаний",
                 ],
               ].map(([t, d]) => (
                 <div
@@ -89,14 +91,15 @@ function NotConnected() {
         </div>
         <div className="col-5">
           <Panel
-            kicker="Qanday ulanadi"
-            title="3 qadam"
-            sub="Manus/MCP yoki AmoCRM eksporti"
+          <Panel
+            kicker="Как подключить"
+            title="3 шага"
+            sub="Экспорт через Manus/MCP или из AmoCRM"
           >
             {[
-              "AmoCRM'dan leadlar (uta_campaign bilan) + pipeline bosqichlari eksport qilinadi",
-              "Fayl server/data/snapshots/amo_<hisob>_<davr>.json nomi bilan tushadi",
-              "Dashboard utm_campaign bo'yicha Meta kampaniyalariga bog'laydi — sahifa o'zi ochiladi",
+              "Экспортируются лиды (с utm_campaign) + этапы воронки из AmoCRM",
+              "Файл сохраняется как server/data/snapshots/amo_<аккаунт>_<период>.json",
+              "Дашборд связывает их с кампаниями Meta по utm_campaign — страница откроется сама",
             ].map((s, i) => (
               <div
                 key={s}
@@ -192,28 +195,28 @@ export default function Pipeline() {
       <div className="page-head">
         <div>
           <span className="kicker">AmoCRM · {crm.account}</span>
-          <h1>Murojaatdan bitimgacha</h1>
+          <h1>От лида до сделки</h1>
           <p>
-            CRM'da {whole(crm.leads.length)} ta murojaat · {crm.matchedLeads}{" "}
-            tasi aniq kampaniyaga bog'langan (UTM) · {crm.unmatchedLeads} tasi
-            manbasi noma'lum. Har bir bosqichning tannarxi va o'tish foizi
-            pastda.
+            В CRM {whole(crm.leads.length)} лидов · {crm.matchedLeads}{" "}
+            привязаны к конкретной кампании (UTM) · {crm.unmatchedLeads} с
+            неизвестным источником. Стоимость каждого этапа и процент перехода
+            ниже.
           </p>
         </div>
         <div className="right">
           <span className="chip good">
-            <i /> AMOCRM · ULANGAN
+            <i /> AMOCRM · ПОДКЛЮЧЕНА
           </span>
         </div>
       </div>
 
       <PageHint>
-        Savol:{" "}
+        Вопрос:{" "}
         <b>
-          reklama olib kelgan murojaatlardan nechtasi haqiqiy bitimga aylandi?
+          сколько лидов с рекламы стали реальными сделками?
         </b>{" "}
-        Tepada yakuniy ko'rsatkichlar, pastda bosqichma-bosqich yo'l (qayerda
-        to'xtab qolmoqda), doska va har bir kampaniyaning haqiqiy samarasi.
+        Сверху итоговые показатели, снизу пошаговый путь (где они
+        останавливаются), доска и реальная эффективность каждой кампании.
       </PageHint>
 
       {/* KPI */}
@@ -222,26 +225,26 @@ export default function Pipeline() {
           <KpiCard
             label={
               <>
-                Murojaatlar <i>(CRM)</i>
+                Лиды <i>(CRM)</i>
               </>
             }
             value={whole(summary.totalLeads)}
             sub={
               <>
-                Jarayonda <b>{summary.inProgress}</b> ta · yakunlangan{" "}
-                <b>{summary.won + summary.lost}</b> ta
+                В процессе <b>{summary.inProgress}</b> · завершенных{" "}
+                <b>{summary.won + summary.lost}</b>
               </>
             }
           />
         </div>
         <div className="col-4">
           <KpiCard
-            label={<>Bitim / bekor</>}
+            label={<>Сделка / отказ</>}
             value={`${summary.won} / ${summary.lost}`}
             tone="var(--good)"
             sub={
               <>
-                Yutuq ulushi{" "}
+                Доля выигранных{" "}
                 <b>
                   {summary.winRate != null ? pct(summary.winRate, 1) : "N/A"}
                 </b>
@@ -251,12 +254,12 @@ export default function Pipeline() {
         </div>
         <div className="col-4">
           <KpiCard
-            label={<>Tushum (bitimlar)</>}
+            label={<>Выручка (сделки)</>}
             value={curMoney(summary.revenue)}
             tone="var(--cyan)"
             sub={
               <>
-                Jarayondagi summa <b>{curMoney(summary.pipelineValue)}</b>
+                Сумма в процессе <b>{curMoney(summary.pipelineValue)}</b>
               </>
             }
           />
@@ -265,7 +268,7 @@ export default function Pipeline() {
           <KpiCard
             label={
               <>
-                Bitim tannarxi <i>(Cost per WON)</i>
+                Стоимость сделки <i>(Cost per WON)</i>
               </>
             }
             value={
@@ -274,7 +277,7 @@ export default function Pipeline() {
             tone="var(--violet)"
             sub={
               <>
-                Bog'langan sarf: <b>{money(summary.spend)}</b>
+                Связанный расход: <b>{money(summary.spend)}</b>
               </>
             }
           />
@@ -283,7 +286,7 @@ export default function Pipeline() {
           <KpiCard
             label={
               <>
-                Qaytim <i>(ROAS)</i>
+                Окупаемость <i>(ROAS)</i>
               </>
             }
             value={summary.roas != null ? `${summary.roas.toFixed(1)}×` : "N/A"}
@@ -291,30 +294,30 @@ export default function Pipeline() {
             sub={
               summary.roas != null
                 ? summary.roas >= 1
-                  ? "Reklama o'zini qaytarmoqda"
-                  : "Hali sarf qaytmagan"
-                : "Bitim summasi yoki valyuta yetarli emas"
+                  ? "Реклама окупается"
+                  : "Расход еще не окупился"
+                : "Сумма сделки или валюта недостаточны"
             }
           />
         </div>
         <div className="col-4">
           <KpiCard
-            label={<>O'rtacha sikl</>}
+            label={<>Средний цикл</>}
             value={
               summary.avgCycleDays != null
-                ? `${summary.avgCycleDays.toFixed(1)} kun`
+                ? `${summary.avgCycleDays.toFixed(1)} д`
                 : "N/A"
             }
             tone="var(--warn)"
-            sub={<>Murojaatdan bitimgacha o'rtacha davomiylik</>}
+            sub={<>Средняя длительность от лида до сделки</>}
           />
         </div>
       </div>
 
       {/* Stage funnel */}
       <Panel
-        kicker="Bosqichlar bo'yicha"
-        title="Har qadamda o'tish foizi va tannarx"
+        kicker="По этапам"
+        title="Процент перехода и стоимость на каждом шаге"
         style={{ marginBottom: 14 }}
       >
         <div
@@ -327,10 +330,10 @@ export default function Pipeline() {
             paddingBottom: 8,
           }}
         >
-          <span style={{ letterSpacing: ".04em" }}>Bosqich</span>
-          <span style={{ letterSpacing: ".04em" }}>Yetib borgan</span>
+          <span style={{ letterSpacing: ".04em" }}>Этап</span>
+          <span style={{ letterSpacing: ".04em" }}>Достигло</span>
           <span style={{ letterSpacing: ".04em", textAlign: "right" }}>
-            O'tish / tannarx
+            Переход / стоимость
           </span>
         </div>
         {funnel.map((f, i) => {
@@ -369,7 +372,7 @@ export default function Pipeline() {
                   ? money(f.costPerLead)
                   : ""}
                 {f.avgDaysInStage != null
-                  ? ` · ⏱ ${f.avgDaysInStage.toFixed(1)}k`
+                  ? ` · ⏱ ${f.avgDaysInStage.toFixed(1)}д`
                   : ""}
               </div>
             </div>
@@ -379,9 +382,9 @@ export default function Pipeline() {
 
       {/* Kanban */}
       <Panel
-        kicker="Doska"
-        title="Kim qaysi bosqichda"
-        sub={`${filteredLeads.length} lead ko'rsatilmoqda — kartani bosing: to'liq jarayon (manba, tarix, summa)`}
+        kicker="Доска"
+        title="Кто на каком этапе"
+        sub={`Отображается ${filteredLeads.length} лидов — нажмите на карточку: полный процесс (источник, история, сумма)`}
         style={{ marginBottom: 14 }}
         action={
           <div className="toolbar">
@@ -390,7 +393,7 @@ export default function Pipeline() {
               <input
                 value={query}
                 onChange={e => setQuery(e.target.value)}
-                placeholder="Lead, kontakt yoki kampaniya…"
+                placeholder="Поиск лида, контакта или кампании…"
               />
             </label>
             <button
@@ -398,7 +401,7 @@ export default function Pipeline() {
               style={{ height: 34 }}
               onClick={() => setOnlyWon(v => !v)}
             >
-              <Filter size={13} /> Faqat yutiq
+              <Filter size={13} /> Только выигранные
             </button>
           </div>
         }
@@ -442,7 +445,7 @@ export default function Pipeline() {
                             {campaign.originalName.slice(0, 26)}
                           </span>
                         ) : (
-                          <span className="chip muted kb-chip">UTM yo'q</span>
+                          <span className="chip muted kb-chip">Без UTM</span>
                         )}
                         <span className="kb-meta">
                           {lead.responsible ? `${lead.responsible} · ` : ""}

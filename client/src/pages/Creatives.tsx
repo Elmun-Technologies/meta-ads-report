@@ -58,22 +58,22 @@ export default function Creatives() {
     <>
       <div className="page-head">
         <div>
-          <span className="kicker">Reyting</span>
-          <h1>Kreativlar (reklama materiallari)</h1>
+          <span className="kicker">Рейтинг</span>
+          <h1>Креативы (рекламные материалы)</h1>
           <p>
-            Jami {snapshot.creatives.length} ta kreativ.{" "}
+            Всего {snapshot.creatives.length} креативов.{" "}
             {withLeads > 0 ? (
               <>
                 <b style={{ color: "var(--text)" }}>
-                  {withLeads} tasi bo'yicha murojaat ma'lumoti ham bor
+                  {withLeads} из них имеют данные по лидам
                 </b>{" "}
-                — murojaat narxi reytingi shular uchun; qolganlari sarf va
-                bosish ulushi bo'yicha baholanadi.
+                — рейтинг по стоимости лида формируется для них; остальные
+                оцениваются по расходу и кликабельности.
               </>
             ) : (
               <>
-                Bu hisobotda har bir kreativ bo'yicha murojaat soni qaytmagan —
-                reyting sarf, bosish ulushi va bosishlar bo'yicha tuzilgan.
+                В этом отчете нет данных по количеству лидов для каждого
+                креатива — рейтинг составлен по расходу, кликабельности и кликам.
               </>
             )}
           </p>
@@ -84,7 +84,7 @@ export default function Creatives() {
             <input
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Kreativ yoki adset qidirish…"
+              placeholder="Поиск креатива или адсета…"
             />
           </label>
           <select
@@ -92,25 +92,25 @@ export default function Creatives() {
             value={rank}
             onChange={e => setRank(e.target.value as Rank)}
           >
-            <option value="spend">Reyting: sarf bo'yicha</option>
-            <option value="ctr">Reyting: bosish ulushi</option>
-            <option value="clicks">Reyting: bosishlar soni</option>
-            <option value="cpl">Reyting: murojaat narxi (arzonidan)</option>
+            <option value="spend">Рейтинг: по расходу</option>
+            <option value="ctr">Рейтинг: по кликабельности</option>
+            <option value="clicks">Рейтинг: по количеству кликов</option>
+            <option value="cpl">Рейтинг: по стоимости лида (с дешевых)</option>
           </select>
         </div>
       </div>
 
       <PageHint>
-        Bu yerda bitta savolga javob izlanadi:{" "}
-        <b>qaysi rasm yoki video odamlarni ko'proq qiziqtirdi?</b> Bosish ulushi
-        o'rtachadan yuqori bo'lgan kreativlar yashil rangda. Kartani bossangiz —
-        kreativning to'liq tafsiloti ochiladi.
+        Здесь мы отвечаем на один вопрос:{" "}
+        <b>какое изображение или видео заинтересовало людей больше всего?</b>{" "}
+        Креативы с кликабельностью выше среднего выделены зеленым. Нажмите на
+        карточку, чтобы открыть полную детализацию креатива.
       </PageHint>
 
       <Panel
-        kicker="Bosish ulushi yetakchilari"
-        title="Eng kuchli 10 ta kreativ"
-        sub="To'q rang — hisob bo'yicha o'rtachadan yuqori"
+        kicker="Лидеры по кликабельности"
+        title="Топ-10 лучших креативов"
+        sub="Темный цвет — выше среднего по аккаунту"
         style={{ marginBottom: 14 }}
       >
         <div style={{ height: 280 }}>
@@ -119,7 +119,7 @@ export default function Creatives() {
       </Panel>
 
       {rows.length === 0 ? (
-        <EmptyState text="Kreativ topilmadi" />
+        <EmptyState text="Креативы не найдены" />
       ) : (
         <div className="creative-grid">
           {rows.map((c, i) => (
@@ -144,27 +144,27 @@ export default function Creatives() {
                   style={{ marginLeft: "auto", flex: "none" }}
                 >
                   {c.effectiveStatus === "ACTIVE"
-                    ? "Faol"
+                    ? "Активен"
                     : c.effectiveStatus === "PAUSED"
-                      ? "To'xtatilgan"
+                      ? "Остановлен"
                       : (c.effectiveStatus ?? "—")}
                 </span>
               </div>
               <div className="c-stats">
                 <div>
-                  <small>Sarf</small>
+                  <small>Расход</small>
                   <b>{money(c.metrics.spend)}</b>
                 </div>
                 <div>
-                  <small>Ko'rsatuv</small>
+                  <small>Показы</small>
                   <b>{whole(c.metrics.impressions)}</b>
                 </div>
                 <div>
-                  <small>Bosish</small>
+                  <small>Клики</small>
                   <b>{whole(c.metrics.clicks)}</b>
                 </div>
                 <div>
-                  <small>Bosish ulushi</small>
+                  <small>Кликабельность</small>
                   <b
                     style={{
                       color:
@@ -179,13 +179,13 @@ export default function Creatives() {
                 {c.hasLeads && (
                   <>
                     <div>
-                      <small>Murojaat</small>
+                      <small>Лиды</small>
                       <b style={{ color: "var(--cyan)" }}>
                         {whole(c.metrics.leads)}
                       </b>
                     </div>
                     <div>
-                      <small>Murojaat narxi</small>
+                      <small>Стоимость лида</small>
                       <b
                         style={{
                           color:
@@ -211,7 +211,7 @@ export default function Creatives() {
                 }}
               >
                 <span>
-                  Bosish narxi {money(c.metrics.cpc)} · 1000 ko'rsatuv narxi{" "}
+                  Цена клика {money(c.metrics.cpc)} · Цена 1000 показов{" "}
                   {money(c.metrics.cpm)}
                 </span>
                 <span
@@ -223,7 +223,7 @@ export default function Creatives() {
                     fontWeight: 600,
                   }}
                 >
-                  Tafsilot <ArrowUpRight size={12} />
+                  Детали <ArrowUpRight size={12} />
                 </span>
               </div>
               <div
