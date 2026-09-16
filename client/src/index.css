@@ -1864,6 +1864,30 @@ table.tbl {
 .setup-note.warn svg {
   color: var(--warn);
 }
+/* API server ishlamayotganda ko'rsatiladigan ogohlantirish (kalit saqlanmaydi) */
+.setup-note.risk {
+  border-color: color-mix(in srgb, var(--risk) 40%, var(--line));
+  background: var(--risk-soft);
+}
+.setup-note.risk svg {
+  color: var(--risk);
+}
+.setup-note .setup-note-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.setup-note code {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  word-break: break-all;
+}
 .setup-steps {
   margin: 0;
   padding: 0;

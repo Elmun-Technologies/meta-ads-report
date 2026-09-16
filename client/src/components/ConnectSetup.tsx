@@ -27,6 +27,7 @@ import {
 import { toast } from "sonner";
 import { ALL_SETUP, type SetupId } from "@shared/oauthSetup";
 import type { OAuthAppStatus } from "@shared/types";
+import { STATIC_MODE_HINT, postJson, probeApiHealth, type ApiHealth } from "@/lib/api";
 
 export type SetupTab = "keys" | "token";
 
@@ -45,16 +46,8 @@ export interface ConnectSetupProps {
 /** Servis (Telegram) — OAuth dialog yo'q, faqat API kaliti */
 const isService = (id: SetupId) => ALL_SETUP[id].kind === "service";
 
-async function postJson(url: string, body: unknown): Promise<{ ok?: boolean; error?: string; [k: string]: unknown }> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body ?? {}),
-  });
-  const data = (await res.json().catch(() => ({}))) as { error?: string };
-  if (!res.ok) throw new Error(data?.error ?? `Server xatosi (${res.status})`);
-  return data as { ok?: boolean; error?: string };
-}
+/* postJson endi @/lib/api da — xatolarni odam tilida qaytaradi
+   (404 = so'rov serverga yetib bormagan, 5xx = API o'chiq, 401 = parol kerak) */
 
 function TextInput({
   label,
@@ -151,6 +144,8 @@ export function ConnectSetup({ platform, tab, status, onClose, onSaved, onConnec
   const [redirectUri, setRedirectUri] = useState<string>("");
   /** status prop berilmasa (masalan Telegram sahifasida) — o'zi serverdan oladi */
   const [fetched, setFetched] = useState<OAuthAppStatus | null>(null);
+  /** API server tirikmi? (null = hali tekshirilmagan) — statik rejimda ok:false */
+  const [api, setApi] = useState<ApiHealth | null>(null);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -168,7 +163,26 @@ export function ConnectSetup({ platform, tab, status, onClose, onSaved, onConnec
     if (!status) void loadStatus();
   }, [status, loadStatus]);
 
+  /* API server tirikmi? Oynani ochganda darhol tekshiramiz: sayt statik rejimda
+   * bo'lsa (server yo'q) «Server xatosi (404)» ni kutmasdan, nima qilishni aytamiz. */
+  useEffect(() => {
+    let alive = true;
+    void probeApiHealth().then(h => {
+      if (alive) setApi(h);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const st = status ?? fetched;
+
+  /** .env'dagi mos maydon nomlari — API server ishlamaganda muqobil yo'l ko'rsatiladi */
+  const envNames =
+    spec.appFields
+      .filter(f => !f.optional && f.env)
+      .map(f => f.env)
+      .join("  ·  ") || "—";
 
   /* Redirect URI — provider sozlamasiga yoziladi (host shu yerdan olinadi) */
   useEffect(() => {
@@ -339,6 +353,19 @@ export function ConnectSetup({ platform, tab, status, onClose, onSaved, onConnec
             <X size={15} />
           </button>
         </div>
+
+        {/* API server ishlamasa — kalit saqlanmaydi. Buni 404'ni kutmasdan aytamiz. */}
+        {api && !api.ok && (
+          <div className="setup-note risk" role="alert" style={{ margin: "12px 18px 0" }}>
+            <TriangleAlert size={14} />
+            <span className="setup-note-body">
+              <b>API server bilan aloqa yo'q — kalitlar saqlanmaydi</b>
+              <span>{api.error}</span>
+              <span>{STATIC_MODE_HINT}</span>
+              <code>.env orqali: {envNames}</code>
+            </span>
+          </div>
+        )}
 
         <div className="setup-tabs">
           <button

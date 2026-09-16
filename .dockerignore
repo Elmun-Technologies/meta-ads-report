@@ -1,0 +1,23 @@
+# Docker build kontekstidan chiqariladigan fayllar (tezlik + maxfiylik)
+node_modules
+dist
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.manus-logs
+.arena
+.cache
+.local
+.npm
+.pnpm-store
+*.log
+coverage
+.DS_Store
+docs
+ideas.md
+todo.md
+template.json
+vercel.json
+api

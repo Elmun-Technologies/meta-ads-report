@@ -83,6 +83,65 @@ functions:        api/[[...slug]].ts  (includeFiles: server/data/snapshots/**)
 Statik rejimda ma'lumotni yangilash uchun — yangi snapshot qo'shib, loyihani qayta deploy qiling
 (yoki uzoq muddatli server rejimida ishga tushiring: `pnpm build && pnpm start` — unda SSE live-sync ishlaydi).
 
+## 🪰 Fly.io — tavsiya etilgan (real-time + ulanishlar to'liq ishlaydi)
+
+Vercel serverless funksiyasi **so'rov orasida o'chib turadi**, shuning uchun unda
+SSE (live), sync scheduler va `fs.watch` ishlamaydi; ustiga Deployment Protection
+yoqilgan bo'lsa `/api/*` umuman funksiyaga yetib bormaydi («Server xatosi (404)»).
+Fly.io'da ilova **doim ishlaydigan process** — barchasi joyida.
+
+Repo'da tayyor fayllar bor: `Dockerfile` (ikki bosqichli build), `fly.toml`,
+`docker-entrypoint.sh`, `.dockerignore`.
+
+```bash
+# 1) Fly CLI (bir marta): https://fly.io/docs/hands-on/install-flyctl/
+fly auth login
+
+# 2) Loyihani ulash — app nomi va region so'raladi (fly.toml shunga yangilanadi)
+fly launch --no-deploy --copy-config
+
+# 3) Ma'lumot uchun volume (tokenlar + snapshotlar shu yerda yashaydi)
+fly volumes create ads_data --size 1
+
+# 4) Maxfiy kalitlar (ixtiyoriy, lekin ochiq URL'da tavsiya etiladi)
+fly secrets set DASHBOARD_PASSWORD="kuchli-parol" AUTH_SECRET="uzun-random-satr"
+
+# 5) Deploy
+fly deploy
+```
+
+Deploy qilingach: `https://<app-nomi>.fly.dev`.
+
+| Nima | Qayerda |
+| ---- | ------- |
+| App kalitlari, tokenlar, kanallar | `/data/store.json` (volume — deploy'da **yo'qolmaydi**) |
+| Tortilgan snapshotlar | `/data/snapshots/*.json` (volume) |
+| Port | `8080` (`API_PORT`), Fly tashqariga `443` (HTTPS) beradi |
+| Health check | `GET /api/health` (`fly.toml` → `http_service.checks`) |
+
+Muhim sozlamalar (`fly.toml` da allaqachon yozilgan):
+
+- `auto_stop_machines = false` + `min_machines_running = 1` — aks holda traffic
+  bo'lmaganda machine uxlaydi va **sync scheduler / SSE / webhook'lar to'xtaydi**.
+- `force_https = true` — OAuth redirect URI'lar `https://…` bo'lishi uchun.
+- `SNAPSHOTS_DIR=/data/snapshots` — `store.json` ham shu volume'ga
+  (`dirname(SNAPSHOTS_DIR)`) yoziladi, ya'ni **bitta volume ikkalasini saqlaydi**.
+- Entrypoint volume bo'sh bo'lsa repo'dagi boshlang'ich snapshotlarni ko'chiradi
+  (`cp -n` — mavjud fayl ustidan yozmaydi).
+
+Facebook app sozlamasiga yoziladigan redirect URI (deploy'dan keyin aniq
+manzilni `Ulanishlar → Sozlash` oynasida ko'rasiz, bir klikda nusxa olinadi):
+
+```
+https://<app-nomi>.fly.dev/api/oauth/meta/callback
+```
+
+Foydali buyruqlar: `fly logs` · `fly status` · `fly ssh console` (volume'ni
+ko'rish: `ls /data/snapshots`) · `fly machine list`.
+
+> Lokalda xuddi shu rejimni tekshirish: `pnpm build && pnpm start`
+> (`NODE_ENV=production` + `dist/public` ni ham o'zi serve qiladi).
+
 ## 🏗 Arxitektura
 
 ```mermaid
@@ -276,6 +335,45 @@ Qanday ishlaydi:
 
 Xavfsizlik: OAuth callbacklar HMAC-imzolangan `state` (CSRF) bilan himoyalangan;
 ulanishlarni boshqarish (toggle, delete) umumiy parol auth ostida.
+
+### ⚠ «Server xatosi (404)» — App ID / App Secret saqlanmayapti
+
+App ID va App Secret ni «Sozlash» oynasiga yozib «Saqlash» bosilganda
+**`Server xatosi (404)`** chiqsa — bu **kalitlar noto'g'ri** degani emas.
+404 deyarli har doim bitta narsani anglatadi: browser'dagi
+`POST /api/oauth/apps/meta` so'rovi **Express serverga yetib bormagan**.
+
+| Javob | Nima bo'lgan | Yechim |
+| ----- | ------------ | ------ |
+| Javob HTML / `vercel.com/login` ga redirect, `sso_required` | **Vercel Deployment Protection** yoqilgan — `/api/*` funksiyaga **umuman yetib bormaydi** (eng keng tarqalgan sabab) | Vercel → Project → Settings → **Deployment Protection** → «Vercel Authentication» ni **«Only Preview Deployments»** ga o'zgartiring (yoki o'chiring) → qayta deploy |
+| 404 + **HTML** sahifa | Sayt **statik rejimda**: `/api/*` ni ushlaydigan server yo'q (GitHub Pages / Netlify statik / Vercel'da serverless funksiya deploy bo'lmagan) | Loyihani server bilan ishga turing: `pnpm dev` (lokal) yoki `pnpm build && pnpm start`. Vercel'da `api/[[...slug]].ts` funksiyasi borligini tekshiring |
+| 404 + **JSON** (`API manzili topilmadi…`) | Server **eski versiyada** — bunday route unda yo'q | Qayta build + deploy/restart bering |
+| 500 + `text/plain` | Dev'da faqat **web** server ishga tushgan (`pnpm dev:web`), API (3001) o'chiq | `pnpm dev` ni ishlating — u web + api ni birga ko'taradi |
+| `fetch failed` / aloqa yo'q | API server umuman ishga tushmagan | `pnpm dev:api` loglarini tekshiring |
+| 401 `authRequired` | `DASHBOARD_PASSWORD` yoqilgan | Sahifani yangilab, parol bilan kiring |
+
+Ulanishlar sahifasida va «Sozlash» oynasida **API server holati** ko'rsatiladi
+(`/api/health` tekshiriladi): server javob bermasa qizil banner chiqadi va nima
+qilish kerakligi yoziladi — 404 ni kutib o'tirish shart emas.
+
+**Muqobil yo'l (UI ishlamasa ham):** kalitlarni `.env` ga yozing va serverni
+qayta ishga tushiring — ikkala manba birlashtirilib o'qiladi:
+
+```bash
+META_APP_ID=1789456123098765
+META_APP_SECRET=...
+```
+
+Tez tekshirish (server tirikmi?):
+
+```bash
+curl http://localhost:3001/api/health
+# {"ok":true,"mode":"server",...}  → server ishlayapti
+curl -X POST http://localhost:3001/api/oauth/apps/meta \
+  -H 'Content-Type: application/json' \
+  -d '{"appId":"...","appSecret":"..."}'
+# {"ok":true,"ready":true,...}     → kalitlar saqlandi
+```
 
 ### AmoCRM matchlash — muhim qadam
 
