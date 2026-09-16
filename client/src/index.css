@@ -1708,6 +1708,347 @@ table.tbl {
   font-weight: 550;
 }
 
+/* --- Tugmalar: o'chirilgan holat KO'RINISHI kerak (aks holda "tugma bosilmaydi"
+       deb o'ylanadi) --- */
+.primary-btn:disabled,
+.tf-btn:disabled,
+.select-btn:disabled,
+.icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  filter: grayscale(0.35);
+  transform: none !important;
+  box-shadow: none;
+}
+.primary-btn:disabled:hover {
+  transform: none;
+  filter: grayscale(0.35);
+  box-shadow: none;
+}
+.spin {
+  animation: rot 0.9s linear infinite;
+}
+
+/* --- App kalitlari holati qatori (Ulanishlar kartasi) --- */
+.keys-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--panel);
+}
+.keys-row small {
+  color: var(--text-3);
+  font-size: 10.5px;
+  line-height: 1.35;
+  min-width: 0;
+}
+.keys-row .tf-btn {
+  height: 26px;
+  padding: 0 9px;
+  font-size: 11px;
+}
+
+/* --- Sozlash / ulash oynasi --- */
+.setup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 8vh 16px 24px;
+  overflow-y: auto;
+  animation: fade-in 0.12s ease both;
+}
+.setup-modal {
+  width: 100%;
+  max-width: 620px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  animation: pop-in 0.16s var(--ease) both;
+}
+.setup-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.setup-head b {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 650;
+}
+.setup-head small {
+  color: var(--text-3);
+  font-size: 11px;
+}
+.setup-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 12px 18px 0;
+}
+.setup-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-bottom-color: transparent;
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  background: var(--panel-2);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 550;
+  position: relative;
+  top: 1px;
+}
+.setup-tab.on {
+  background: var(--bg-soft);
+  color: var(--text);
+  border-color: var(--line-strong);
+  border-bottom-color: var(--bg-soft);
+}
+.setup-tab .dot-ok {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--good);
+  display: inline-block;
+}
+.setup-body {
+  padding: 16px 18px 18px;
+  border-top: 1px solid var(--line-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.setup-note {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+.setup-note svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--accent);
+}
+.setup-note.good {
+  border-color: color-mix(in srgb, var(--good) 35%, var(--line));
+  background: var(--good-soft);
+}
+.setup-note.good svg {
+  color: var(--good);
+}
+.setup-note.warn {
+  border-color: color-mix(in srgb, var(--warn) 35%, var(--line));
+  background: var(--warn-soft);
+}
+.setup-note.warn svg {
+  color: var(--warn);
+}
+.setup-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.setup-steps li {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+.setup-steps .ss-num {
+  flex: none;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  margin-top: 1px;
+}
+.setup-uri {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+}
+.setup-uri span {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  font-weight: 650;
+  width: 100%;
+}
+.setup-uri code {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  word-break: break-all;
+}
+.setup-uri .tf-btn {
+  height: 26px;
+  padding: 0 9px;
+  font-size: 11px;
+  flex: none;
+}
+.setup-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+.setup-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.sf-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.sf-missing,
+.sf-saved {
+  font-style: normal;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.sf-missing {
+  color: var(--warn);
+  background: var(--warn-soft);
+  border-color: color-mix(in srgb, var(--warn) 35%, transparent);
+}
+.sf-saved {
+  color: var(--good);
+  background: var(--good-soft);
+  border-color: color-mix(in srgb, var(--good) 30%, transparent);
+  font-family: var(--mono);
+}
+.sf-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  padding: 0 10px;
+  transition: border-color 0.14s var(--ease);
+}
+.sf-input:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.sf-input input,
+.sf-input textarea {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+  font-size: 12.5px;
+  font-family: var(--mono);
+  padding: 8px 0;
+  resize: vertical;
+}
+.sf-input textarea {
+  line-height: 1.5;
+}
+.sf-eye {
+  flex: none;
+  color: var(--text-3);
+  display: grid;
+  place-items: center;
+  padding: 4px;
+}
+.sf-eye:hover {
+  color: var(--text);
+}
+.sf-help {
+  color: var(--text-3);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+.setup-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--accent);
+  width: fit-content;
+}
+.setup-link:hover {
+  text-decoration: underline;
+}
+.setup-error {
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in srgb, var(--risk) 40%, var(--line));
+  background: var(--risk-soft);
+  color: var(--risk);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.setup-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.setup-foot {
+  color: var(--text-3);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+@media (max-width: 560px) {
+  .setup-overlay {
+    padding: 4vh 10px 18px;
+  }
+  .setup-actions .primary-btn,
+  .setup-actions .tf-btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
 /* Ulash qo'llanmasi (connections) */
 .guide-where {
   display: flex;

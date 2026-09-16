@@ -11,7 +11,12 @@ const __dirname = path.dirname(__filename);
 /**
  * Snapshotlar papkasi — turli muhitlarda (lokal dev, Vercel serverless, Railway/VPS)
  * turlicha joylashishi mumkin, shuning uchun bir nechta manzil tekshiriladi.
+ * SNAPSHOTS_DIR berilganda — so'rovsiz shu papka (deploy'da volume, serverless'da /tmp).
  */
+const EXPLICIT_DIR = process.env.SNAPSHOTS_DIR?.trim()
+  ? path.resolve(process.env.SNAPSHOTS_DIR.trim())
+  : null;
+
 const DATA_DIR_CANDIDATES = [
   path.join(__dirname, "data", "snapshots"),
   path.join(__dirname, "..", "data", "snapshots"),
@@ -22,7 +27,12 @@ const DATA_DIR_CANDIDATES = [
   path.resolve(process.cwd(), "..", "server", "data", "snapshots"),
 ];
 
+/**
+ * Aniq ko'rsatilgan papka SO'ROVSIZ ishlatiladi (bo'sh bo'lsa ham — yangi deploy'da
+ * snapshotlar hali yo'q). Aks holda mavjud fayllari bor papka tanlanadi.
+ */
 export const DATA_DIR =
+  EXPLICIT_DIR ??
   DATA_DIR_CANDIDATES.find(
     p => fs.existsSync(p) && fs.readdirSync(p).some(f => f.endsWith(".json"))
   ) ??

@@ -188,21 +188,44 @@ hisoblaringizni ulaysiz — tokenlar serverda saqlanadi, har sync'da ma'lumot
 o'zi tortiladi. Bu rejim **barcha loyihalaringiz** uchun: istalgan vaqt yangi
 kabinet ulanadi, tepadagi **kabinet tanlagich**dan xohlagan hisob ko'riladi.
 
-| Platforma | Tugma | Serverda (bir marta, .env) | Redirect URL (app sozlamasida) |
-| --------- | ----- | -------------------------- | ------------------------------ |
+| Platforma | Tugma | App kalitlari (OAuth uchun) | Redirect URL (app sozlamasida) |
+| --------- | ----- | --------------------------- | ------------------------------ |
 | Facebook / Instagram | «Facebook bilan ulash» | `META_APP_ID` + `META_APP_SECRET` | https://<host>/api/oauth/meta/callback |
 | Google Ads | «Google bilan ulash» | `GOOGLE_ADS_CLIENT_ID/SECRET/DEVELOPER_TOKEN` | https://<host>/api/oauth/google-ads/callback |
 | AmoCRM | «AmoCRM hisobini ulash» (subdomain kiritiladi) | `AMOCRM_CLIENT_ID/SECRET` | https://<host>/api/oauth/amocrm/callback |
 
+**Tugmalar har doim bosiladi.** App kalitlari bo'lmasa tugma «o'lik» turmaydi —
+bosilganda sozlash oynasi ochiladi va ikki yo'lni taklif qiladi:
+
+1. **App kalitlarini UI'dan kiritish** (`.env` tahrirlash, serverni qayta ishga
+   tushirish shart emas). Kalitlar `server/data/store.json` ga yoziladi va
+   `.env` dagi qiymatlar bilan birlashtirilib o'qiladi. Saqlagach tugma darhol
+   OAuth dialogni ochadi. Oynada provider sozlamasiga yoziladigan **redirect URI**
+   ham tayyor turadi (bir klikda nusxa olinadi).
+2. **«Token bilan ulash»** — app yaratishga vaqt yo'q bo'lsa:
+   | Platforma | Nima kiritiladi | Qayerdan olinadi |
+   | --------- | --------------- | ---------------- |
+   | Meta | access token (+ ixtiyoriy `act_` id) | Business Settings → System Users → token (`ads_read`) yoki Graph API Explorer |
+   | Google Ads | refresh token (+ client id/secret, developer token) | `pnpm google:oauth` yoki OAuth Playground |
+   | AmoCRM | subdomain + access token | Sozlamalar → Integratsiyalar → «API kalitlari» |
+
+   Token serverda **haqiqiy API so'rovi bilan tekshiriladi** (kabinetlar ro'yxati
+   olinadi), xato bo'lsa aniq xabar qaytadi; to'g'ri bo'lsa ulanish saqlanadi va
+   ma'lumot **shu zahoti** tortiladi (interval kutilmaydi).
+
 Qanday ishlaydi:
 
-1. Admin bir marta app kalitlarini `.env` ga qo'yadi (yuqoridagi jadval).
-2. Har bir foydalanuvchi o'z hisobini ulaydi: consent → callback → tokenlar
-   `server/data/store.json` ga (gitignore'da) yoziladi — **client'ga hech qachon yuborilmaydi**.
-3. Sync dvigateli har `SYNC_INTERVAL_SEC` da ulangan kabinetlardan tortadi:
-   Meta — `act_*` bo'yicha, Google — har customer id, AmoCRM — v4 API (leadlar + pipeline).
-4. Ulangan kabinetlarni chip'lar bilan yoqib/o'chirib qo'yish mumkin (o'chirilgani sync qilinmaydi).
-5. Token eskirsa — status «TOKEN ESKIRGAN» bo'ladi, bir klikda qayta ulanadi.
+1. Admin app kalitlarini **`.env` ga yoki Ulanishlar sahifasidagi «Sozlash» oynasiga** qo'yadi.
+2. Har bir foydalanuvchi o'z hisobini ulaydi: consent (yoki token) → tokenlar
+   `server/data/store.json` ga (gitignore'da) yoziladi — **client'ga hech qachon yuborilmaydi**
+   (UI'da faqat niqoblangan ko'rinishi ko'rinadi).
+3. Ulanishdan keyin darhol bir martalik sync ketadi, keyin sync dvigateli har
+   `SYNC_INTERVAL_SEC` da tortadi: Meta — `act_*` bo'yicha, Google — har customer id,
+   AmoCRM — v4 API (leadlar + pipeline).
+4. Ulangan kabinetlarni chip'lar bilan yoqib/o'chirib qo'yish mumkin (o'chirilgani sync qilinmaydi);
+   har ulanishda **«Hoziroq tortish»** tugmasi bor.
+5. Qayta ulanganda eski yozuv ustidan yoziladi (bir xil hisob ikki marta ko'paymaydi).
+6. Token eskirsa — status «TOKEN ESKIRGAN» bo'ladi, bir klikda qayta ulanadi.
 
 > **Meta app:** developers.facebook.com da Business tipidagi app yarating,
 > `ads_read` + `business_management` scope'lari bilan. O'z hisoblaringiz uchun
@@ -232,7 +255,13 @@ Bog'lanmagan leadlar "Manbasi aniqlanmagan" deb alohida chiqadi — **taxminiy b
 | Endpoint                          | Tavsif                                                  |
 | --------------------------------- | ------------------------------------------------------- |
 | `GET /api/snapshot?platform=meta` | Eng yangi snapshot (normalized). `?file=` — aniq fayl, `?account=` — kabinet filtri |
-| `GET /api/oauth/status`            | Qaysi platformalar OAuth'ga tayyor (app kalitlari bormi) |
+| `GET /api/oauth/status`            | Qaysi platformalar tayyor: `ready`, `missing[]`, `source` (env/store), niqoblangan qiymatlar |
+| `GET /api/oauth/apps`              | App kalitlari holati (maydon darajasida) + UI uchun sozlash retsepti |
+| `GET /api/oauth/apps/redirect-uris`| Provider sozlamasiga yoziladigan aniq callback URL'lar |
+| `POST /api/oauth/apps/<p>`         | App kalitlarini **UI'dan** saqlash (partial; restart shart emas) |
+| `DELETE /api/oauth/apps/<p>`       | Saqlangan kalitlarni o'chirish (`.env` qiymatlari qoladi) |
+| `POST /api/oauth/<p>/token`        | **Token bilan ulash** — kalit tekshiriladi, hisob saqlanadi, darhol sync |
+| `POST /api/oauth/sync/<p>`         | Bitta platformani hoziroq tortish (interval kutmasdan) |
 | `GET /api/oauth/<p>/start`         | OAuth consent sahifasiga redirect (meta/google-ads/amocrm) |
 | `GET /api/oauth/<p>/callback`      | Provider'dan qaytgan kod → tokenlar serverda saqlanadi |
 | `POST /api/oauth/accounts/:cid/:aid/toggle` | Kabinetni sync'dan yoqish/o'chirish |

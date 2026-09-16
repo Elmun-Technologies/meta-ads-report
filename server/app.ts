@@ -610,27 +610,39 @@ export function connectionsPayload(): ConnectionInfo[] {
     syncedAt: crm?.syncedAt ?? null,
   };
   const oauthConns = listConnectionsPublic();
-  const oauthFor = (platform: string) => ({
-    ready: oauthStatus()[platform as "meta" | "google-ads" | "amocrm"]?.ready ?? false,
-    reason: oauthStatus()[platform as "meta" | "google-ads" | "amocrm"]?.reason,
-    connections: oauthConns
-      .filter(c => c.platform === platform)
-      .map(c => ({
-        id: c.id,
-        label: c.label,
-        status: c.status,
-        error: c.error,
-        lastSyncAt: c.lastSyncAt,
-        tokenExpiresAt: c.tokenExpiresAt,
-        accounts: c.accounts,
-        subdomain: c.subdomain,
-      })),
-  });
+  const status = oauthStatus();
+  /** Faqat OAuth qo'llab-quvvatlaydigan platformalar (meta / google-ads / amocrm) */
+  const oauthFor = (platform: string): ConnectionInfo["oauth"] => {
+    const st = status[platform as keyof typeof status];
+    if (!st) return undefined;
+    return {
+      ready: st.ready,
+      reason: st.reason,
+      missing: st.missing,
+      source: st.source,
+      values: st.values,
+      manual: st.manual,
+      connections: oauthConns
+        .filter(c => c.platform === platform)
+        .map(c => ({
+          id: c.id,
+          label: c.label,
+          status: c.status,
+          error: c.error,
+          lastSyncAt: c.lastSyncAt,
+          tokenExpiresAt: c.tokenExpiresAt,
+          accounts: c.accounts,
+          subdomain: c.subdomain,
+          method: c.method,
+        })),
+    };
+  };
   return [
     ...CONNECTORS.map(c => {
       const snapshot = c.resolve();
       const latest = c.latestFile?.();
       const oauth = oauthFor(c.id);
+      // OAuth bo'lmagan platformalar (yandex/telegram/offline) uchun maydon qo'yilmaydi
       // Kabinetlar ro'yxati — shu platformaning barcha fayllaridan (unique nomlar)
       const seen = new Set<string>();
       const accounts = listSnapshots()
@@ -659,7 +671,7 @@ export function connectionsPayload(): ConnectionInfo[] {
         syncedAt: latest?.mtime.toISOString() ?? null,
         note: c.note,
         autoSync: c.autoSync,
-        oauth: oauth.connections.length > 0 || !oauth.ready ? oauth : { ...oauth, reason: undefined },
+        oauth,
       } satisfies ConnectionInfo;
     }),
     {

@@ -35,9 +35,17 @@ import {
   GOOGLE_ADS_API_VERSION,
   type GoogleAdsConfig,
 } from "@shared/googleAdsApi";
-import { loadAmoAppCredentials, ensureFreshToken, pullAmoSnapshot } from "@shared/amoApi";
-import { activeConnections, markSynced, setConnectionStatus, upsertConnection } from "./connections";
+import { ensureFreshToken, pullAmoSnapshot } from "@shared/amoApi";
+import {
+  activeConnections,
+  markSynced,
+  setConnectionStatus,
+  setConnectionTokens,
+} from "./connections";
+import { amoApp, googleApp } from "./oauthApps";
+import { setConfiguredResolver } from "./store";
 import type { SyncResultItem } from "@shared/types";
+import type { OAuthPlatformId } from "@shared/oauthSetup";
 
 /* Broadcast — app.ts da ro'yxatdan o'tkaziladi (circular import oldini olish uchun) */
 type Broadcaster = (event: string, payload?: unknown) => void;
@@ -80,7 +88,12 @@ async function syncMeta(): Promise<SyncResultItem> {
   const conns = activeConnections("meta");
   const envCfg = loadMetaConfigFromEnv();
   if (conns.length === 0 && !envCfg) {
-    return { ...base, ok: false, message: "Facebook ulanmagan — Ulanishlar sahifasida «Facebook bilan ulash»", durationMs: 0 };
+    return {
+      ...base,
+      ok: false,
+      message: "Facebook ulanmagan — Ulanishlar sahifasida «Facebook bilan ulash» yoki «Token bilan ulash»",
+      durationMs: 0,
+    };
   }
 
   let okCount = 0;
@@ -164,7 +177,12 @@ async function syncGoogle(): Promise<SyncResultItem> {
     envCfg = null;
   }
   if (conns.length === 0 && !envCfg) {
-    return { ...base, ok: false, message: "Google Ads ulanmagan — «Google bilan ulash»", durationMs: 0 };
+    return {
+      ...base,
+      ok: false,
+      message: "Google Ads ulanmagan — «Google bilan ulash» yoki «Token bilan ulash» (refresh token)",
+      durationMs: 0,
+    };
   }
 
   let okCount = 0;
@@ -173,17 +191,26 @@ async function syncGoogle(): Promise<SyncResultItem> {
   const dateRange = process.env.GOOGLE_ADS_DATE_RANGE || "LAST_30_DAYS";
   const currency = process.env.GOOGLE_ADS_CURRENCY || "USD";
 
+  // App kalitlari: .env + UI'dan kiritilgan (store) — birlashtirilgan holda
+  const app = googleApp();
+  if (conns.length > 0 && !app) {
+    errors.push(
+      "Google app kalitlari yo'q (client id/secret/developer token) — Ulanishlar → «Sozlash» dan kiriting"
+    );
+  }
+
   for (const conn of conns) {
     if (!conn.refreshToken) continue;
+    if (!app) continue;
     const enabled = conn.accounts.filter(a => a.enabled);
     if (conn.accounts.length > 0 && enabled.length === 0) continue;
     try {
       const client = new GoogleAdsClient({
-        developerToken: process.env.GOOGLE_ADS_DEVELOPER_TOKEN ?? "",
-        clientId: process.env.GOOGLE_ADS_CLIENT_ID!,
-        clientSecret: process.env.GOOGLE_ADS_CLIENT_SECRET!,
+        developerToken: app.developerToken,
+        clientId: app.clientId,
+        clientSecret: app.clientSecret,
         refreshToken: conn.refreshToken,
-        managerId: process.env.GOOGLE_ADS_MANAGER_ID || undefined,
+        managerId: app.managerId || undefined,
         customerIds: enabled.map(a => a.id),
         useTestAccount: process.env.GOOGLE_ADS_USE_TEST_ACCOUNT === "true",
         dateRange,
@@ -265,10 +292,17 @@ async function syncAmoCrm(): Promise<SyncResultItem> {
   const started = Date.now();
   const at = new Date().toISOString();
   const base = { id: "amocrm", label: "AmoCRM", at };
-  const app = loadAmoAppCredentials();
+  // App kalitlari faqat token YANGILASH uchun kerak — qo'lda kiritilgan uzun
+  // muddatli token (API kalitlari) bo'lsa, ulamisiz ham tortaveradi.
+  const app = amoApp();
   const conns = activeConnections("amocrm");
-  if (!app || conns.length === 0) {
-    return { ...base, ok: false, message: "AmoCRM ulanmagan — «AmoCRM ulash»", durationMs: 0 };
+  if (conns.length === 0) {
+    return {
+      ...base,
+      ok: false,
+      message: "AmoCRM ulanmagan — Ulanishlar sahifasida «AmoCRM hisobini ulash» yoki «Token bilan ulash»",
+      durationMs: 0,
+    };
   }
 
   let okCount = 0;
@@ -276,16 +310,16 @@ async function syncAmoCrm(): Promise<SyncResultItem> {
   const errors: string[] = [];
 
   for (const conn of conns) {
-    if (!conn.accessToken || !conn.refreshToken || !conn.subdomain) continue;
+    if (!conn.accessToken || !conn.subdomain) continue;
     try {
       let tokens = {
         accessToken: conn.accessToken,
-        refreshToken: conn.refreshToken,
-        tokenExpiresAt: conn.tokenExpiresAt ?? new Date(0).toISOString(),
+        refreshToken: conn.refreshToken ?? "",
+        tokenExpiresAt: conn.tokenExpiresAt ?? new Date(Date.now() + 86400_000).toISOString(),
         subdomain: conn.subdomain,
       };
-      // Tokenni yangilab, ulanishda saqlaymiz
-      tokens = await ensureFreshToken(app, tokens);
+      // Refresh token + app kalitlari bo'lsa — tokenni yangilab olamiz
+      if (app && conn.refreshToken) tokens = await ensureFreshToken(app, tokens);
       const raw = await pullAmoSnapshot(tokens);
       const stamp = new Date().toISOString().slice(0, 10);
       const file = `amo_${conn.subdomain}_${stamp}.json`;
@@ -298,7 +332,7 @@ async function syncAmoCrm(): Promise<SyncResultItem> {
         totalLeads += raw.leads?.length ?? 0;
         markSynced(conn.id);
         // Yangi tokenlarni saqlash
-        setConnectionTokens(conn.id, tokens);
+        if (app && conn.refreshToken) setConnectionTokens(conn.id, tokens);
       }
     } catch (err) {
       const message = (err as Error).message;
@@ -323,10 +357,6 @@ async function syncAmoCrm(): Promise<SyncResultItem> {
     });
   }
   return { ...base, ok, message, durationMs: Date.now() - started };
-}
-
-function setConnectionTokens(id: string, tokens: { accessToken: string; refreshToken: string; tokenExpiresAt: string }) {
-  upsertConnection({ id, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, tokenExpiresAt: tokens.tokenExpiresAt } as any);
 }
 
 async function syncTelegram(): Promise<SyncResultItem> {
@@ -410,6 +440,55 @@ export async function runSync(trigger: "auto" | "manual" | "startup"): Promise<S
 }
 
 /* ------------------------------------------------------------------ */
+/* Bitta platformani hoziroq tortish (ulanishdan keyin darhol)          */
+/* ------------------------------------------------------------------ */
+
+const PLATFORM_SYNC: Record<OAuthPlatformId, () => Promise<SyncResultItem>> = {
+  meta: syncMeta,
+  "google-ads": syncGoogle,
+  amocrm: syncAmoCrm,
+};
+
+/**
+ * Ulanish qo'shilganda DARHOL shu platformani tortadi (interval kutmaydi).
+ * Umumiy sync band bo'lsa (inFlight) — navbatdagi siklga qoldiradi.
+ */
+export async function syncPlatformNow(platform: OAuthPlatformId): Promise<SyncResultItem | null> {
+  if (inFlight) return null;
+  const fn = PLATFORM_SYNC[platform];
+  if (!fn) return null;
+  inFlight = true;
+  updateSyncState({ running: true, trigger: "manual" });
+  let result: SyncResultItem | null = null;
+  try {
+    result = await fn();
+    const results = [...(currentSyncState().results ?? []).filter(r => r.id !== platform), result];
+    recordSyncResults(results, "manual");
+    emit("sync", { at: new Date().toISOString(), source: `connect-${platform}` });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    result = { id: platform, label: platform, at: new Date().toISOString(), ok: false, message, durationMs: 0 };
+    logActivity({ kind: "error", source: platform, tone: "risk", title: `${platform} sync xatosi`, body: message });
+  } finally {
+    inFlight = false;
+    updateSyncState({ running: false });
+  }
+  return result;
+}
+
+/* ------------------------------------------------------------------ */
+/* "configured" — faqat .env ga emas, ulanishlar va UI kalitlariga ham  */
+/* ------------------------------------------------------------------ */
+
+setConfiguredResolver(() => ({
+  meta: activeConnections("meta").length > 0 || metaConfigured(),
+  google:
+    activeConnections("google-ads").length > 0 ||
+    Boolean(googleApp() && process.env.GOOGLE_ADS_REFRESH_TOKEN),
+  telegram: Boolean(process.env.TGSTAT_TOKEN),
+}));
+
+/* ------------------------------------------------------------------ */
 /* Scheduler (faqat "server" rejimida)                                 */
 /* ------------------------------------------------------------------ */
 
@@ -431,6 +510,6 @@ export function startSyncScheduler() {
   timer.unref?.();
   const oauthCount = activeConnections().length;
   console.log(
-    `[sync] scheduler ishga tushdi: har ${interval}s · OAuth ulanishlar: ${oauthCount} · Meta(env):${metaConfigured() ? "ON" : "off"} · Telegram:${process.env.TGSTAT_TOKEN ? "ON" : "off"}`
+    `[sync] scheduler ishga tushdi: har ${interval}s · ulanishlar: ${oauthCount} · Meta(env):${metaConfigured() ? "ON" : "off"} · Google app:${googleApp() ? "ON" : "off"} · AmoCRM:${activeConnections("amocrm").length > 0 ? "ON" : "off"} · Telegram:${process.env.TGSTAT_TOKEN ? "ON" : "off"}`
   );
 }

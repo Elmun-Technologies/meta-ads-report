@@ -28,11 +28,19 @@ export interface ConnectionInfo {
   note?: string;
   /** Sync dvigateli bu manbadan avtomatik (INTERVAL bilan) tortadi */
   autoSync?: boolean;
-  /** OAuth orqali ulangan shaxsiy hisoblar (Ulanishlar sahifasi) */
+  /** Platformani ulash imkoniyati + ulangan shaxsiy hisoblar (Ulanishlar sahifasi) */
   oauth?: {
-    /** Platformani hozir ulash mumkinmi (app kalitlari .env da bormi) */
+    /** App kalitlari to'liqmi — OAuth dialog shunda ishlaydi */
     ready: boolean;
     reason?: string;
+    /** Nima yetishmayapti (maydon nomlari) */
+    missing?: { key: string; label: string; env: string }[];
+    /** Kalitlar qayerdan kelgan: env / store / mixed / none */
+    source?: "env" | "store" | "mixed" | "none";
+    /** Saqlangan kalitlar (niqoblangan) */
+    values?: Record<string, string>;
+    /** «Token bilan ulash» yo'li ochiqmi */
+    manual?: boolean;
     connections: {
       id: string;
       label: string;
@@ -42,6 +50,7 @@ export interface ConnectionInfo {
       tokenExpiresAt: string | null;
       accounts: OAuthAdAccount[];
       subdomain?: string;
+      method?: "oauth" | "token";
     }[];
   };
 }
@@ -287,6 +296,8 @@ export interface OAuthConnectionPublic {
   accounts: OAuthAdAccount[];
   /** AmoCRM: subdomain */
   subdomain?: string;
+  /** Qanday ulangan: "oauth" — dialog orqali, "token" — qo'lda kiritilgan kalit */
+  method?: "oauth" | "token";
 }
 
 /** Server tomonda saqlanadigan to'liq ulanish (tokenlar bilan) — client'ga YUBORILMAYDI */
@@ -295,12 +306,25 @@ export interface OAuthConnection extends OAuthConnectionPublic {
   refreshToken?: string;
 }
 
-/** /api/oauth/status javobi — qaysi platformalar ulashga tayyor (app kalitlari bor) */
-export interface OAuthConfigStatus {
-  meta: { ready: boolean; reason?: string };
-  "google-ads": { ready: boolean; reason?: string };
-  amocrm: { ready: boolean; reason?: string };
+/** Bitta platformaning app kalitlari holati (/api/oauth/status, /api/oauth/apps) */
+export interface OAuthAppStatus {
+  /** Kerakli barcha app kalitlari bormi (OAuth dialog ishlaydi) */
+  ready: boolean;
+  /** Yetishmayotgan maydonlar — aniq nom bilan */
+  missing: { key: string; label: string; env: string }[];
+  reason?: string;
+  /** Kalitlar qayerdan: .env, UI'dan kiritilgan (store), aralash yoki yo'q */
+  source: "env" | "store" | "mixed" | "none";
+  /** Saqlangan qiymatlar (maxfiylari niqoblangan) */
+  values: Record<string, string>;
+  /** OAuth dialogni boshlash mumkinmi */
+  oauth: boolean;
+  /** «Token bilan ulash» yo'li ochiqmi (app kalitlarisiz ham ishlaydi) */
+  manual: boolean;
 }
+
+/** /api/oauth/status javobi — qaysi platformalar ulashga tayyor */
+export type OAuthConfigStatus = Record<"meta" | "google-ads" | "amocrm", OAuthAppStatus>;
 
 /* ------------------------------------------------------------------ */
 /* CRM (AmoCRM) — lead lifecycle                                       */

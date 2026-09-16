@@ -230,6 +230,9 @@ export default defineConfig({
       "/api": {
         target: process.env.API_URL || "http://localhost:3001",
         changeOrigin: true,
+        // X-Forwarded-Host/Proto yuboriladi — OAuth redirect URI preview/production
+        // hostida to'g'ri hosil bo'lishi uchun (aks holda localhost:3001 bo'lib qoladi)
+        xfwd: true,
       },
     },
     fs: {

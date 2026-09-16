@@ -1,17 +1,21 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ArrowUpRight,
   Check,
   FolderOpen,
+  KeyRound,
   Link2,
-  Radio,
   RefreshCw,
+  Settings2,
   Trash2,
   Zap,
 } from "lucide-react";
-import { PLATFORM_META, type ConnectionInfo } from "@shared/types";
+import { toast } from "sonner";
+import { PLATFORM_META, type ConnectionInfo, type OAuthAppStatus } from "@shared/types";
+import { OAUTH_SETUP, type OAuthPlatformId } from "@shared/oauthSetup";
 import { dateLabel, whole } from "@/lib/format";
 import { useDashboardContext } from "@/contexts/DashboardContext";
+import { ConnectSetup, type SetupTab } from "@/components/ConnectSetup";
 import { Panel } from "@/components/widgets";
 
 interface Step {
@@ -154,35 +158,14 @@ const GUIDES: Guide[] = [
 ];
 
 /* ------------------------------------------------------------------ */
-/* OAuth — o'z hisoblaringizni "Ulash" tugmasi bilan bog'lash         */
+/* Ulanish — OAuth dialog YOKI token bilan                             */
+/*                                                                     */
+/* Muhim: tugmalar hech qachon `disabled` turmaydi. App kalitlari bo'l- */
+/* masa, bosilganda sozlash oynasi ochiladi — kalitni shu yerdan kirit- */
+/* sa (yoki tayyor token bilan ulansa) hisob darhol ulanadi.            */
 /* ------------------------------------------------------------------ */
 
-const OAUTH_PLATFORMS = [
-  {
-    id: "meta",
-    name: "Facebook / Instagram",
-    logo: "f",
-    color: PLATFORM_META.meta.color,
-    button: "Facebook bilan ulash",
-    hint: "Barcha reklama kabinetlaringiz (aktlar) topiladi — xohlaganingizini yoqib/o'chirib qo'yasiz.",
-  },
-  {
-    id: "google-ads",
-    name: "Google Ads",
-    logo: "G",
-    color: PLATFORM_META["google-ads"].color,
-    button: "Google bilan ulash",
-    hint: "Google hisobingizdagi barcha Ads kabinetlar (customer id) topiladi.",
-  },
-  {
-    id: "amocrm",
-    name: "AmoCRM",
-    logo: "A",
-    color: "#8b5cf6",
-    button: "AmoCRM hisobini ulash",
-    hint: "Leadlar har sync'da to'g'ridan-to'g'ri API'dan tortiladi — webhook shart emas.",
-  },
-] as const;
+const OAUTH_PLATFORMS: OAuthPlatformId[] = ["meta", "google-ads", "amocrm"];
 
 function statusChip(status: "active" | "expired" | "error") {
   if (status === "active") return { cls: "good", text: "FAOL" };
@@ -190,15 +173,38 @@ function statusChip(status: "active" | "expired" | "error") {
   return { cls: "muted", text: "XATO" };
 }
 
+/** Context'dagi /api/connections javobini setup holatiga aylantirish */
+function contextStatus(o?: ConnectionInfo["oauth"]): OAuthAppStatus | null {
+  if (!o) return null;
+  return {
+    ready: o.ready,
+    missing: o.missing ?? [],
+    reason: o.reason,
+    source: o.source ?? "none",
+    values: o.values ?? {},
+    oauth: o.ready,
+    manual: o.manual ?? false,
+  };
+}
+
+const SOURCE_LABEL: Record<OAuthAppStatus["source"], string> = {
+  env: ".env dan",
+  store: "UI'dan kiritilgan",
+  mixed: ".env + UI",
+  none: "kiritilmagan",
+};
+
 function OAuthConnectionCard({
   conn,
   onToggle,
   onDelete,
+  onSync,
   busy,
 }: {
   conn: NonNullable<ConnectionInfo["oauth"]>["connections"][number];
   onToggle: (accountId: string) => void;
   onDelete: () => void;
+  onSync: () => void;
   busy: boolean;
 }) {
   const chip = statusChip(conn.status);
@@ -217,6 +223,9 @@ function OAuthConnectionCard({
     >
       <div className="c-head">
         <b style={{ fontSize: 13 }}>{conn.label}</b>
+        <span className="chip muted" style={{ flex: "none", fontSize: 10 }}>
+          {conn.method === "token" ? "TOKEN" : "OAUTH"}
+        </span>
         <span className={`chip ${chip.cls}`} style={{ marginLeft: "auto", flex: "none" }}>
           <i /> {chip.text}
         </span>
@@ -229,11 +238,11 @@ function OAuthConnectionCard({
       )}
       <div className="conn-kv">
         <span>Oxirgi sync</span>
-        <b>{conn.lastSyncAt ? dateLabel(conn.lastSyncAt) : "—"}</b>
+        <b>{conn.lastSyncAt ? dateLabel(conn.lastSyncAt) : "hali tortilmagan"}</b>
       </div>
       {conn.accounts.length > 0 && (
         <div style={{ marginTop: 8 }}>
-          <small style={{ color: "var(--muted)", display: "block", marginBottom: 6 }}>
+          <small style={{ color: "var(--text-2)", display: "block", marginBottom: 6 }}>
             Kabinetlar (o'chirilgani sync qilinmaydi):
           </small>
           {conn.accounts.map(a => (
@@ -269,19 +278,25 @@ function OAuthConnectionCard({
           ))}
         </div>
       )}
-      <button
-        className="tf-btn"
-        style={{
-          marginTop: 10,
-          width: "100%",
-          justifyContent: "center",
-          color: "var(--risk)",
-        }}
-        onClick={onDelete}
-        disabled={busy}
-      >
-        <Trash2 size={12} /> Ulanishni olib tashlash
-      </button>
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <button
+          className="tf-btn"
+          style={{ flex: 1, justifyContent: "center" }}
+          onClick={onSync}
+          disabled={busy}
+          title="Shu ulanishdan ma'lumotni hoziroq tortish"
+        >
+          <RefreshCw size={12} className={busy ? "spin" : ""} /> Hoziroq tortish
+        </button>
+        <button
+          className="tf-btn"
+          style={{ color: "var(--risk)" }}
+          onClick={onDelete}
+          disabled={busy}
+        >
+          <Trash2 size={12} /> Olib tashlash
+        </button>
+      </div>
     </div>
   );
 }
@@ -291,6 +306,24 @@ function OAuthPanel() {
   const [subdomain, setSubdomain] = useState("");
   const [busy, setBusy] = useState(false);
   const [subError, setSubError] = useState<string | null>(null);
+  const [setup, setSetup] = useState<{ id: OAuthPlatformId; tab: SetupTab } | null>(null);
+  const [apps, setApps] = useState<Record<OAuthPlatformId, OAuthAppStatus> | null>(null);
+
+  /** App kalitlari holati (maydon darajasida) — /api/oauth/apps dan */
+  const loadApps = useCallback(async () => {
+    try {
+      const res = await fetch("/api/oauth/apps", { headers: { Accept: "application/json" } });
+      if (!res.ok) return;
+      const data = (await res.json()) as { platforms?: Record<OAuthPlatformId, OAuthAppStatus> };
+      if (data?.platforms) setApps(data.platforms);
+    } catch {
+      /* server javob bermasa — context'dagi holat bilan davom etamiz */
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadApps();
+  }, [loadApps]);
 
   const toggleAccount = async (connectionId: string, accountId: string) => {
     setBusy(true);
@@ -313,14 +346,51 @@ function OAuthPanel() {
       await fetch(`/api/oauth/connections/${encodeURIComponent(connectionId)}`, {
         method: "DELETE",
       });
+      toast.success("Ulanish olib tashlandi");
       await refresh();
+    } catch {
+      toast.error("Ulanishni o'chirib bo'lmadi");
     } finally {
       setBusy(false);
     }
   };
 
-  const connect = (platform: string) => {
-    if (platform === "amocrm") {
+  /** Bitta platformani hoziroq tortish (interval kutmasdan) */
+  const syncPlatform = async (id: OAuthPlatformId) => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/oauth/sync/${id}`, { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as {
+        result?: { ok?: boolean; message?: string };
+        error?: string;
+      };
+      const message = data?.result?.message ?? data?.error ?? "";
+      if (res.ok && data?.result?.ok) {
+        toast.success(`${OAUTH_SETUP[id].name} yangilandi`, { description: message });
+      } else {
+        toast.error(`${OAUTH_SETUP[id].name} — ma'lumot tortilmadi`, { description: message });
+      }
+      await refresh();
+    } catch {
+      toast.error("Server bilan aloqa yo'q");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const connect = (id: OAuthPlatformId, st: OAuthAppStatus | null) => {
+    if (!st?.ready) {
+      // Kalit yo'q — tugma baribir ishlaydi: sozlash oynasini ochamiz
+      setSetup({ id, tab: "keys" });
+      toast.info(`${OAUTH_SETUP[id].name} uchun app kalitlari kerak`, {
+        description:
+          st?.missing.length
+            ? `Yetishmayapti: ${st.missing.map(m => m.label).join(", ")}. Oynadan kiriting yoki «Token bilan ulash» dan foydalaning.`
+            : "Oynadan kalitlarni kiriting yoki tayyor token bilan ulang.",
+      });
+      return;
+    }
+    if (id === "amocrm") {
       const sub = subdomain.trim().toLowerCase().replace(/\.amocrm\.ru$/, "");
       if (!sub) {
         setSubError("Avval subdomenni kiriting (masalan: sofexpo)");
@@ -329,36 +399,39 @@ function OAuthPanel() {
       window.location.href = `/api/oauth/amocrm/start?subdomain=${encodeURIComponent(sub)}`;
       return;
     }
-    window.location.href = `/api/oauth/${platform}/start`;
+    window.location.href = `/api/oauth/${id}/start`;
   };
 
   return (
     <Panel
-      kicker="OAuth — bitta tugma"
+      kicker="Ulash — bitta tugma"
       title="O'z hisoblaringizni ulang"
       style={{ marginBottom: 14 }}
     >
-      <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--muted)", lineHeight: 1.6 }}>
-        Har bir loyihangizning Facebook, Google va AmoCRM hisobini o'zingiz ulaysiz
-        — tokenlar serverda saqlanadi, ma'lumot har{" "}
-        {Math.round(300 / 60)} daqiqada avtomatik yangilanadi. Ulangach, tepadagi
-        kabinet tanlagichdan xohlagan hisobni ko'rish mumkin.
+      <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--text-2)", lineHeight: 1.6 }}>
+        Ikki yo'l bor: <b>OAuth</b> (app kalitlari bilan — barcha kabinetlar avtomatik
+        topiladi) yoki <b>token bilan ulash</b> (app yaratmasdan, tayyor kalit bilan).
+        Kalitlarni shu oynadan kiritishingiz mumkin — serverni qayta ishga tushirish
+        shart emas. Tokenlar faqat serverda saqlanadi, ma'lumot har{" "}
+        {Math.round(300 / 60)} daqiqada avtomatik yangilanadi.
       </p>
       <div className="conn-grid">
-        {OAUTH_PLATFORMS.map(p => {
-          const conn = connections.find(c => c.id === p.id);
-          const oauth = conn?.oauth;
-          const ready = oauth?.ready ?? false;
-          const linked = oauth?.connections ?? [];
+        {OAUTH_PLATFORMS.map(id => {
+          const spec = OAUTH_SETUP[id];
+          const conn = connections.find(c => c.id === id);
+          const st = apps?.[id] ?? contextStatus(conn?.oauth);
+          const linked = conn?.oauth?.connections ?? [];
           return (
-            <div className="conn-card" key={p.id}>
+            <div className="conn-card" key={id}>
               <div className="c-head">
-                <span className="conn-logo" style={{ background: p.color }}>
-                  {p.logo}
+                <span className="conn-logo" style={{ background: spec.color }}>
+                  {spec.logo}
                 </span>
                 <div style={{ minWidth: 0 }}>
-                  <b>{p.name}</b>
-                  <small>{linked.length > 0 ? `${linked.length} hisob ulangan` : p.hint}</small>
+                  <b>{spec.name}</b>
+                  <small>
+                    {linked.length > 0 ? `${linked.length} hisob ulangan` : spec.oauthHint}
+                  </small>
                 </div>
                 {linked.length > 0 && (
                   <span className="chip good" style={{ marginLeft: "auto", flex: "none" }}>
@@ -366,8 +439,28 @@ function OAuthPanel() {
                   </span>
                 )}
               </div>
-              {p.id === "amocrm" && (
-                <div style={{ margin: "10px 0 0" }}>
+
+              {/* App kalitlari holati — nima bor / nima yetishmaydi */}
+              <div className="keys-row">
+                <span className={`chip ${st?.ready ? "good" : "warn"}`}>
+                  <i /> {st?.ready ? "KALITLAR TAYYOR" : "KALIT KERAK"}
+                </span>
+                <small>
+                  {st?.ready
+                    ? `Manba: ${SOURCE_LABEL[st.source]}`
+                    : `Yetishmayapti: ${st?.missing.map(m => m.label).join(", ") || "—"}`}
+                </small>
+                <button
+                  className="tf-btn"
+                  style={{ marginLeft: "auto", flex: "none" }}
+                  onClick={() => setSetup({ id, tab: "keys" })}
+                >
+                  <Settings2 size={12} /> Sozlash
+                </button>
+              </div>
+
+              {id === "amocrm" && (
+                <div style={{ margin: "2px 0 0" }}>
                   <input
                     type="text"
                     style={{
@@ -388,32 +481,30 @@ function OAuthPanel() {
                       setSubError(null);
                     }}
                   />
-                  {subError && (
-                    <small style={{ color: "var(--risk)" }}>{subError}</small>
-                  )}
+                  {subError && <small style={{ color: "var(--risk)" }}>{subError}</small>}
                 </div>
               )}
+
               <button
                 className="primary-btn"
-                style={{ marginTop: 10, width: "100%" }}
-                onClick={() => connect(p.id)}
-                disabled={!ready}
-                title={ready ? undefined : oauth?.reason}
+                style={{ marginTop: 10, width: "100%", justifyContent: "center" }}
+                onClick={() => connect(id, st)}
+                title={st?.ready ? spec.button : "Avval app kalitlarini kiritish kerak — oyna ochiladi"}
               >
-                <Link2 size={13} /> {p.button}
+                <Link2 size={13} /> {spec.button}
               </button>
-              {!ready && (
-                <small
-                  style={{
-                    display: "block",
-                    marginTop: 8,
-                    color: "var(--muted)",
-                    lineHeight: 1.5,
-                  }}
+
+              {spec.manual && (
+                <button
+                  className="tf-btn"
+                  style={{ width: "100%", justifyContent: "center" }}
+                  onClick={() => setSetup({ id, tab: "token" })}
+                  title="App yaratmasdan, tayyor token bilan ulash"
                 >
-                  ⚠ {oauth?.reason ?? "Serverda app kalitlari yo'q"}
-                </small>
+                  <KeyRound size={12} /> Token bilan ulash
+                </button>
               )}
+
               {linked.map(c => (
                 <OAuthConnectionCard
                   key={c.id}
@@ -421,12 +512,30 @@ function OAuthPanel() {
                   busy={busy}
                   onToggle={accountId => void toggleAccount(c.id, accountId)}
                   onDelete={() => void deleteConnection(c.id)}
+                  onSync={() => void syncPlatform(id)}
                 />
               ))}
             </div>
           );
         })}
       </div>
+
+      {setup && (
+        <ConnectSetup
+          platform={setup.id}
+          tab={setup.tab}
+          status={apps?.[setup.id] ?? contextStatus(connections.find(c => c.id === setup.id)?.oauth)}
+          onClose={() => setSetup(null)}
+          onSaved={async () => {
+            await loadApps();
+            await refresh();
+          }}
+          onConnected={async () => {
+            await loadApps();
+            await refresh();
+          }}
+        />
+      )}
     </Panel>
   );
 }
@@ -442,10 +551,11 @@ export default function Connections() {
           <span className="kicker">Ulash qo‘llanmasi</span>
           <h1>Ulanishlar</h1>
           <p>
-            Har bir platforma bitta narsa bilan ulanadi: uning eksport faylini{" "}
+            Ulashning uch yo'li bor: <b>OAuth</b> («… bilan ulash» tugmasi),{" "}
+            <b>token bilan ulash</b> (app yaratmasdan) va <b>eksport faylini</b>{" "}
             <span className="mono">server/data/snapshots/</span> papkasiga
-            tashlash. Pastda har bir manba uchun — qayerdan boshlash, qanday
-            eksport olish va qanday nomlash — aniq qadamlar.
+            tashlash. Tugmalar har doim bosiladi — kalit yetishmasa sozlash
+            oynasi ochiladi. Pastda har bir manba uchun aniq qadamlar.
           </p>
         </div>
         <div className="right">
