@@ -402,6 +402,35 @@ check("13.5 /api/health → ok + mode (client diagnostikasi shunga tayanadi)", h
 const metaAgain = await post("/api/oauth/apps/meta", { appId: "1234567890" });
 check("13.6 Haqiqiy route catch-all'ga yutilmadi (200)", metaAgain.status === 200 && metaAgain.data.ok === true, metaAgain.data);
 
+// 14) Client xato matnlari — HAQIQIY client kodi (client/src/lib/api.ts) tekshiriladi.
+//     Maqsad: «Server xatosi (404)» o'rniga har bir holat uchun aniq sabab chiqishi.
+const { httpErrorMessage } = await import("../client/src/lib/api.ts");
+const htmlRes = (status: number, type = "text/html") =>
+  new Response("<html>404</html>", { status, headers: { "content-type": type } });
+
+const sso = httpErrorMessage(
+  new Response(JSON.stringify({ error: { code: "sso_required" } }), {
+    status: 401,
+    headers: { "content-type": "application/json" },
+  }),
+  { error: { code: "sso_required" } },
+  "Kalitlarni saqlash"
+);
+check("14.1 Vercel SSO (sso_required) → Deployment Protection haqida aytiladi", /Deployment Protection/.test(sso), sso);
+const html404 = httpErrorMessage(htmlRes(404), {}, "Kalitlarni saqlash");
+check("14.2 HTML 404 → statik rejim tushuntiriladi", /statik rejimda/.test(html404) && /pnpm dev/.test(html404), html404);
+const json404 = httpErrorMessage(
+  new Response(JSON.stringify({ error: "API manzili topilmadi: POST /api/x", hint: "server eski versiyada" }), {
+    status: 404,
+    headers: { "content-type": "application/json" },
+  }),
+  { error: "API manzili topilmadi: POST /api/x", hint: "server eski versiyada" },
+  "Kalitlarni saqlash"
+);
+check("14.3 JSON 404 → serverning o'z xatosi + hint", /topilmadi/.test(json404) && /eski versiyada/.test(json404), json404);
+const down500 = httpErrorMessage(htmlRes(500, "text/plain"), {}, "Kalitlarni saqlash");
+check("14.4 5xx + JSON emas → 'API server javob bermadi'", /API server javob bermadi \(500\)/.test(down500), down500);
+
 /* ------------------------------------------------------------------ */
 
 console.log(results.join("\n"));

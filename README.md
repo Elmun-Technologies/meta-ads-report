@@ -286,6 +286,7 @@ App ID va App Secret ni «Sozlash» oynasiga yozib «Saqlash» bosilganda
 
 | Javob | Nima bo'lgan | Yechim |
 | ----- | ------------ | ------ |
+| Javob HTML / `vercel.com/login` ga redirect, `sso_required` | **Vercel Deployment Protection** yoqilgan — `/api/*` funksiyaga **umuman yetib bormaydi** (eng keng tarqalgan sabab) | Vercel → Project → Settings → **Deployment Protection** → «Vercel Authentication» ni **«Only Preview Deployments»** ga o'zgartiring (yoki o'chiring) → qayta deploy |
 | 404 + **HTML** sahifa | Sayt **statik rejimda**: `/api/*` ni ushlaydigan server yo'q (GitHub Pages / Netlify statik / Vercel'da serverless funksiya deploy bo'lmagan) | Loyihani server bilan ishga turing: `pnpm dev` (lokal) yoki `pnpm build && pnpm start`. Vercel'da `api/[[...slug]].ts` funksiyasi borligini tekshiring |
 | 404 + **JSON** (`API manzili topilmadi…`) | Server **eski versiyada** — bunday route unda yo'q | Qayta build + deploy/restart bering |
 | 500 + `text/plain` | Dev'da faqat **web** server ishga tushgan (`pnpm dev:web`), API (3001) o'chiq | `pnpm dev` ni ishlating — u web + api ni birga ko'taradi |
