@@ -148,6 +148,7 @@ pnpm build      # production build → dist/
 pnpm start      # production: bitta server (client + API), port 3000
 pnpm check      # TypeScript strict typecheck
 pnpm smoke        # jsdom render test — 46 tekshiruv (barcha sahifalar, drawer, ⌘K, OAuth paneli, kabinet tanlagich)
+pnpm test:connect # ulanish oqimi testi — 55 tekshiruv (app kalitlari, OAuth start, token bilan ulash, Telegram, fayl yuklash)
 pnpm audit:chain  # skvoznaya zanjir auditi — real snapshot ustida 11 tekshiruv
 
 # Google Ads API (batafsil pull — Variant A)
@@ -155,6 +156,25 @@ pnpm google:oauth           # refresh token olish (docs/google-ads-api-setup.md 
 pnpm google:pull            # Google Ads API'dan tortib, google_*.json snapshot yozadi
 pnpm google:test:normalize  # offline normalizer tekshiruvi (tarmoq talab qilmaydi)
 ```
+
+### `pnpm test:connect` — ulanish oqimi testi
+
+`scripts/connect-flow-test.ts` butun ulanish zanjirini **haqiqiy server kodi** bilan
+tekshiradi. Tashqi API'lar (`graph.facebook.com`, `googleapis.com`, `amocrm.ru`,
+`api.tgstat.ru`) `fetch` stub orqali **mock** qilinadi — sandbox/CI'da ularga chiqish
+bloklangan, lekin route → `oauthApps` → `store` → sync dvigateli → snapshot fayli →
+`/api/connections` payload zanjiri haqiqiy.
+
+Qamrab olinadi: app kalitlari holati (maydon darajasida `missing`) va saqlash/niqoblash,
+OAuth start (`redirect_uri` = `PUBLIC_ORIGIN`; kalitsiz holatda tushunarli 400 sahifasi),
+token bilan ulash (Meta: yaroqsiz/bo'sh token, aniq kabinet, dedupe · Google: app kalitsiz
+va yaroqsiz refresh holatlari · AmoCRM: subdomain tozalash, yaroqsiz hisob), ulangandan
+keyingi **darhol sync** (snapshot fayllari yozilganini diskdan tekshiradi), Telegram
+tokenini `usage/stat` orqali tekshirish va kanal qo'shish, eksport fayl yuklash (nom
+sanitariyasi, path traversal, buzilgan format, JSON bo'lmagan matn, bo'sh fayl, o'chirish),
+kabinet toggle, ulanishni o'chirish va kalitlarning `store.json`da saqlanishi (client
+payload'iga sizmasligi). Test vaqtinchalik papka ishlatadi (`SNAPSHOTS_DIR`) va oxirida
+tozalaydi — repo fayllariga tegmaydi.
 
 Google Ads API'ni real ulash bo'yicha to'liq bosqichma-bosqich qo'llanma:
 [**`docs/google-ads-api-setup.md`**](docs/google-ads-api-setup.md) (Google Cloud →
