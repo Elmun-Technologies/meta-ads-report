@@ -130,3 +130,18 @@
 - [x] Hisobot (Report) sahifasiga platformalar kesimi jadvali — rahbariyat
       bir qarashda pul qaysi kanalga ketganini ko\'radi (2+ manba ulanganda).
 - [x] Smoke-test 40 tekshiruvga kengaytirildi (shaffoflik paneli) — 40/40.
+
+## Bajarildi (V3.3 — ko\'p kabinet, parol himoyasi)
+
+- [x] Ko\'p kabinet birlashtirish: bir platformaning BARCHA hisob fayllari
+      (meta_<act>/google_<cid>/yandex_<login>) avtomatik jamlanadi — har
+      kabinetdan eng yangi fayl olinadi, kampaniyalar/sarf/leadlar qo\'shiladi,
+      nomi "Google Ads — 2 kabinet" ko\'rinishida. Ulanishlar sahifasida
+      barcha kabinetlar ro\'yxati. Oldin faqat eng yangi bitta fayl o\'qilar,
+      qolgan kabinetlar ma\'lumoti yo\'qolardi.
+- [x] Parol himoyasi (DASHBOARD_PASSWORD): butun /api/* HMAC-cookie sessiya
+      ostiga o\'tadi, brauzerda login ekrani. Statik zaxira (bootstrap.json)
+      401 holatda ishlatilmaydi — himoya chetlab o\'tilmaydi.
+      /api/health ochiq (monitoring), webhooklar alohida: WEBHOOK_SECRET
+      qo\'yilganda ?secret=... talab qiladi.
+- [x] Session: 30 kun, HttpOnly cookie, timing-safe parol tekshiruvi.

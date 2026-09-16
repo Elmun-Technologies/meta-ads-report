@@ -38,6 +38,16 @@ import { webhooksRouter } from "./routes/webhooks";
 import { offlineChannelsRouter } from "./routes/offline-channels";
 import { telegramRouter, getTelegramStats } from "./routes/telegram";
 import {
+  authEnabled,
+  clearCookie,
+  createSessionToken,
+  passwordMatches,
+  sessionCookie,
+  sessionFromCookie,
+  verifySessionToken,
+  webhookSecretOk,
+} from "./auth";
+import {
   getStore,
   currentSyncState,
   logActivity,
@@ -132,7 +142,7 @@ function readGenericSnapshotFile(
   }
 }
 
-/** Google Ads / Yandex Direct — eng yangi snapshot */
+/** Google Ads / Yandex Direct — eng yangi snapshot (bitta fayl) */
 function readGenericSnapshot(
   platform: "google-ads" | "yandex-direct"
 ): NormalizedSnapshot | null {
@@ -140,6 +150,178 @@ function readGenericSnapshot(
   const latest = latestFileFor(prefix);
   if (!latest) return null;
   return readGenericSnapshotFile(platform, latest.file, latest.mtime);
+}
+
+/* ------------------------------------------------------------------ */
+/* Ko'p kabinet — bir platformaning BARCHA hisob fayllari jamlanadi    */
+/* ------------------------------------------------------------------ */
+
+/** Bir nechta snapshotni bitta ko'p kabinetli snapshotga birlashtiradi */
+function mergeSnapshots(
+  snaps: NormalizedSnapshot[],
+  opts: { platform: PlatformId; name: string }
+): NormalizedSnapshot {
+  const totals = {
+    spend: 0,
+    leads: 0,
+    impressions: 0,
+    clicks: 0,
+    reach: 0,
+    landingPageViews: 0,
+    linkClicks: 0,
+    videoViews: 0,
+  };
+  const campaigns: NormalizedSnapshot["campaigns"] = [];
+  const creatives: NormalizedSnapshot["creatives"] = [];
+  const ageBySeg = new Map<string, NormalizedSnapshot["age"][number]>();
+  const dailyByDate = new Map<string, NonNullable<NormalizedSnapshot["daily"]>[number]>();
+  const accounts: { id: string; name: string; currency: string; externalId?: string }[] = [];
+  const limitations = new Set<string>();
+  const files: string[] = [];
+  let latestSync = "";
+
+  for (const s of snaps) {
+    totals.spend += s.totals.spend || 0;
+    totals.leads += s.totals.leads || 0;
+    totals.impressions += s.totals.impressions || 0;
+    totals.clicks += s.totals.clicks || 0;
+    totals.reach += s.totals.reach || 0;
+    totals.landingPageViews += s.totals.landingPageViews || 0;
+    totals.linkClicks += s.totals.linkClicks || 0;
+    totals.videoViews += s.totals.videoViews || 0;
+    campaigns.push(...s.campaigns);
+    creatives.push(...s.creatives);
+    for (const a of s.age) {
+      const acc = ageBySeg.get(a.age) ?? { ...a, spend: 0, leads: 0, impressions: 0, clicks: 0 };
+      acc.spend += a.spend || 0;
+      acc.leads += a.leads || 0;
+      acc.impressions += a.impressions || 0;
+      acc.clicks += a.clicks || 0;
+      ageBySeg.set(a.age, acc);
+    }
+    for (const d of s.daily ?? []) {
+      const acc = dailyByDate.get(d.date) ?? { ...d, spend: 0, leads: 0, impressions: 0, clicks: 0 };
+      acc.spend += d.spend || 0;
+      acc.leads += d.leads || 0;
+      acc.impressions += d.impressions || 0;
+      acc.clicks += d.clicks || 0;
+      dailyByDate.set(d.date, acc);
+    }
+    accounts.push(s.meta.account);
+    for (const l of s.meta.limitations) limitations.add(l);
+    if (s.meta.file) files.push(s.meta.file);
+    if (s.meta.syncedAt > latestSync) latestSync = s.meta.syncedAt;
+  }
+
+  const age = [...ageBySeg.values()].map(a => ({
+    ...a,
+    ctr: a.impressions > 0 ? (a.clicks / a.impressions) * 100 : null,
+    cpm: a.impressions > 0 ? (a.spend / a.impressions) * 1000 : null,
+  }));
+  const daily = [...dailyByDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+
+  const multi = snaps.length > 1;
+  return {
+    meta: {
+      platform: opts.platform,
+      account: {
+        id: multi ? `${opts.platform}-multi` : snaps[0].meta.account.id,
+        name: multi ? `${opts.name} — ${snaps.length} kabinet` : snaps[0].meta.account.name,
+        currency: snaps[0].meta.account.currency,
+        externalId: multi ? undefined : snaps[0].meta.account.externalId,
+      },
+      period: snaps[0].meta.period,
+      syncedAt: latestSync || new Date().toISOString(),
+      sourceLabel: multi ? `${snaps.length} kabinet birlashtirilgan (${files.join(", ")})` : snaps[0].meta.sourceLabel,
+      limitations: [...limitations],
+    },
+    totals: {
+      ...(snaps[0].totals as any),
+      ...totals,
+      cpl: totals.leads > 0 ? totals.spend / totals.leads : null,
+      ctr: totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : null,
+      cpm: totals.impressions > 0 ? (totals.spend / totals.impressions) * 1000 : null,
+      cpc: totals.clicks > 0 ? totals.spend / totals.clicks : null,
+    } as NormalizedSnapshot["totals"],
+    campaigns,
+    creatives,
+    age,
+    ...(daily.length > 0 ? { daily } : {}),
+  };
+}
+
+interface FileEntry {
+  file: string;
+  mtime: Date;
+  /** Kabinet kaliti — bir xil kabinetning faqat eng yangi fayli olinadi */
+  accountKey: string;
+}
+
+/** Prefiks bo'yicha barcha fayllarni kabinetlar bo'yicha guruhlaydi (har kabinetdan eng yangi) */
+function latestFilePerAccount(
+  prefix: "meta" | "google" | "yandex",
+  keyOf: (raw: any, file: string) => string
+): FileEntry[] {
+  if (!fs.existsSync(DATA_DIR)) return [];
+  const files = fs
+    .readdirSync(DATA_DIR)
+    .filter(f => f.startsWith(prefix) && f.endsWith(".json"))
+    .map(file => ({ file: path.join(DATA_DIR, file), name: file }))
+    .sort((a, b) => b.name.localeCompare(a.name));
+  const byAccount = new Map<string, FileEntry>();
+  for (const f of files) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(f.file, "utf-8")) as any;
+      const key = keyOf(raw, f.name);
+      if (!byAccount.has(key)) {
+        byAccount.set(key, {
+          file: f.file,
+          mtime: fs.statSync(f.file).mtime,
+          accountKey: key,
+        });
+      }
+    } catch {
+      /* buzilgan fayl — o'tkazib yuboramiz */
+    }
+  }
+  return [...byAccount.values()].sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+}
+
+/** Meta — BARCHA kabinetlar (act-lar) birlashtiriladi */
+function readMetaSnapshotAll(): NormalizedSnapshot | null {
+  const perAccount = latestFilePerAccount("meta", raw =>
+    String(raw?.account?.id ?? raw?.account_id ?? "unknown")
+  );
+  if (perAccount.length === 0) return readMetaSnapshot();
+  if (perAccount.length === 1) {
+    return readMetaSnapshot(path.basename(perAccount[0].file));
+  }
+  const snaps = perAccount
+    .map(e => readMetaSnapshot(path.basename(e.file)))
+    .filter((s): s is NormalizedSnapshot => s != null);
+  if (snaps.length === 0) return null;
+  return mergeSnapshots(snaps, { platform: "meta", name: "Meta Ads" });
+}
+
+/** Google Ads / Yandex Direct — barcha kabinetlar birlashtiriladi */
+function readGenericSnapshotAll(
+  platform: "google-ads" | "yandex-direct"
+): NormalizedSnapshot | null {
+  const prefix = platform === "google-ads" ? "google" : "yandex";
+  const perAccount = latestFilePerAccount(
+    prefix,
+    (raw, file) => String(raw?.customer_id ?? raw?.account_name ?? raw?.Login ?? raw?.account?.id ?? file)
+  );
+  if (perAccount.length === 0) return readGenericSnapshot(platform);
+  const snaps = perAccount
+    .map(e => readGenericSnapshotFile(platform, e.file, e.mtime))
+    .filter((s): s is NormalizedSnapshot => s != null);
+  if (snaps.length === 0) return null;
+  if (snaps.length === 1) return snaps[0];
+  return mergeSnapshots(snaps, {
+    platform,
+    name: platform === "google-ads" ? "Google Ads" : "Yandex Direct",
+  });
 }
 
 /** Barcha snapshot fayllari ro'yxati — davrlararo taqqoslash uchun */
@@ -300,26 +482,26 @@ const CONNECTORS: Connector[] = [
       : "META_ACCESS_TOKEN + META_AD_ACCOUNT_ID berilsa — real-time Graph API pull yoqiladi. Aks holda meta_*.json eksporti papkaga tushganda ulanadi.",
     autoSync: metaConfigured(),
     latestFile: latestMetaFile,
-    resolve: () => readMetaSnapshot(),
+    resolve: () => readMetaSnapshotAll(),
   },
   {
     id: "google-ads",
     name: "Google Ads",
     vendor: "Google",
-    note: "GOOGLE_ADS_* env to'ldirilsa — API'dan avtomatik tortiladi. Aks holda google_*.json snapshot papkaga tushganda avtomatik ulanadi.",
+    note: "GOOGLE_ADS_* env to'ldirilsa — API'dan avtomatik tortiladi. Aks holda google_*.json snapshot papkaga tushganda avtomatik ulanadi. Bir nechta kabinet fayli bo'lsa — hammasi jamlanadi.",
     autoSync: Boolean(
       process.env.GOOGLE_ADS_DEVELOPER_TOKEN && process.env.GOOGLE_ADS_REFRESH_TOKEN
     ),
     latestFile: () => latestFileFor("google"),
-    resolve: () => readGenericSnapshot("google-ads"),
+    resolve: () => readGenericSnapshotAll("google-ads"),
   },
   {
     id: "yandex-direct",
     name: "Yandex Direct",
     vendor: "Yandex",
-    note: "yandex_*.json snapshot papkaga tushganda avtomatik ulanadi (Name, Spend, Clicks, Conversions maydonlari taniladi — README).",
+    note: "yandex_*.json snapshot papkaga tushganda avtomatik ulanadi (Name, Spend, Clicks, Conversions maydonlari taniladi — README). Bir nechta login bo'lsa — hammasi jamlanadi.",
     latestFile: () => latestFileFor("yandex"),
-    resolve: () => readGenericSnapshot("yandex-direct"),
+    resolve: () => readGenericSnapshotAll("yandex-direct"),
   },
 ];
 
@@ -360,13 +542,22 @@ export function connectionsPayload(): ConnectionInfo[] {
     ...CONNECTORS.map(c => {
       const snapshot = c.resolve();
       const latest = c.latestFile?.();
+      // Kabinetlar ro'yxati — shu platformaning barcha fayllaridan (unique nomlar)
+      const seen = new Set<string>();
+      const accounts = listSnapshots()
+        .filter(s => s.platform === c.id && !seen.has(s.accountName) && seen.add(s.accountName))
+        .map(s => ({
+          id: s.accountName,
+          name: s.accountName,
+          currency: snapshot?.meta.account.currency ?? "USD",
+        }));
       return {
         id: c.id,
         kind: "ads" as const,
         name: c.name,
         vendor: c.vendor,
         status: snapshot ? "connected" : "ready",
-        accounts: snapshot
+        accounts: accounts.length > 0 ? accounts : snapshot
           ? [
               {
                 id: snapshot.meta.account.id,
@@ -769,6 +960,58 @@ export type AppMode = "server" | "serverless";
 export function createApp(mode: AppMode = "server") {
   const app = express();
   app.use(express.json({ limit: "20mb" }));
+
+  /* ---------------- Auth (DASHBOARD_PASSWORD berilganda yoqiladi) ---------------- */
+
+  app.use("/api", (req, res, next) => {
+    // Ochiq yo'llar: login/status/health (monitoring) va webhooklar (server-to-server)
+    const openPath =
+      req.path.startsWith("/auth") ||
+      req.path === "/health" ||
+      req.path.startsWith("/webhooks");
+    if (openPath || !authEnabled()) return next();
+    const token = sessionFromCookie(req.headers.cookie);
+    if (verifySessionToken(token)) return next();
+    res
+      .status(401)
+      .json({ error: "Avtorizatsiya talab qilinadi — parol bilan kiring", authRequired: true });
+    return;
+  });
+
+  // Webhook maxfiy kaliti (WEBHOOK_SECRET qo'yilganda): /api/webhooks/amocrm?secret=...
+  app.use("/api/webhooks", (req, res, next) => {
+    if (webhookSecretOk(req.query as Record<string, unknown>)) return next();
+    res.status(401).json({ error: "Webhook secret noto'g'ri (?secret=... kerak)" });
+    return;
+  });
+
+  app.post("/api/auth/login", (req, res) => {
+    if (!authEnabled()) {
+      res.json({ ok: true, enabled: false });
+      return;
+    }
+    if (!passwordMatches((req.body as { password?: string })?.password)) {
+      res.status(401).json({ ok: false, error: "Parol noto'g'ri" });
+      return;
+    }
+    const token = createSessionToken();
+    const secure =
+      req.secure || String(req.headers["x-forwarded-proto"] ?? "") === "https";
+    res.setHeader("Set-Cookie", sessionCookie(token, secure));
+    res.json({ ok: true, enabled: true });
+  });
+
+  app.post("/api/auth/logout", (_req, res) => {
+    res.setHeader("Set-Cookie", clearCookie());
+    res.json({ ok: true });
+  });
+
+  app.get("/api/auth/status", (req, res) => {
+    res.json({
+      enabled: authEnabled(),
+      authenticated: !authEnabled() || verifySessionToken(sessionFromCookie(req.headers.cookie)),
+    });
+  });
 
   app.use("/api/webhooks", webhooksRouter);
   app.use("/api/channels/offline", offlineChannelsRouter);

@@ -11,6 +11,7 @@ import {
 import { setCurrency } from "@/lib/format";
 import { CommandPalette, Sidebar, Topbar } from "./components/shell";
 import { DetailDrawer } from "./components/DetailDrawer";
+import { LoginScreen } from "./components/LoginScreen";
 
 // Sahifalar lazy yuklanadi — faqat ochilgan bo'limning kodi yuklanadi
 // (dastlabki bundle hajmini kamaytiradi).
@@ -94,12 +95,18 @@ function ErrorState({ error }: { error: string }) {
 
 function Shell() {
   const [navOpen, setNavOpen] = useState(false);
-  const { loading, error, snapshot } = useDashboardContext();
+  const { loading, error, snapshot, authRequired, onLoggedIn } =
+    useDashboardContext();
 
   // Account valyutasini formatlarga qo'llash (UZS/RUB bo'lsa $ o'rniga)
   useEffect(() => {
     setCurrency(snapshot?.meta.account.currency);
   }, [snapshot?.meta.account.currency]);
+
+  // Server parol so'rayapti — login ekranidan oldin hech narsa ko'rsatmaymiz
+  if (authRequired) {
+    return <LoginScreen onLoggedIn={onLoggedIn} />;
+  }
 
   return (
     <div className="shell">

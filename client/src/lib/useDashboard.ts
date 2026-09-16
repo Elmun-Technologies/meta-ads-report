@@ -45,6 +45,10 @@ export interface DashboardState {
   /** Haqiqiy manbalardan tortish (POST /api/sync) ishlab turibdi */
   syncRunning: boolean;
   error: string | null;
+  /** Server parol so'rayapti — LoginScreen ko'rsatiladi */
+  authRequired: boolean;
+  /** Login muvaffaqiyatli bo'lgach — true (LoginScreen yopiladi) */
+  onLoggedIn: () => void;
   live: boolean;
   lastEventAt: string | null;
   /** Sync dvigateli holati — interval, keyingi sync, natijalar */
@@ -68,7 +72,9 @@ async function fetchJson<T>(url: string): Promise<T> {
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       if (body?.error) message = body.error;
     }
-    throw new Error(message);
+    const err = new Error(message) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
   if (!type.includes("application/json"))
     throw new Error("Javob JSON formatida emas (HTML?)");
@@ -87,6 +93,7 @@ export function useDashboard(): DashboardState {
   const [syncing, setSyncing] = useState(false);
   const [syncRunning, setSyncRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authRequired, setAuthRequired] = useState(false);
   const [live, setLive] = useState(false);
   const [source, setSource] = useState<DataSource>("api");
   const [lastEventAt, setLastEventAt] = useState<string | null>(null);
@@ -101,8 +108,14 @@ export function useDashboard(): DashboardState {
         const snapUrl = file
           ? `/api/snapshot?file=${encodeURIComponent(file)}`
           : `/api/snapshot?platform=${encodeURIComponent(plat)}`;
+        // 401 (parol) holatini alohida ushlaymiz — statik zaxiraga O'TMAYMIZ,
+        // aks holda parol himoyasi chetlab o'tilgan bo'lardi.
+        let snapStatus: number | null = null;
         const [snapRes, connRes, crmRes, snapsRes, syncRes, actRes] = await Promise.all([
-          fetchJson<NormalizedSnapshot>(snapUrl).catch(() => null),
+          fetchJson<NormalizedSnapshot>(snapUrl).catch(err => {
+            snapStatus = (err as { status?: number })?.status ?? null;
+            return null;
+          }),
           fetchJson<ConnectionInfo[]>("/api/connections").catch(() => []),
           fetchJson<{ connected?: boolean } & CrmData>("/api/crm").catch(
             () => null
@@ -114,7 +127,16 @@ export function useDashboard(): DashboardState {
           ),
         ]);
 
-        if (!snapRes) throw new Error("API javob bermadi");
+        if (!snapRes) {
+          if (snapStatus === 401) {
+            // Parol talab qilinadi — LoginScreen ko'rsatamiz, xato emas
+            setAuthRequired(true);
+            setError(null);
+            return;
+          }
+          throw new Error("API javob bermadi");
+        }
+        setAuthRequired(false);
         setSnapshot(snapRes);
         setConnections(connRes);
         if (crmRes?.connected) {
@@ -259,6 +281,12 @@ export function useDashboard(): DashboardState {
     };
   }, [load]);
 
+  /** Login muvaffaqiyatli — ekranni ochib, ma'lumotni qayta yuklaymiz */
+  const handleLoggedIn = useCallback(() => {
+    setAuthRequired(false);
+    void load(false);
+  }, [load]);
+
   const refresh = useCallback(async () => {
     await load(true);
     try {
@@ -313,6 +341,8 @@ export function useDashboard(): DashboardState {
     syncing,
     syncRunning,
     error,
+    authRequired,
+    onLoggedIn: handleLoggedIn,
     live,
     lastEventAt,
     syncState,

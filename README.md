@@ -230,6 +230,20 @@ Ma'lumot ikki yo'lda jonli yangilanadi — fayl tashlash shart emas:
 - **Transparenslik**: qaysi manba sozlangan, qaysi ma'lumot bor/yo'q — Overview'dagi platformalar kesimi va /api/sync javobida aniq ko'rsatiladi.
 - Ma'lumotlar `server/data/store.json` (yengil JSON store) da saqlanadi — tashqi DB talab qilinmaydi.
 
+## 🔒 Xavfsizlik (ixtiyoriy)
+
+Ochiq URL'da deploy qilganda dashboardni parol bilan himoyalang — `.env` ga:
+
+```
+DASHBOARD_PASSWORD=...      # login ekrani yoqiladi
+AUTH_SECRET=...             # sessiya imzosi (random satr; ixtiyoriy)
+WEBHOOK_SECRET=...          # AmoCRM webhook faqat ?secret=... bilan qabul qilinadi
+```
+
+- Sessiya: 30 kun, HttpOnly cookie, HMAC imzolangan; parol timing-safe tekshiriladi.
+- `/api/health` ochiq (monitoring uchun), `/api/webhooks/*` — alohida `WEBHOOK_SECRET` bilan.
+- Statik zaxira (bootstrap.json) parol so\'ralganda ishlatilmaydi — himoya chetlab o\'tilmaydi.
+
 ## 🧠 Signal dvigateli (avtomatik xulosalar)
 
 **Qoidalar:** lead kelmagan sarf (% ulushi) · DISAPPROVED kreativlar · CPL regressiya (>1.5× o'rtacha) · auditoriya charchashi (frequency ≥ 3×) · pauzadagi sarf · zaif CTR · scale imkoniyati (+$100 ≈ +N lead) · ma'lumot to'liqligi
@@ -254,7 +268,7 @@ Hammasi snapshotdagi real raqamlardan hisoblanadi — qo'lda yozilgan "fact" yo'
 ## 🗺 Yo'l xaritasi
 
 - [x] Yagona oyna: platformalar kesimi Overview'da (Meta/Google/Yandex/Telegram/Offline bir joyda) — V3.
-- [ ] Google/Yandex uchun ko'p kabinet tanlagich (Meta'da bor)
+- [x] Ko'p kabinet: bir platformaning barcha hisoblari avtomatik jamlanadi (V3.3); aniq davr/kabinet tanlash — tepadagi tanlagich.
 - [ ] Ko'p platformali CRM atributsiyasi (Google/Yandex leadlarini ham bog'lash)
 - [ ] Kunlik timeseries (`time_increment=1`) → trend chartlar, kunlik anomaliyalar
 - [ ] Placement/gender/geo kesimlari
