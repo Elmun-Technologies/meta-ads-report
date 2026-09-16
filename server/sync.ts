@@ -42,10 +42,13 @@ import {
   setConnectionStatus,
   setConnectionTokens,
 } from "./connections";
-import { amoApp, googleApp } from "./oauthApps";
+import { amoApp, googleApp, tgstatToken } from "./oauthApps";
 import { setConfiguredResolver } from "./store";
 import type { SyncResultItem } from "@shared/types";
 import type { OAuthPlatformId } from "@shared/oauthSetup";
+
+/** syncPlatformNow qabul qiladigan manba (OAuth platformalar + Telegram servisi) */
+export type SyncTarget = OAuthPlatformId | "telegram";
 
 /* Broadcast — app.ts da ro'yxatdan o'tkaziladi (circular import oldini olish uchun) */
 type Broadcaster = (event: string, payload?: unknown) => void;
@@ -364,8 +367,13 @@ async function syncTelegram(): Promise<SyncResultItem> {
   const at = new Date().toISOString();
   const base = { id: "telegram", label: "Telegram", at };
   const channels = getStore().channels.length;
-  if (!process.env.TGSTAT_TOKEN) {
-    return { ...base, ok: false, message: "TGSTAT_TOKEN yo'q", durationMs: 0 };
+  if (!tgstatToken()) {
+    return {
+      ...base,
+      ok: false,
+      message: "TGStat tokeni yo'q — Ulanishlar sahifasida «Telegram» → «Sozlash» dan kiriting (yoki TGSTAT_TOKEN env)",
+      durationMs: 0,
+    };
   }
   if (channels === 0) {
     return { ...base, ok: false, message: "Kanallar qo'shilmagan", durationMs: 0 };
@@ -443,17 +451,19 @@ export async function runSync(trigger: "auto" | "manual" | "startup"): Promise<S
 /* Bitta platformani hoziroq tortish (ulanishdan keyin darhol)          */
 /* ------------------------------------------------------------------ */
 
-const PLATFORM_SYNC: Record<OAuthPlatformId, () => Promise<SyncResultItem>> = {
+/** Bitta manbani tortadigan funksiyalar (Telegram servisi ham shu yerda) */
+const PLATFORM_SYNC: Record<SyncTarget, () => Promise<SyncResultItem>> = {
   meta: syncMeta,
   "google-ads": syncGoogle,
   amocrm: syncAmoCrm,
+  telegram: syncTelegram,
 };
 
 /**
  * Ulanish qo'shilganda DARHOL shu platformani tortadi (interval kutmaydi).
  * Umumiy sync band bo'lsa (inFlight) — navbatdagi siklga qoldiradi.
  */
-export async function syncPlatformNow(platform: OAuthPlatformId): Promise<SyncResultItem | null> {
+export async function syncPlatformNow(platform: SyncTarget): Promise<SyncResultItem | null> {
   if (inFlight) return null;
   const fn = PLATFORM_SYNC[platform];
   if (!fn) return null;
@@ -485,7 +495,7 @@ setConfiguredResolver(() => ({
   google:
     activeConnections("google-ads").length > 0 ||
     Boolean(googleApp() && process.env.GOOGLE_ADS_REFRESH_TOKEN),
-  telegram: Boolean(process.env.TGSTAT_TOKEN),
+  telegram: Boolean(tgstatToken()),
 }));
 
 /* ------------------------------------------------------------------ */
@@ -510,6 +520,6 @@ export function startSyncScheduler() {
   timer.unref?.();
   const oauthCount = activeConnections().length;
   console.log(
-    `[sync] scheduler ishga tushdi: har ${interval}s · ulanishlar: ${oauthCount} · Meta(env):${metaConfigured() ? "ON" : "off"} · Google app:${googleApp() ? "ON" : "off"} · AmoCRM:${activeConnections("amocrm").length > 0 ? "ON" : "off"} · Telegram:${process.env.TGSTAT_TOKEN ? "ON" : "off"}`
+    `[sync] scheduler ishga tushdi: har ${interval}s · ulanishlar: ${oauthCount} · Meta(env):${metaConfigured() ? "ON" : "off"} · Google app:${googleApp() ? "ON" : "off"} · AmoCRM:${activeConnections("amocrm").length > 0 ? "ON" : "off"} · Telegram:${tgstatToken() ? "ON" : "off"}`
   );
 }

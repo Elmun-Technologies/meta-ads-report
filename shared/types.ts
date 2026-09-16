@@ -174,6 +174,8 @@ export interface SnapshotInfo {
   accountName: string;
   periodLabel: string;
   syncedAt: string;
+  /** Fayl turi: "ads" — reklama platformasi, "crm" — AmoCRM leadlari (aloqida ko'rsatiladi) */
+  kind?: "ads" | "crm";
 }
 
 export interface NormalizedSnapshot {

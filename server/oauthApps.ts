@@ -13,7 +13,13 @@
  * faqat niqoblangan (mask) ko'rinishda qaytadi.
  */
 import { getStore, mutate } from "./store";
-import { OAUTH_SETUP, type AppCreds, type OAuthPlatformId } from "@shared/oauthSetup";
+import {
+  ALL_SETUP,
+  OAUTH_SETUP,
+  type AppCreds,
+  type OAuthPlatformId,
+  type SetupId,
+} from "@shared/oauthSetup";
 
 export type { AppCreds, StoredApps } from "@shared/oauthSetup";
 
@@ -21,8 +27,8 @@ export type { AppCreds, StoredApps } from "@shared/oauthSetup";
 /* O'qish / yozish                                                     */
 /* ------------------------------------------------------------------ */
 
-function stored(platform: OAuthPlatformId): AppCreds {
-  return (getStore().oauthApps?.[platform] ?? {}) as AppCreds;
+function stored(id: SetupId): AppCreds {
+  return (getStore().oauthApps?.[id] ?? {}) as AppCreds;
 }
 
 function envValue(envKey: string): string {
@@ -31,9 +37,9 @@ function envValue(envKey: string): string {
 }
 
 /** Birlashtirilgan kalitlar: .env + store (store bo'sh bo'lmagan maydonlarda g'olib) */
-export function appCredentials(platform: OAuthPlatformId): AppCreds {
-  const spec = OAUTH_SETUP[platform];
-  const s = stored(platform);
+export function appCredentials(id: SetupId): AppCreds {
+  const spec = ALL_SETUP[id];
+  const s = stored(id);
   const out: AppCreds = {};
   for (const f of spec.appFields) {
     const fromStore = (s[f.key] ?? "").trim();
@@ -45,27 +51,25 @@ export function appCredentials(platform: OAuthPlatformId): AppCreds {
 }
 
 /** Kerakli (optional emas) maydonlar to'ldirilganmi */
-export function appReady(platform: OAuthPlatformId): boolean {
-  const creds = appCredentials(platform);
-  return OAUTH_SETUP[platform].appFields
-    .filter(f => !f.optional)
-    .every(f => Boolean(creds[f.key]));
+export function appReady(id: SetupId): boolean {
+  const creds = appCredentials(id);
+  return ALL_SETUP[id].appFields.filter(f => !f.optional).every(f => Boolean(creds[f.key]));
 }
 
 /** Yetishmayotgan maydonlar (label + env nomi) */
-export function missingFields(platform: OAuthPlatformId): { key: string; label: string; env: string }[] {
-  const creds = appCredentials(platform);
-  return OAUTH_SETUP[platform].appFields
+export function missingFields(id: SetupId): { key: string; label: string; env: string }[] {
+  const creds = appCredentials(id);
+  return ALL_SETUP[id].appFields
     .filter(f => !f.optional && !creds[f.key])
     .map(f => ({ key: f.key, label: f.label, env: f.env }));
 }
 
 /** Qiymat qayerdan kelgan: env / store / aralash / yo'q */
-export function credsSource(platform: OAuthPlatformId): "env" | "store" | "mixed" | "none" {
-  const s = stored(platform);
+export function credsSource(id: SetupId): "env" | "store" | "mixed" | "none" {
+  const s = stored(id);
   let fromEnv = false;
   let fromStore = false;
-  for (const f of OAUTH_SETUP[platform].appFields) {
+  for (const f of ALL_SETUP[id].appFields) {
     if ((s[f.key] ?? "").trim()) fromStore = true;
     else if (envValue(f.env)) fromEnv = true;
   }
@@ -84,11 +88,11 @@ export function maskSecret(value: string, secret = false): string {
 }
 
 /** Saqlash: bo'sh yuborilgan maydon eskisini o'chirmaydi (partial update) */
-export function saveAppCredentials(platform: OAuthPlatformId, patch: Record<string, unknown>): AppCreds {
-  const spec = OAUTH_SETUP[platform];
+export function saveAppCredentials(id: SetupId, patch: Record<string, unknown>): AppCreds {
+  const spec = ALL_SETUP[id];
   return mutate(store => {
     store.oauthApps = store.oauthApps ?? {};
-    const cur = { ...(store.oauthApps[platform] ?? {}) } as AppCreds;
+    const cur = { ...(store.oauthApps[id] ?? {}) } as AppCreds;
     for (const f of spec.appFields) {
       const raw = patch[f.key];
       if (typeof raw !== "string") continue;
@@ -98,17 +102,17 @@ export function saveAppCredentials(platform: OAuthPlatformId, patch: Record<stri
       if (f.secret && /^.{0,3}•+.{0,2}$/.test(value)) continue;
       cur[f.key] = value;
     }
-    store.oauthApps[platform] = cur;
+    store.oauthApps[id] = cur;
     return cur;
   });
 }
 
 /** Store'dagi kalitlarni o'chirish (.env dagi qiymatlar qoladi) */
-export function clearAppCredentials(platform: OAuthPlatformId): boolean {
+export function clearAppCredentials(id: SetupId): boolean {
   return mutate(store => {
-    const had = Boolean(store.oauthApps?.[platform] && Object.keys(store.oauthApps[platform]!).length);
+    const had = Boolean(store.oauthApps?.[id] && Object.keys(store.oauthApps[id]!).length);
     store.oauthApps = store.oauthApps ?? {};
-    delete store.oauthApps[platform];
+    delete store.oauthApps[id];
     return had;
   });
 }
@@ -131,34 +135,52 @@ export interface AppPlatformStatus {
   manual: boolean;
 }
 
-export function appPlatformStatus(platform: OAuthPlatformId): AppPlatformStatus {
-  const spec = OAUTH_SETUP[platform];
-  const creds = appCredentials(platform);
-  const missing = missingFields(platform);
+export function appPlatformStatus(id: SetupId): AppPlatformStatus {
+  const spec = ALL_SETUP[id];
+  const creds = appCredentials(id);
+  const missing = missingFields(id);
   const values: Record<string, string> = {};
   for (const f of spec.appFields) {
     if (creds[f.key]) values[f.key] = maskSecret(creds[f.key], f.secret);
   }
   const ready = missing.length === 0;
+  const isService = spec.kind === "service";
   return {
     ready,
     missing,
-    source: credsSource(platform),
+    source: credsSource(id),
     values,
-    oauth: ready,
+    // Servislar (Telegram) uchun OAuth dialog yo'q — "oauth" flag false qoladi
+    oauth: ready && !isService,
     manual: Boolean(spec.manual),
     reason: ready
       ? undefined
-      : `${spec.name} uchun app kalitlari kiritilmagan: ${missing.map(m => m.label).join(", ")}. Pastdagi «Sozlash» tugmasidan kiriting yoki «Token bilan ulash» dan foydalaning.`,
+      : isService
+        ? `${spec.name} uchun API kaliti kiritilmagan: ${missing.map(m => m.label).join(", ")}. Quyidagi maydonga token qo'ying va «Saqlash» ni bosing.`
+        : `${spec.name} uchun app kalitlari kiritilmagan: ${missing.map(m => m.label).join(", ")}. «Sozlash» tugmasidan kiriting yoki «Token bilan ulash» dan foydalaning.`,
   };
 }
 
+/** Faqat OAuth platformalar (UI'dagi «… bilan ulash» tugmalari) */
 export function appStatusAll(): Record<OAuthPlatformId, AppPlatformStatus> {
   return {
     meta: appPlatformStatus("meta"),
     "google-ads": appPlatformStatus("google-ads"),
     amocrm: appPlatformStatus("amocrm"),
   };
+}
+
+/** Barcha manbalar (OAuth + Telegram servisi) — /api/oauth/apps javobi */
+export function setupStatusAll(): Record<SetupId, AppPlatformStatus> {
+  return {
+    ...appStatusAll(),
+    telegram: appPlatformStatus("telegram"),
+  };
+}
+
+/** TGStat tokeni — .env yoki UI'dan kiritilgan (sync + telegram route ishlatadi) */
+export function tgstatToken(): string | null {
+  return appCredentials("telegram").token || null;
 }
 
 /* ------------------------------------------------------------------ */

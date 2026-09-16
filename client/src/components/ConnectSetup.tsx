@@ -25,13 +25,14 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { OAUTH_SETUP, type OAuthPlatformId } from "@shared/oauthSetup";
+import { ALL_SETUP, type SetupId } from "@shared/oauthSetup";
 import type { OAuthAppStatus } from "@shared/types";
 
 export type SetupTab = "keys" | "token";
 
 export interface ConnectSetupProps {
-  platform: OAuthPlatformId;
+  /** OAuth platforma (meta/google-ads/amocrm) yoki servis (telegram) */
+  platform: SetupId;
   tab: SetupTab;
   status: OAuthAppStatus | null;
   onClose: () => void;
@@ -40,6 +41,9 @@ export interface ConnectSetupProps {
   /** Token bilan ulanish muvaffaqiyatli bo'lgach */
   onConnected: () => void | Promise<void>;
 }
+
+/** Servis (Telegram) — OAuth dialog yo'q, faqat API kaliti */
+const isService = (id: SetupId) => ALL_SETUP[id].kind === "service";
 
 async function postJson(url: string, body: unknown): Promise<{ ok?: boolean; error?: string; [k: string]: unknown }> {
   const res = await fetch(url, {
@@ -137,17 +141,39 @@ function Steps({ items, color }: { items: string[]; color: string }) {
 }
 
 export function ConnectSetup({ platform, tab, status, onClose, onSaved, onConnected }: ConnectSetupProps) {
-  const spec = OAUTH_SETUP[platform];
-  const [active, setActive] = useState<SetupTab>(tab);
+  const spec = ALL_SETUP[platform];
+  const service = isService(platform);
+  const [active, setActive] = useState<SetupTab>(service ? "keys" : tab);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [manualValues, setManualValues] = useState<Record<string, string>>({});
   const [redirectUri, setRedirectUri] = useState<string>("");
+  /** status prop berilmasa (masalan Telegram sahifasida) — o'zi serverdan oladi */
+  const [fetched, setFetched] = useState<OAuthAppStatus | null>(null);
+
+  const loadStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/oauth/apps", { headers: { Accept: "application/json" } });
+      if (!res.ok) return;
+      const data = (await res.json()) as { platforms?: Record<string, OAuthAppStatus> };
+      const st = data?.platforms?.[platform];
+      if (st) setFetched(st);
+    } catch {
+      /* offline — status ko'rsatilmaydi */
+    }
+  }, [platform]);
+
+  useEffect(() => {
+    if (!status) void loadStatus();
+  }, [status, loadStatus]);
+
+  const st = status ?? fetched;
 
   /* Redirect URI — provider sozlamasiga yoziladi (host shu yerdan olinadi) */
   useEffect(() => {
     let alive = true;
+    if (service) return () => undefined; // servislerde callback URL yo'q
     fetch("/api/oauth/apps/redirect-uris")
       .then(r => (r.ok ? r.json() : null))
       .then((d: { uris?: Record<string, string> } | null) => {
@@ -157,7 +183,7 @@ export function ConnectSetup({ platform, tab, status, onClose, onSaved, onConnec
     return () => {
       alive = false;
     };
-  }, [platform]);
+  }, [platform, service]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -205,16 +231,25 @@ export function ConnectSetup({ platform, tab, status, onClose, onSaved, onConnec
       for (const [k, v] of filledKeys) body[k] = v.trim();
       const res = await postJson(`/api/oauth/apps/${platform}`, body);
       const st = (res as { status?: OAuthAppStatus }).status;
-      if (st?.ready) {
-        toast.success(`${spec.name} kalitlari saqlandi — endi «${spec.button}» ishlaydi`);
+      const probe = (res as { probe?: { state?: string; message?: string } }).probe;
+      if (probe?.state === "invalid") {
+        toast.warning("Kalit saqlandi, lekin tekshiruvdan o'tmadi", { description: probe.message });
+      } else if (probe && probe.state !== "ok") {
+        toast.success(`${spec.name} kaliti saqlandi`, { description: probe.message });
+      } else if (st?.ready) {
+        toast.success(
+          service
+            ? `${spec.name} kaliti saqlandi`
+            : `${spec.name} kalitlari saqlandi — endi «${spec.button}» ishlaydi`
+        );
       } else {
         toast.warning("Saqlandi, lekin hali ham maydon yetishmayapti", {
           description: st?.missing.map(m => m.label).join(", "),
         });
       }
       setKeys({});
+      if (!status) await loadStatus();
       await onSaved();
-      if (st?.ready) setActive("keys");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
@@ -293,11 +328,11 @@ export function ConnectSetup({ platform, tab, status, onClose, onSaved, onConnec
             {spec.logo}
           </span>
           <div style={{ minWidth: 0 }}>
-            <b>{spec.name} — ulash</b>
+            <b>{service ? `${spec.name} — API kaliti` : `${spec.name} — ulash`}</b>
             <small>
-              {status?.ready
-                ? `App kalitlari tayyor (${status.source === "env" ? ".env" : "server"})`
-                : `Yetishmayapti: ${status?.missing.map(m => m.label).join(", ") || "—"}`}
+              {st?.ready
+                ? `Kalitlar tayyor (${st.source === "env" ? ".env" : "server"})`
+                : `Yetishmayapti: ${st?.missing.map(m => m.label).join(", ") || "—"}`}
             </small>
           </div>
           <button className="icon-btn" style={{ marginLeft: "auto" }} onClick={onClose} title="Yopish">
@@ -313,8 +348,8 @@ export function ConnectSetup({ platform, tab, status, onClose, onSaved, onConnec
               setError(null);
             }}
           >
-            <KeyRound size={13} /> App kalitlari
-            {status?.ready && <i className="dot-ok" />}
+            <KeyRound size={13} /> {service ? "API kaliti" : "App kalitlari"}
+            {st?.ready && <i className="dot-ok" />}
           </button>
           {spec.manual && (
             <button
@@ -332,18 +367,26 @@ export function ConnectSetup({ platform, tab, status, onClose, onSaved, onConnec
         <div className="setup-body">
           {active === "keys" ? (
             <>
-              {!status?.ready && (
+              {!st?.ready && (
                 <div className="setup-note warn">
                   <TriangleAlert size={14} />
-                  <span>{status?.reason ?? "App kalitlari kiritilmagan — quyidagi maydonlarni to'ldiring."}</span>
+                  <span>
+                    {st?.reason ??
+                      (service
+                        ? "API kaliti kiritilmagan — quyidagi maydonga token qo'ying."
+                        : "App kalitlari kiritilmagan — quyidagi maydonlarni to'ldiring.")}
+                  </span>
                 </div>
               )}
-              {status?.ready && (
+              {st?.ready && (
                 <div className="setup-note good">
                   <Check size={14} />
                   <span>
-                    Kalitlar tayyor — «{spec.button}» tugmasi ishlaydi. Qiymatlar{" "}
-                    <b>{status.source === "env" ? ".env dan" : status.source === "store" ? "shu oynadan kiritilgan" : ".env + oynadan"}</b>{" "}
+                    {service
+                      ? "Kalit saqlangan — kanallar har sync'da yangilanadi."
+                      : `Kalitlar tayyor — «${spec.button}» tugmasi ishlaydi.`}{" "}
+                    Qiymatlar{" "}
+                    <b>{st.source === "env" ? ".env dan" : st.source === "store" ? "shu oynadan kiritilgan" : ".env + oynadan"}</b>{" "}
                     olingan.
                   </span>
                 </div>
@@ -371,8 +414,8 @@ export function ConnectSetup({ platform, tab, status, onClose, onSaved, onConnec
                     secret={f.secret}
                     value={keys[f.key] ?? ""}
                     onChange={v => setKeys(s => ({ ...s, [f.key]: v }))}
-                    savedMask={status?.values?.[f.key]}
-                    missing={Boolean(status?.missing.some(m => m.key === f.key))}
+                    savedMask={st?.values?.[f.key]}
+                    missing={Boolean(st?.missing.some(m => m.key === f.key))}
                   />
                 ))}
               </div>
@@ -387,22 +430,29 @@ export function ConnectSetup({ platform, tab, status, onClose, onSaved, onConnec
 
               <div className="setup-actions">
                 <button className="primary-btn" type="button" onClick={() => void saveKeys()} disabled={busy}>
-                  {busy ? <Loader2 size={13} className="spin" /> : <Check size={13} />} Kalitlarni saqlash
+                  {busy ? <Loader2 size={13} className="spin" /> : <Check size={13} />}{" "}
+                  {service ? spec.button : "Kalitlarni saqlash"}
                 </button>
-                {status?.ready && (
+                {st?.ready && !service && (
                   <button className="primary-btn" type="button" onClick={startOAuth} disabled={busy}>
                     {spec.button}
                   </button>
                 )}
-                {(status?.source === "store" || status?.source === "mixed") && (
+                {service && st?.ready && (
+                  <button className="tf-btn" type="button" onClick={onClose} disabled={busy}>
+                    Yopish
+                  </button>
+                )}
+                {(st?.source === "store" || st?.source === "mixed") && (
                   <button className="tf-btn" type="button" onClick={() => void clearKeys()} disabled={busy}>
                     Saqlanganni o'chirish
                   </button>
                 )}
               </div>
               <small className="setup-foot">
-                Kalitlar faqat serverda (server/data/store.json) saqlanadi — browserga qaytmaydi,
-                bu oynada niqoblangan ko'rinishi ko'rinadi.
+                {service
+                  ? "Token saqlangach server uni TGStat'da tekshiradi va kanallar har sync'da avtomatik yangilanadi."
+                  : "Kalitlar faqat serverda (server/data/store.json) saqlanadi — browserga qaytmaydi, bu oynada niqoblangan ko'rinishi ko'rinadi."}
               </small>
             </>
           ) : (

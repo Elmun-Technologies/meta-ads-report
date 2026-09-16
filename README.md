@@ -193,6 +193,7 @@ kabinet ulanadi, tepadagi **kabinet tanlagich**dan xohlagan hisob ko'riladi.
 | Facebook / Instagram | «Facebook bilan ulash» | `META_APP_ID` + `META_APP_SECRET` | https://<host>/api/oauth/meta/callback |
 | Google Ads | «Google bilan ulash» | `GOOGLE_ADS_CLIENT_ID/SECRET/DEVELOPER_TOKEN` | https://<host>/api/oauth/google-ads/callback |
 | AmoCRM | «AmoCRM hisobini ulash» (subdomain kiritiladi) | `AMOCRM_CLIENT_ID/SECRET` | https://<host>/api/oauth/amocrm/callback |
+| Telegram (TGStat) | «TGStat tokenini kiritish» (OAuth yo'q — faqat token) | `TGSTAT_TOKEN` | — (callback kerak emas) |
 
 **Tugmalar har doim bosiladi.** App kalitlari bo'lmasa tugma «o'lik» turmaydi —
 bosilganda sozlash oynasi ochiladi va ikki yo'lni taklif qiladi:
@@ -212,6 +213,24 @@ bosilganda sozlash oynasi ochiladi va ikki yo'lni taklif qiladi:
    Token serverda **haqiqiy API so'rovi bilan tekshiriladi** (kabinetlar ro'yxati
    olinadi), xato bo'lsa aniq xabar qaytadi; to'g'ri bo'lsa ulanish saqlanadi va
    ma'lumot **shu zahoti** tortiladi (interval kutilmaydi).
+
+**3. Telegram (TGStat)** — OAuth talab qilmaydi, faqat API tokeni:
+`tgstat.ru → Личный кабинет → API token` ni Ulanishlar sahifasidagi «Telegram»
+kartasidan kiritasiz (yoki `TGSTAT_TOKEN` env). Saqlashda server tokenni
+`GET https://api.tgstat.ru/usage/stat` orqali tekshiradi — bu metod **tariflanmaydi**
+(kvota sarflanmaydi) va javobda tarif nomi, muddati hamda sarflangan so'rovlar
+ko'rsatiladi. Keyin «Telegram kanallar» sahifasida kanal @username'lari kiritiladi.
+
+**4. Eksport faylni browser'dan yuklash** — hosting'da papkaga qo'lda fayl
+tashlab bo'lmasa (SSH yo'q), Ulanishlar sahifasidagi «Eksport faylni yuklash»
+panelidan drag&drop bilan yuklanadi. Fayl **yozilishdan oldin** normalizer orqali
+tekshiriladi (format tanilmasa yoki ma'lumot bo'sh bo'lsa — aniq xato, papkaga
+buzilgan fayl tushmaydi), yozilgach `fs.watch` darhol sezadi va barcha ochiq
+dashboardlar SSE orqali yangilanadi. Nomlash qoidalari:
+
+```
+meta_act-<id>_<davr>.json · google_<id>_<davr>.json · yandex_<login>_<davr>.json · amo_<hisob>_<davr>.json
+```
 
 Qanday ishlaydi:
 
@@ -267,6 +286,10 @@ Bog'lanmagan leadlar "Manbasi aniqlanmagan" deb alohida chiqadi — **taxminiy b
 | `POST /api/oauth/accounts/:cid/:aid/toggle` | Kabinetni sync'dan yoqish/o'chirish |
 | `DELETE /api/oauth/connections/:id` | Ulanishni olib tashlash                                 |
 | `GET /api/snapshots`              | Mavjud davr/kabinet fayllari ro'yxati (tanlagich uchun) |
+| `GET /api/snapshots/all`          | Barcha fayllar (amo_* ham) + papka yoziladiganmi (`writable`) |
+| `POST /api/snapshots`             | **Eksport faylni yuklash** — tekshiriladi, yoziladi, SSE push ketadi |
+| `DELETE /api/snapshots/:file`     | Snapshot faylini o'chirish (faqat papkadagi .json) |
+| `POST /api/telegram/channels`     | Telegram kanal qo'shish (@username) — TGStat'dan statistika tortiladi |
 | `GET /api/connections`            | Platforma + CRM ulanish holati                          |
 | `GET /api/crm`                    | AmoCRM ma'lumoti (matchlangan)                          |
 | `GET /api/stream`                 | SSE live kanali: hello/ping/sync + **sync_state** + **activity** eventlari |

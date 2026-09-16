@@ -19,7 +19,13 @@
 import { Router } from "express";
 import crypto from "crypto";
 import type { OAuthAdAccount, OAuthConnection } from "@shared/types";
-import { OAUTH_SETUP, type OAuthPlatformId } from "@shared/oauthSetup";
+import {
+  ALL_SETUP,
+  OAUTH_SETUP,
+  isSetupId,
+  type OAuthPlatformId,
+  type SetupId,
+} from "@shared/oauthSetup";
 import { refreshAccessToken, GOOGLE_ADS_API_VERSION } from "@shared/googleAdsApi";
 import {
   deleteConnection,
@@ -31,6 +37,7 @@ import {
 } from "../connections";
 import {
   amoApp,
+  appCredentials,
   appPlatformStatus,
   appStatusAll,
   clearAppCredentials,
@@ -38,6 +45,7 @@ import {
   googleAppPartial,
   metaApp,
   saveAppCredentials,
+  setupStatusAll,
 } from "../oauthApps";
 import { logActivity } from "../store";
 import { broadcast } from "../app";
@@ -126,7 +134,7 @@ h1{font-size:16px;margin:0 0 8px}p{font-size:13px;color:#9aa3b2;line-height:1.6}
  * Ulanishdan keyin DARHOL sync — foydalanuvchi 5 daqiqa kutmasligi uchun.
  * Javob qaytgach ishga tushadi (fire-and-forget), xato bo'lsa log'ga yoziladi.
  */
-function syncSoon(platform: OAuthPlatformId) {
+function syncSoon(platform: OAuthPlatformId | "telegram") {
   setTimeout(() => {
     void syncPlatformNow(platform).catch(err => {
       console.warn(`[oauth] ${platform} sync xatosi:`, err instanceof Error ? err.message : err);
@@ -159,6 +167,52 @@ function isPlatform(id: string): id is OAuthPlatformId {
 }
 
 /* ------------------------------------------------------------------ */
+/* TGStat (Telegram) — token tekshiruvi                                */
+/* ------------------------------------------------------------------ */
+
+const TGSTAT_BASE = "https://api.tgstat.ru";
+
+/**
+ * Token haqiqiymi? — `GET /usage/stat` bilan tekshiriladi.
+ * Bu metod TGStat'da barcha tariflarda mavjud va TARIFLANMAYDI (kvotani yemaydi),
+ * shuning uchun tekshiruv uchun ideal. Javob: { status: "ok", response: [...] }.
+ *
+ * "unverified" — TGStat'ga umuman ulanib bo'lmadi (tarmoq/firewall): token
+ * SAQLANADI, lekin foydalanuvchiga "tekshirib bo'lmadi" deyiladi (bloklamaymiz).
+ */
+async function probeTgstat(token: string): Promise<{ state: "ok" | "invalid" | "unverified"; message: string }> {
+  try {
+    const res = await fetch(`${TGSTAT_BASE}/usage/stat?token=${encodeURIComponent(token)}`);
+    const json = (await res.json().catch(() => ({}))) as any;
+    const errText = String(json?.error ?? json?.message ?? "");
+    if (res.status === 404) {
+      return { state: "unverified", message: "TGStat tekshiruv metodini topmadi — token saqlandi" };
+    }
+    if (!res.ok || (json?.status && json.status !== "ok")) {
+      const msg = errText || `TGStat ${res.status}`;
+      const invalid = res.status === 401 || res.status === 403 || /token|токен|auth|invalid/i.test(msg);
+      return { state: invalid ? "invalid" : "unverified", message: msg };
+    }
+    const tariffs = Array.isArray(json?.response) ? json.response : [];
+    if (tariffs.length === 0) {
+      return {
+        state: "ok",
+        message: "Token to'g'ri, lekin faol tarif ko'rinmadi — TGStat kabinetida API ulanishini tekshiring",
+      };
+    }
+    const t = tariffs[0] as { title?: string; expiredAt?: number; spentRequests?: string };
+    return {
+      state: "ok",
+      message: `Token ishlayapti${t?.title ? ` — ${t.title}` : ""}${
+        t?.expiredAt ? ` (muddati: ${new Date(Number(t.expiredAt) * 1000).toISOString().slice(0, 10)})` : ""
+      }${t?.spentRequests ? ` · so'rovlar: ${t.spentRequests}` : ""}`,
+    };
+  } catch (err) {
+    return { state: "unverified", message: netError(err, "api.tgstat.ru") };
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Status — qaysi platformalar ulashga tayyor                          */
 /* ------------------------------------------------------------------ */
 
@@ -169,6 +223,11 @@ export function oauthStatus() {
 
 oauthRouter.get("/status", (_req, res) => {
   res.json(oauthStatus());
+});
+
+/** Barcha manbalar holati (Telegram servisi ham) — UI'dagi «Sozlash» oynasi uchun */
+oauthRouter.get("/setup", (_req, res) => {
+  res.json({ platforms: setupStatusAll(), setup: ALL_SETUP });
 });
 
 /** Ulangan hisoblar ro'yxati (tokensiz!) */
@@ -201,30 +260,30 @@ oauthRouter.delete("/connections/:id", (req, res) => {
 /** Kalitlar holati: nima bor (niqoblangan), nima yetishmayapti, qayerdan */
 oauthRouter.get("/apps", (_req, res) => {
   res.json({
-    platforms: appStatusAll(),
-    setup: OAUTH_SETUP,
-    redirectUris: null as null | Record<string, string>,
+    // Barcha manbalar (meta / google-ads / amocrm / telegram) holati
+    platforms: setupStatusAll(),
+    setup: ALL_SETUP,
   });
 });
 
 /** Host bilan birga — provider sozlamasiga yoziladigan aniq redirect URI'lar */
 oauthRouter.get("/apps/redirect-uris", (req, res) => {
   const origin = originOf(req);
-  res.json({
-    origin,
-    uris: {
-      meta: `${origin}/api/oauth/meta/callback`,
-      "google-ads": `${origin}/api/oauth/google-ads/callback`,
-      amocrm: `${origin}/api/oauth/amocrm/callback`,
-    },
-  });
+  const uris: Record<string, string> = {};
+  for (const id of Object.keys(OAUTH_SETUP) as OAuthPlatformId[]) {
+    if (OAUTH_SETUP[id].callbackPath) uris[id] = `${origin}${OAUTH_SETUP[id].callbackPath}`;
+  }
+  res.json({ origin, uris });
 });
 
-/** App kalitlarini saqlash (partial — bo'sh maydon eskisini o'chirmaydi) */
-oauthRouter.post("/apps/:platform", (req, res) => {
+/**
+ * App/servis kalitlarini saqlash (partial — bo'sh maydon eskisini o'chirmaydi).
+ * Telegram uchun token darhol TGStat'da tekshiriladi (saqlash baribir bajariladi).
+ */
+oauthRouter.post("/apps/:platform", async (req, res) => {
   const id = req.params.platform;
-  if (!isPlatform(id)) {
-    res.status(404).json({ error: `Noma'lum platforma: ${id}` });
+  if (!isSetupId(id)) {
+    res.status(404).json({ error: `Noma'lum manba: ${id}` });
     return;
   }
   const saved = saveAppCredentials(id, (req.body ?? {}) as Record<string, unknown>);
@@ -236,24 +295,36 @@ oauthRouter.post("/apps/:platform", (req, res) => {
     return;
   }
   const status = appPlatformStatus(id);
+
+  // Telegram: token tekshiruvi (saqlashga to'sqinlik qilmaydi)
+  let probe: { state: string; message: string } | undefined;
+  if (id === "telegram") {
+    const token = appCredentials("telegram").token;
+    if (token) probe = await probeTgstat(token);
+  }
+
   logActivity({
     kind: "channel",
     source: `oauth-apps-${id}`,
-    tone: status.ready ? "good" : "warn",
-    title: `${OAUTH_SETUP[id].name} — app kalitlari saqlandi`,
-    body: status.ready
-      ? "Kalitlar to'liq — «Ulash» tugmasi ishlaydi"
-      : `Hali yetishmayapti: ${status.missing.map(m => m.label).join(", ")}`,
+    tone: probe?.state === "invalid" ? "warn" : status.ready ? "good" : "warn",
+    title: `${ALL_SETUP[id].name} — kalitlar saqlandi`,
+    body: probe
+      ? probe.message
+      : status.ready
+        ? "Kalitlar to'liq — ulash tugmasi ishlaydi"
+        : `Hali yetishmayapti: ${status.missing.map(m => m.label).join(", ")}`,
   });
   broadcast("sync", { at: new Date().toISOString(), source: "app-credentials" });
-  res.json({ ok: true, ready: status.ready, status });
+  // Telegram tokeni saqlangach kanallarni darhol tortishga urinamiz
+  if (id === "telegram" && status.ready) syncSoon("telegram");
+  res.json({ ok: true, ready: status.ready, status, probe });
 });
 
 /** Store'dagi kalitlarni o'chirish (.env qiymatlari qoladi) */
 oauthRouter.delete("/apps/:platform", (req, res) => {
   const id = req.params.platform;
-  if (!isPlatform(id)) {
-    res.status(404).json({ error: `Noma'lum platforma: ${id}` });
+  if (!isSetupId(id)) {
+    res.status(404).json({ error: `Noma'lum manba: ${id}` });
     return;
   }
   const removed = clearAppCredentials(id);
@@ -261,7 +332,7 @@ oauthRouter.delete("/apps/:platform", (req, res) => {
     kind: "channel",
     source: `oauth-apps-${id}`,
     tone: "warn",
-    title: `${OAUTH_SETUP[id].name} — saqlangan kalitlar o'chirildi`,
+    title: `${ALL_SETUP[id].name} — saqlangan kalitlar o'chirildi`,
   });
   res.json({ ok: removed, status: appPlatformStatus(id) });
 });
@@ -816,7 +887,7 @@ oauthRouter.get("/amocrm/callback", async (req, res) => {
 
 oauthRouter.post("/sync/:platform", async (req, res) => {
   const id = req.params.platform;
-  if (!isPlatform(id)) {
+  if (!isPlatform(id) && id !== "telegram") {
     res.status(404).json({ error: `Noma'lum platforma: ${id}` });
     return;
   }

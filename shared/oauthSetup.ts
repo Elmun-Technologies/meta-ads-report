@@ -19,14 +19,26 @@ export type OAuthPlatformId = "meta" | "google-ads" | "amocrm";
 
 export const OAUTH_PLATFORM_IDS: OAuthPlatformId[] = ["meta", "google-ads", "amocrm"];
 
+/**
+ * OAuth bo'lmagan, lekin shunday "kalitni UI'dan kiritish" mantig'i bilan ulanadigan
+ * manbalar (hozircha: Telegram — TGStat API tokeni).
+ */
+export type ServiceId = "telegram";
+
+/** Barcha sozlanadigan manbalar (OAuth platformalar + servislar) */
+export type SetupId = OAuthPlatformId | ServiceId;
+
+export const SETUP_IDS: SetupId[] = ["meta", "google-ads", "amocrm", "telegram"];
+
 /** Platforma bo'yicha app kalitlari (maydon nomi → qiymat). Server tomonda saqlanadi. */
 export type AppCreds = Record<string, string>;
 
-/** store.json dagi `oauthApps` bo'limi — UI'dan kiritilgan app kalitlari */
+/** store.json dagi `oauthApps` bo'limi — UI'dan kiritilgan app/servis kalitlari */
 export interface StoredApps {
   meta?: AppCreds;
   "google-ads"?: AppCreds;
   amocrm?: AppCreds;
+  telegram?: AppCreds;
 }
 
 /** App kaliti maydoni (OAuth dialog uchun kerak) */
@@ -57,7 +69,9 @@ export interface ManualFieldSpec {
 }
 
 export interface PlatformSetupSpec {
-  id: OAuthPlatformId;
+  id: SetupId;
+  /** "oauth" — consent dialog orqali, "service" — faqat API kaliti (token) */
+  kind?: "oauth" | "service";
   name: string;
   logo: string;
   color: string;
@@ -68,7 +82,7 @@ export interface PlatformSetupSpec {
   /** App kalitlari qayerdan olinadi — bosqichlar */
   appSteps: string[];
   appFields: AppFieldSpec[];
-  /** Redirect URI (provider sozlamasiga yoziladi) — /api/oauth/<id>/callback */
+  /** Redirect URI (provider sozlamasiga yoziladi) — /api/oauth/<id>/callback. Servislarda bo'sh. */
   callbackPath: string;
   /** Token bilan ulash — app yaratishga vaqt yo'q bo'lganda */
   manual: {
@@ -302,8 +316,51 @@ export const OAUTH_SETUP: Record<OAuthPlatformId, PlatformSetupSpec> = {
   },
 };
 
+/** OAuth dialog talab qilmaydigan manba — Telegram (TGStat API tokeni) */
+export const SERVICE_SETUP: Record<ServiceId, PlatformSetupSpec> = {
+  telegram: {
+    id: "telegram",
+    kind: "service",
+    name: "Telegram (TGStat)",
+    logo: "TG",
+    color: PLATFORM_META.telegram.color,
+    button: "TGStat tokenini saqlash",
+    oauthHint:
+      "Kanallar statistikasi (obunachilar, qamrov, postlar, reaksiyalar) TGStat API'dan tortiladi.",
+    appSteps: [
+      "tgstat.ru da ro'yxatdan o'ting → «Личный кабинет» (tgstat.ru/my/profile) → API token (32 belgili satr). Token muddatsiz, istalgan vaqtda yangilanadi.",
+      "Tokenni pastdagi maydonga qo'ying va «Saqlash» — server uni TGStat'da tekshiradi (bepul /usage/stat metodi, kvota sarflanmaydi) va tarif muddatini ko'rsatadi.",
+      "«Telegram kanallar» sahifasida kanal @username'larini kiriting — obunachilar, qamrov, postlar va reaksiyalar avtomatik yuklanadi.",
+      "Har bir reklama postiga narx kiriting — Telegram sarfi umumiy hisobga qo'shiladi.",
+    ],
+    appFields: [
+      {
+        key: "token",
+        env: "TGSTAT_TOKEN",
+        label: "TGStat API token",
+        secret: true,
+        placeholder: "6d15f8ff6b9b9b134457c4aed9c2f7cb",
+        help: "tgstat.ru → Личный кабинет (my/profile) → API token. Kalit faqat serverda saqlanadi.",
+      },
+    ],
+    callbackPath: "",
+    manual: null,
+    docs: { label: "TGStat API — token olish", url: "https://api.tgstat.ru/docs/ru/start/token.html" },
+  },
+};
+
+/** Barcha sozlanadigan manbalar (OAuth + servislar) — server va client bir xil ro'yxatda */
+export const ALL_SETUP: Record<SetupId, PlatformSetupSpec> = {
+  ...OAUTH_SETUP,
+  ...SERVICE_SETUP,
+};
+
 export function setupSpec(id: string): PlatformSetupSpec | null {
-  return (OAUTH_SETUP as Record<string, PlatformSetupSpec>)[id] ?? null;
+  return (ALL_SETUP as Record<string, PlatformSetupSpec>)[id] ?? null;
+}
+
+export function isSetupId(id: string): id is SetupId {
+  return SETUP_IDS.includes(id as SetupId);
 }
 
 /** Callback URL — provider sozlamasiga yoziladigan manzil (host client'da ma'lum) */

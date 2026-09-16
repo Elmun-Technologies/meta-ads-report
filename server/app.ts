@@ -38,6 +38,7 @@ import { webhooksRouter } from "./routes/webhooks";
 import { offlineChannelsRouter } from "./routes/offline-channels";
 import { telegramRouter, getTelegramStats } from "./routes/telegram";
 import { oauthRouter, oauthStatus } from "./routes/oauth";
+import { tgstatToken } from "./oauthApps";
 import { listConnectionsPublic } from "./connections";
 import {
   authEnabled,
@@ -57,7 +58,7 @@ import {
   setBroadcaster,
 } from "./store";
 import { runSync, setSyncBroadcaster } from "./sync";
-import { DATA_DIR } from "./paths";
+import { DATA_DIR, canWriteSnapshots } from "./paths";
 
 export { DATA_DIR };
 
@@ -340,13 +341,14 @@ export function listSnapshots(): SnapshotInfo[] {
   return fs
     .readdirSync(DATA_DIR)
     .filter(f => f.endsWith(".json"))
-    .map(file => {
+    .map((file): SnapshotInfo | null => {
       try {
         const full = path.join(DATA_DIR, file);
         const raw = JSON.parse(fs.readFileSync(full, "utf-8")) as any;
         return {
           file,
           platform: platformForFile(file),
+          kind: file.startsWith("amo") ? "crm" : "ads",
           accountName:
             raw.account?.name ??
             raw.account_name ??
@@ -356,7 +358,7 @@ export function listSnapshots(): SnapshotInfo[] {
           periodLabel:
             raw.account?.period ?? raw.period ?? raw.date_range ?? "—",
           syncedAt: fs.statSync(full).mtime.toISOString(),
-        } satisfies SnapshotInfo;
+        };
       } catch {
         return null;
       }
@@ -583,6 +585,30 @@ function accountMatches(name: string | undefined, filter: string): boolean {
   const n = name.toLowerCase();
   const f = filter.toLowerCase();
   return n === f || n.includes(f) || f.includes(n);
+}
+
+/**
+ * Yuklanayotgan snapshot fayli nomi — xavfsiz (path traversal yo'q, faqat .json).
+ * Prefiks platformani belgilaydi: meta_ / google_ / yandex_ / amo_
+ */
+function safeSnapshotName(raw: string): string | null {
+  const base = path.basename(String(raw ?? "").trim().replace(/\\/g, "/"));
+  if (!base || base.startsWith(".") || base.includes("..")) return null;
+  const clean = base.replace(/[^A-Za-z0-9._-]+/g, "_");
+  if (!/\.json$/i.test(clean)) return null;
+  if (!/^(meta|google|yandex|amo)[_.-]/i.test(clean)) return null;
+  return clean;
+}
+
+type UploadPlatform = "meta" | "google-ads" | "yandex-direct" | "amocrm";
+
+function platformOfSnapshotName(name: string): UploadPlatform | null {
+  const n = name.toLowerCase();
+  if (n.startsWith("amo")) return "amocrm";
+  if (n.startsWith("google")) return "google-ads";
+  if (n.startsWith("yandex")) return "yandex-direct";
+  if (n.startsWith("meta")) return "meta";
+  return null;
 }
 
 const CRM_CONNECTIONS: ConnectionInfo[] = [
@@ -974,7 +1000,7 @@ export async function buildUnifiedSnapshot(
       platformTotalsFor(
         "telegram",
         tgSnap,
-        Boolean(process.env.TGSTAT_TOKEN),
+        Boolean(tgstatToken()),
         ["Post narxi (qo'lda)", "Ko'rishlar", "Reaksiyalar", "Obunachilar", "ERR"],
         tgSnap.meta.limitations
       )
@@ -1130,7 +1156,7 @@ export function createApp(mode: AppMode = "server") {
   // API CORS (dev proxy same-origin ishlatadi, lekin alohida deploymentda ham ishlashi uchun)
   app.use("/api", (_req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     next();
   });
@@ -1159,6 +1185,157 @@ export function createApp(mode: AppMode = "server") {
   app.get("/api/snapshots", (_req, res) => {
     // A/B taqqoslash faqat reklama davr snapshotlari uchun (amo_* — CRM, alohida)
     res.json(listSnapshots().filter(s => !s.file.startsWith("amo")));
+  });
+
+  /* ---------------- Snapshot yuklash (browser'dan) ----------------
+   * Hosting'da papkaga qo'lda fayl tashlab bo'lmaydi (SSH yo'q) — shuning uchun
+   * eksport JSON'ni UI'dan yuklash mumkin. Fayl yozilgach fs.watch darhol sezadi
+   * va barcha ochiq dashboardlar SSE orqali yangilanadi.
+   */
+
+  /** Barcha snapshot fayllari (amo_* ham) — yuklash paneli ro'yxati uchun */
+  app.get("/api/snapshots/all", (_req, res) => {
+    res.json({ dir: DATA_DIR, writable: canWriteSnapshots(), files: listSnapshots() });
+  });
+
+  app.post("/api/snapshots", (req, res) => {
+    const body = (req.body ?? {}) as { name?: string; content?: unknown };
+    let raw: unknown = body.content;
+    if (typeof raw === "string") {
+      try {
+        raw = JSON.parse(raw);
+      } catch {
+        res.status(400).json({ error: "Fayl JSON formatida emas — parse qilib bo'lmadi" });
+        return;
+      }
+    }
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      res.status(400).json({ error: "Kutilgan: JSON obyekt (eksport fayli mazmuni)" });
+      return;
+    }
+    const name = safeSnapshotName(body.name ?? "");
+    if (!name) {
+      res.status(400).json({
+        error:
+          "Fayl nomi noto'g'ri. Nom platforma prefiksi bilan boshlanishi va .json bilan tugashi kerak: meta_<akt>_<davr>.json · google_<id>_<davr>.json · yandex_<login>_<davr>.json · amo_<hisob>_<davr>.json",
+      });
+      return;
+    }
+    const platform = platformOfSnapshotName(name);
+    if (!platform) {
+      res.status(400).json({
+        error: `Nom prefiksidan platformani aniqlab bo'lmadi (${name}). Boshlanishi: meta_ / google_ / yandex_ / amo_`,
+      });
+      return;
+    }
+    if (!canWriteSnapshots()) {
+      res.status(507).json({
+        error:
+          "Server snapshot papkasiga yoza olmaydi (serverless/read-only disk). Uzoq muddatli server rejimida (Railway/Render/VPS) ishga tushiring yoki SNAPSHOTS_DIR ni yoziladigan papkaga sozlang.",
+      });
+      return;
+    }
+
+    // Format tekshiruvi — normalizer orqali (xato bo'lsa fayl YOZILMAYDI)
+    const syncedAt = new Date().toISOString();
+    let summary: Record<string, unknown>;
+    try {
+      if (platform === "amocrm") {
+        const crm = normalizeAmoExport(raw as RawAmoExport, { syncedAt, file: name });
+        summary = {
+          leads: crm.leads.length,
+          stages: crm.stages.length,
+          account: crm.account,
+          matched: crm.matchedLeads,
+          unmatched: crm.unmatchedLeads,
+        };
+        if (crm.leads.length === 0) {
+          res.status(400).json({ error: "Faylda leadlar yo'q (leads massivi bo'sh) — eksportni tekshiring" });
+          return;
+        }
+      } else if (platform === "meta") {
+        const snap = normalizeMetaExport(raw as RawMetaExport, {
+          syncedAt,
+          sourceLabel: `Yuklangan fayl · ${name}`,
+          file: name,
+        });
+        summary = {
+          campaigns: snap.campaigns.length,
+          creatives: snap.creatives.length,
+          spend: snap.totals.spend,
+          leads: snap.totals.leads,
+          account: snap.meta.account.name,
+          period: snap.meta.period,
+        };
+        if (snap.campaigns.length === 0) {
+          res.status(400).json({ error: "Faylda kampaniyalar yo'q — Meta eksporti bo'sh ko'rinadi" });
+          return;
+        }
+      } else {
+        const snap = normalizeGenericAds(raw, { platform, syncedAt, file: name });
+        if (!snap) {
+          res.status(400).json({
+            error:
+              platform === "google-ads"
+                ? "Google eksportida qatorlar topilmadi (campaign_name / cost_micros maydonlari kerak)"
+                : "Yandex eksportida qatorlar topilmadi (Name / Spend maydonlari kerak)",
+          });
+          return;
+        }
+        summary = {
+          campaigns: snap.campaigns.length,
+          spend: snap.totals.spend,
+          leads: snap.totals.leads,
+          account: snap.meta.account.name,
+          period: snap.meta.period,
+        };
+      }
+    } catch (err) {
+      res.status(400).json({
+        error: `Fayl formati tanilmadi: ${err instanceof Error ? err.message : String(err)}`,
+      });
+      return;
+    }
+
+    try {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+      const target = path.join(DATA_DIR, name);
+      const existed = fs.existsSync(target);
+      fs.writeFileSync(target, JSON.stringify(raw, null, 2), "utf-8");
+      logActivity({
+        kind: "snapshot",
+        source: "upload",
+        tone: "good",
+        title: `${existed ? "Yangilandi" : "Yuklandi"}: ${name}`,
+        body: `${platform} · ${JSON.stringify(summary)}`,
+      });
+      // fs.watch ham sezadi, lekin kafolat uchun darhol push qilamiz
+      broadcast("sync", { at: new Date().toISOString(), source: "upload", file: name });
+      res.json({ ok: true, file: name, platform, replaced: existed, summary });
+    } catch (err) {
+      res.status(500).json({ error: `Faylni yozib bo'lmadi: ${err instanceof Error ? err.message : String(err)}` });
+    }
+  });
+
+  app.delete("/api/snapshots/:file", (req, res) => {
+    const name = safeSnapshotName(req.params.file ?? "");
+    if (!name) {
+      res.status(400).json({ error: "Fayl nomi noto'g'ri" });
+      return;
+    }
+    const target = path.join(DATA_DIR, name);
+    if (!fs.existsSync(target)) {
+      res.status(404).json({ error: `Fayl topilmadi: ${name}` });
+      return;
+    }
+    try {
+      fs.unlinkSync(target);
+      logActivity({ kind: "snapshot", source: "upload", tone: "warn", title: `Snapshot o'chirildi: ${name}` });
+      broadcast("sync", { at: new Date().toISOString(), source: "snapshot-deleted", file: name });
+      res.json({ ok: true, file: name });
+    } catch (err) {
+      res.status(500).json({ error: `O'chirib bo'lmadi: ${err instanceof Error ? err.message : String(err)}` });
+    }
   });
 
   app.get("/api/crm", (_req, res) => {

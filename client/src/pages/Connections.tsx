@@ -5,17 +5,25 @@ import {
   FolderOpen,
   KeyRound,
   Link2,
+  Radio,
   RefreshCw,
   Settings2,
   Trash2,
   Zap,
 } from "lucide-react";
+import { Link } from "wouter";
 import { toast } from "sonner";
 import { PLATFORM_META, type ConnectionInfo, type OAuthAppStatus } from "@shared/types";
-import { OAUTH_SETUP, type OAuthPlatformId } from "@shared/oauthSetup";
+import {
+  ALL_SETUP,
+  OAUTH_PLATFORM_IDS,
+  type OAuthPlatformId,
+  type SetupId,
+} from "@shared/oauthSetup";
 import { dateLabel, whole } from "@/lib/format";
 import { useDashboardContext } from "@/contexts/DashboardContext";
 import { ConnectSetup, type SetupTab } from "@/components/ConnectSetup";
+import { SnapshotUpload } from "@/components/SnapshotUpload";
 import { Panel } from "@/components/widgets";
 
 interface Step {
@@ -54,7 +62,7 @@ const GUIDES: Guide[] = [
         code: "https://<sizingiz>/api/webhooks/amocrm",
       },
       {
-        t: "Yoki faylni nomlab, snapshot papkasiga tashlang:",
+        t: "Yoki faylni nomlab, pastdagi «Eksport faylni yuklash» panelidan yuklang (yoki papkaga tashlang):",
         code: "server/data/snapshots/amo_<hisob>_<davr>.json",
       },
       {
@@ -79,11 +87,11 @@ const GUIDES: Guide[] = [
         t: "Marketing API uchun access token oling — ruxsat: ads_read (yoki tayyor Meta Ads MCP serverini ishlating).",
       },
       {
-        t: "Real-time rejim (tavsiya): .env ga token va kabinet ID sini yozing — sync dvigateli har 5 daqiqada o'zi tortadi:",
+        t: "Real-time rejim (tavsiya): tepadagi «Facebook bilan ulash» yoki «Token bilan ulash» — kabinetlar avtomatik topiladi, sync har 5 daqiqada o'zi tortadi. Yoki .env ga yozing:",
         code: "META_ACCESS_TOKEN=...\nMETA_AD_ACCOUNT_ID=act_...\nSYNC_INTERVAL_SEC=300",
       },
       {
-        t: "Yoki MCP standart eksportini olib, faylni nomlab papkaga tashlang:",
+        t: "Yoki MCP standart eksportini olib, faylni nomlab «Eksport faylni yuklash» panelidan yuklang:",
         code: "account · summary · campaigns · age · ads · adInsights\n→ server/data/snapshots/meta_act-<id>_<davr>.json",
       },
     ],
@@ -105,7 +113,7 @@ const GUIDES: Guide[] = [
         code: "pnpm google:oauth   # refresh token olish\npnpm google:pull    # bir marta qo'lda tortish",
       },
       {
-        t: "Yoki kampaniyalar kesimida eksport olib, faylni nomlab papkaga tashlang:",
+        t: "Yoki kampaniyalar kesimida eksport olib, faylni nomlab «Eksport faylni yuklash» panelidan yuklang:",
         code: "campaign_id · campaign_name · cost_micros · impressions · clicks · conversions\n→ server/data/snapshots/google_<id>_<davr>.json",
       },
     ],
@@ -120,8 +128,8 @@ const GUIDES: Guide[] = [
     where: "TGStat API — @channelname bo'yicha kanal statistikasi",
     steps: [
       {
-        t: "TGStat'da token oling va .env ga yozing:",
-        code: "TGSTAT_TOKEN=...",
+        t: "TGStat tokenini oling (tgstat.ru → Личный кабинет → API token) va tepadagi «Telegram» kartasidagi «TGStat tokenini kiritish» tugmasidan saqlang — .env tahrirlash shart emas:",
+        code: "yoki .env orqali: TGSTAT_TOKEN=...",
       },
       {
         t: "«Telegram kanallar» sahifasida kanal @username ini kiriting — obunachilar, qamrov, postlar va reaksiyalar avtomatik yuklanadi.",
@@ -148,7 +156,7 @@ const GUIDES: Guide[] = [
         code: "Id · Name · Spend · Impressions · Clicks · Conversions",
       },
       {
-        t: "Faylni nomlab, snapshot papkasiga tashlang:",
+        t: "Faylni nomlab, «Eksport faylni yuklash» panelidan yuklang (yoki papkaga tashlang):",
         code: "server/data/snapshots/yandex_<login>_<davr>.json",
       },
     ],
@@ -165,7 +173,8 @@ const GUIDES: Guide[] = [
 /* sa (yoki tayyor token bilan ulansa) hisob darhol ulanadi.            */
 /* ------------------------------------------------------------------ */
 
-const OAUTH_PLATFORMS: OAuthPlatformId[] = ["meta", "google-ads", "amocrm"];
+/** Kartalarda ko'rsatiladigan manbalar: OAuth platformalar + Telegram (TGStat) */
+const SETUP_PLATFORMS: SetupId[] = [...OAUTH_PLATFORM_IDS, "telegram"];
 
 function statusChip(status: "active" | "expired" | "error") {
   if (status === "active") return { cls: "good", text: "FAOL" };
@@ -306,18 +315,27 @@ function OAuthPanel() {
   const [subdomain, setSubdomain] = useState("");
   const [busy, setBusy] = useState(false);
   const [subError, setSubError] = useState<string | null>(null);
-  const [setup, setSetup] = useState<{ id: OAuthPlatformId; tab: SetupTab } | null>(null);
-  const [apps, setApps] = useState<Record<OAuthPlatformId, OAuthAppStatus> | null>(null);
+  const [setup, setSetup] = useState<{ id: SetupId; tab: SetupTab } | null>(null);
+  const [apps, setApps] = useState<Partial<Record<SetupId, OAuthAppStatus>> | null>(null);
+  const [tgChannels, setTgChannels] = useState<{ count: number; hasToken: boolean } | null>(null);
 
-  /** App kalitlari holati (maydon darajasida) — /api/oauth/apps dan */
+  /** App/servis kalitlari holati (maydon darajasida) — /api/oauth/apps dan */
   const loadApps = useCallback(async () => {
     try {
       const res = await fetch("/api/oauth/apps", { headers: { Accept: "application/json" } });
       if (!res.ok) return;
-      const data = (await res.json()) as { platforms?: Record<OAuthPlatformId, OAuthAppStatus> };
+      const data = (await res.json()) as { platforms?: Partial<Record<SetupId, OAuthAppStatus>> };
       if (data?.platforms) setApps(data.platforms);
     } catch {
       /* server javob bermasa — context'dagi holat bilan davom etamiz */
+    }
+    try {
+      const res = await fetch("/api/telegram/channels", { headers: { Accept: "application/json" } });
+      if (!res.ok) return;
+      const data = (await res.json()) as { channels?: unknown[]; hasToken?: boolean };
+      setTgChannels({ count: data?.channels?.length ?? 0, hasToken: Boolean(data?.hasToken) });
+    } catch {
+      /* telegram paneli ixtiyoriy */
     }
   }, []);
 
@@ -355,8 +373,8 @@ function OAuthPanel() {
     }
   };
 
-  /** Bitta platformani hoziroq tortish (interval kutmasdan) */
-  const syncPlatform = async (id: OAuthPlatformId) => {
+  /** Bitta manbani hoziroq tortish (interval kutmasdan) */
+  const syncPlatform = async (id: SetupId) => {
     setBusy(true);
     try {
       const res = await fetch(`/api/oauth/sync/${id}`, { method: "POST" });
@@ -366,9 +384,9 @@ function OAuthPanel() {
       };
       const message = data?.result?.message ?? data?.error ?? "";
       if (res.ok && data?.result?.ok) {
-        toast.success(`${OAUTH_SETUP[id].name} yangilandi`, { description: message });
+        toast.success(`${ALL_SETUP[id].name} yangilandi`, { description: message });
       } else {
-        toast.error(`${OAUTH_SETUP[id].name} — ma'lumot tortilmadi`, { description: message });
+        toast.error(`${ALL_SETUP[id].name} — ma'lumot tortilmadi`, { description: message });
       }
       await refresh();
     } catch {
@@ -382,7 +400,7 @@ function OAuthPanel() {
     if (!st?.ready) {
       // Kalit yo'q — tugma baribir ishlaydi: sozlash oynasini ochamiz
       setSetup({ id, tab: "keys" });
-      toast.info(`${OAUTH_SETUP[id].name} uchun app kalitlari kerak`, {
+      toast.info(`${ALL_SETUP[id].name} uchun app kalitlari kerak`, {
         description:
           st?.missing.length
             ? `Yetishmayapti: ${st.missing.map(m => m.label).join(", ")}. Oynadan kiriting yoki «Token bilan ulash» dan foydalaning.`
@@ -416,8 +434,9 @@ function OAuthPanel() {
         {Math.round(300 / 60)} daqiqada avtomatik yangilanadi.
       </p>
       <div className="conn-grid">
-        {OAUTH_PLATFORMS.map(id => {
-          const spec = OAUTH_SETUP[id];
+        {SETUP_PLATFORMS.map(id => {
+          const spec = ALL_SETUP[id];
+          const service = spec.kind === "service";
           const conn = connections.find(c => c.id === id);
           const st = apps?.[id] ?? contextStatus(conn?.oauth);
           const linked = conn?.oauth?.connections ?? [];
@@ -430,12 +449,16 @@ function OAuthPanel() {
                 <div style={{ minWidth: 0 }}>
                   <b>{spec.name}</b>
                   <small>
-                    {linked.length > 0 ? `${linked.length} hisob ulangan` : spec.oauthHint}
+                    {linked.length > 0
+                      ? `${linked.length} hisob ulangan`
+                      : service && tgChannels?.count
+                        ? `${tgChannels.count} kanal ulangan`
+                        : spec.oauthHint}
                   </small>
                 </div>
-                {linked.length > 0 && (
+                {(linked.length > 0 || (service && (tgChannels?.count ?? 0) > 0)) && (
                   <span className="chip good" style={{ marginLeft: "auto", flex: "none" }}>
-                    <i /> {linked.length}
+                    <i /> {linked.length || tgChannels?.count}
                   </span>
                 )}
               </div>
@@ -485,14 +508,25 @@ function OAuthPanel() {
                 </div>
               )}
 
-              <button
-                className="primary-btn"
-                style={{ marginTop: 10, width: "100%", justifyContent: "center" }}
-                onClick={() => connect(id, st)}
-                title={st?.ready ? spec.button : "Avval app kalitlarini kiritish kerak — oyna ochiladi"}
-              >
-                <Link2 size={13} /> {spec.button}
-              </button>
+              {service ? (
+                <button
+                  className="primary-btn"
+                  style={{ marginTop: 10, width: "100%", justifyContent: "center" }}
+                  onClick={() => setSetup({ id, tab: "keys" })}
+                  title={st?.ready ? "Tokenni yangilash / almashtirish" : "TGStat API tokenini kiritish"}
+                >
+                  <KeyRound size={13} /> {st?.ready ? "TGStat tokenini yangilash" : "TGStat tokenini kiritish"}
+                </button>
+              ) : (
+                <button
+                  className="primary-btn"
+                  style={{ marginTop: 10, width: "100%", justifyContent: "center" }}
+                  onClick={() => connect(id as OAuthPlatformId, st)}
+                  title={st?.ready ? spec.button : "Avval app kalitlarini kiritish kerak — oyna ochiladi"}
+                >
+                  <Link2 size={13} /> {spec.button}
+                </button>
+              )}
 
               {spec.manual && (
                 <button
@@ -503,6 +537,12 @@ function OAuthPanel() {
                 >
                   <KeyRound size={12} /> Token bilan ulash
                 </button>
+              )}
+
+              {service && (
+                <Link href="/telegram" className="tf-btn" style={{ width: "100%", justifyContent: "center" }}>
+                  <Radio size={12} /> Telegram kanallar sahifasi
+                </Link>
               )}
 
               {linked.map(c => (
@@ -552,10 +592,10 @@ export default function Connections() {
           <h1>Ulanishlar</h1>
           <p>
             Ulashning uch yo'li bor: <b>OAuth</b> («… bilan ulash» tugmasi),{" "}
-            <b>token bilan ulash</b> (app yaratmasdan) va <b>eksport faylini</b>{" "}
-            <span className="mono">server/data/snapshots/</span> papkasiga
-            tashlash. Tugmalar har doim bosiladi — kalit yetishmasa sozlash
-            oynasi ochiladi. Pastda har bir manba uchun aniq qadamlar.
+            <b>token bilan ulash</b> (app yaratmasdan) va <b>eksport faylini
+            yuklash</b> (browser'dan — papkaga qo'lda tashlash shart emas).
+            Tugmalar har doim bosiladi — kalit yetishmasa sozlash oynasi
+            ochiladi. Pastda har bir manba uchun aniq qadamlar.
           </p>
         </div>
         <div className="right">
@@ -647,6 +687,15 @@ export default function Connections() {
             </div>
           );
         })}
+      </div>
+
+      {/* Eksport faylni browser'dan yuklash (hosting'da papkaga tashlab bo'lmasa) */}
+      <div style={{ marginBottom: 14 }}>
+        <div className="upload-head">
+          <span className="kicker">Uchinchi yo'l</span>
+          <h2 style={{ fontSize: 15, margin: 0 }}>Eksport faylni yuklash</h2>
+        </div>
+        <SnapshotUpload />
       </div>
 
       {/* Qanday ulash — bosqichma-bosqich */}
