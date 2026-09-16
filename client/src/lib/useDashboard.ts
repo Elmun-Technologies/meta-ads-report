@@ -14,6 +14,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { desktopNotify } from "./notify";
 import type {
   ActivityEvent,
   ConnectionInfo,
@@ -216,10 +217,17 @@ export function useDashboard(): DashboardState {
                 description: event.body,
                 duration: 6000,
               });
+              desktopNotify(`Yangi murojaat: ${event.title.replace("Yangi murojaat: ", "")}`, event.body);
             } else if (event.kind === "stage") {
               toast.info(event.title, { description: event.body, duration: 5000 });
             } else if (event.kind === "error") {
               toast.error(event.title, { description: event.body, duration: 8000 });
+              desktopNotify(event.title, event.body);
+            } else if (
+              event.tone === "risk" ||
+              (event.tone === "warn" && event.kind !== "sync")
+            ) {
+              desktopNotify(event.title, event.body);
             }
           }
         } catch {

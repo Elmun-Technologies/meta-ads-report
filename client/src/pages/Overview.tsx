@@ -353,6 +353,90 @@ export default function Overview() {
   const platforms = snapshot.platforms ?? null;
   const daily = snapshot.daily ?? null;
 
+  /**
+   * Shaffoflik paneli uchun ma'lumot: har bir manbada nima bor / nima yo'q.
+   * Yo'q metrikalar "N/A" ko'rinishining sababi — foydalanuvchi hech kimdan
+   * "nega bu raqam yo'q?" deb so'ramasligi kerak.
+   */
+  const transparency = (() => {
+    const rows: {
+      label: string;
+      color: string;
+      initial: string;
+      coverage: string[];
+      missing: string[];
+      why: Record<string, string>;
+    }[] = [];
+    const metaPlat = platforms?.find(p => p.platform === "meta");
+    if (snapshot.meta.platform === "meta" || metaPlat) {
+      const hasDaily = (snapshot.daily?.length ?? 0) > 0;
+      rows.push({
+        label: "Meta Ads",
+        color: "#0866FF",
+        initial: "f",
+        coverage: [
+          "Sarf",
+          "Murojaatlar",
+          "Ko'rsatuvlar",
+          "Bosishlar",
+          "Kreativlar",
+          "Yosh kesimi",
+          ...(hasDaily ? ["Kunlik dinamika"] : []),
+        ],
+        missing: [
+          ...(totals.reach == null ? ["Qamrov (reach)"] : []),
+          ...(!hasDaily ? ["Kunlik dinamika"] : []),
+          ...(snapshot.meta.limitations.some(l => /placement/i.test(l)) ? ["Placement kesimi"] : []),
+          ...(snapshot.meta.limitations.some(l => /gender|geo/i.test(l)) ? ["Gender/geo kesimi"] : []),
+        ],
+        why: {
+          "Kunlik dinamika": "Snapshot faylida kunlik kesim yo'q — real-time Meta ulanishida (META_ACCESS_TOKEN) to'ladi",
+          "Placement kesimi": "Meta API bu so'rovni rad etdi (combo noto'g'ri)",
+          "Gender/geo kesimi": "Bu eksportda kiritilmagan",
+        },
+      });
+    }
+    const googlePlat = platforms?.find(p => p.platform === "google-ads");
+    if (googlePlat && googlePlat.campaigns > 0) {
+      rows.push({
+        label: "Google Ads",
+        color: "#4285F4",
+        initial: "G",
+        coverage: ["Sarf", "Konversiyalar (murojaat sifatida)", "Ko'rsatuvlar", "Bosishlar"],
+        missing: ["Qamrov (reach)", "Yosh kesimi", "Kreativ darajasi"],
+        why: {
+          "Qamrov (reach)": "Google Ads API'da reach kampaniya kesimida qaytmaydi",
+          "Yosh kesimi": "Demografik kesim alohida so'rov talab qiladi (hali ulanmagan)",
+          "Kreativ darajasi": "Batafsil pull'da ad darajasi hali kirmaydi",
+        },
+      });
+    } else if (googlePlat) {
+      rows.push({
+        label: "Google Ads",
+        color: "#4285F4",
+        initial: "G",
+        coverage: [],
+        missing: ["Hali ulanmagan"],
+        why: { "Hali ulanmagan": "GOOGLE_ADS_* env to'ldirilsa yoki google_*.json tushsa avtomatik yonadi" },
+      });
+    }
+    const yandexPlat = platforms?.find(p => p.platform === "yandex-direct");
+    if (yandexPlat && yandexPlat.campaigns > 0) {
+      rows.push({
+        label: "Yandex Direct",
+        color: "#FC3F1D",
+        initial: "Я",
+        coverage: ["Sarf", "Bosishlar", "Ko'rsatuvlar", "Konversiyalar"],
+        missing: ["Qamrov (reach)", "Yosh kesimi"],
+        why: {
+          "Qamrov (reach)": "Yandex eksportida Users maydoni yo'q",
+          "Yosh kesimi": "Yandex'da demografik kesim boshqacha olinadi",
+        },
+      });
+    }
+    return rows.length > 0 ? rows : null;
+  })();
+
   const spendChart = campaigns
     .slice(0, 9)
     .map(c => ({
@@ -645,6 +729,77 @@ export default function Overview() {
               <div style={{ height: 250 }}>
                 <DailyTrendChart data={daily} />
               </div>
+            </Panel>
+          </div>
+        </div>
+      )}
+
+      {/* Shaffoflik — nima ma'lum, nima noma'lum */}
+      {transparency && (
+        <div className="grid-12" style={{ marginBottom: 14 }}>
+          <div className="col-12">
+            <Panel
+              kicker="Shaffoflik"
+              title="Nima ma'lum, nima noma'lum?"
+              sub="Har bir manbada qaysi ma'lumot bor va nima uchun yo'q — taxminiy hisob yuritilmaydi, yo'q ma'lumot ochiq ko'rsatiladi"
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {transparency.map((row, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      alignItems: "flex-start",
+                      padding: "8px 0",
+                      borderBottom: i < transparency.length - 1 ? "1px solid var(--line)" : "none",
+                    }}
+                  >
+                    <span
+                      className="p-dot"
+                      style={{
+                        background: row.color,
+                        width: 16,
+                        height: 16,
+                        borderRadius: 5,
+                        flex: "none",
+                        marginTop: 2,
+                        fontSize: 8,
+                      }}
+                    >
+                      {row.initial}
+                    </span>
+                    <span style={{ minWidth: 0, flex: 1 }}>
+                      <b style={{ fontSize: 12.5 }}>{row.label}</b>
+                      <div style={{ marginTop: 4, display: "flex", flexWrap: "wrap", gap: 5 }}>
+                        {row.coverage.map(c => (
+                          <span key={c} className="chip muted" style={{ fontSize: 9.5 }}>
+                            ✓ {c}
+                          </span>
+                        ))}
+                        {row.missing.map(m => (
+                          <span
+                            key={m}
+                            className="chip warn"
+                            style={{ fontSize: 9.5 }}
+                            title={row.why[m] ?? "Bu manbada ushbu metrika qaytmaydi"}
+                          >
+                            ✕ {m}
+                          </span>
+                        ))}
+                      </div>
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {snapshot.meta.limitations.length > 0 && (
+                <div className="note-strip" style={{ marginTop: 11 }}>
+                  <span className="kicker" style={{ flex: "none" }}>
+                    Manba izohi
+                  </span>
+                  <span style={{ fontSize: 11.5 }}>{snapshot.meta.limitations.join(" · ")}</span>
+                </div>
+              )}
             </Panel>
           </div>
         </div>

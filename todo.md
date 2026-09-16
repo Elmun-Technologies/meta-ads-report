@@ -117,3 +117,16 @@
       hodisalar — server replayi toast qilmaydi).
 - [x] /telegram sahifasi ham real-time hodisalarda avtomatik qayta yuklanadi.
 - [x] Smoke-test 39 tekshiruvga kengaytirildi (kunlik trend + offline sahifa) — 39/39.
+
+## Bajarildi (V3.2 — bildirishnomalar, shaffoflik, hisobot kesimi)
+
+- [x] Desktop bildirishnomalari (Browser Notification API): AlertsMenu'dagi
+      qo\'ng\'iroq tugmasi ostida kalit — yoqilganda kritik signallar, xatolar va
+      yangi murojaatlar desktop\'ga keladi (fon rejimidagi tab uchun ham).
+      Ruxsat faqat foydalanuvchi xohishi bilan so\'raladi.
+- [x] Overview\'da "Nima ma\'lum, nima noma\'lum?" shaffoflik paneli: har manba
+      uchun ✓ mavjud ma\'lumotlar / ✕ yo\'q metrikalar (har birining sababi
+      tooltip\'da) — "nega bu raqam yo\'q" savoli yopildi.
+- [x] Hisobot (Report) sahifasiga platformalar kesimi jadvali — rahbariyat
+      bir qarashda pul qaysi kanalga ketganini ko\'radi (2+ manba ulanganda).
+- [x] Smoke-test 40 tekshiruvga kengaytirildi (shaffoflik paneli) — 40/40.

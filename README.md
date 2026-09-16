@@ -13,7 +13,7 @@
   <img alt="stack" src="https://img.shields.io/badge/React_19-Vite_7-5e8bff?style=flat-square" />
   <img alt="stack" src="https://img.shields.io/badge/TypeScript-strict-2dd4bf?style=flat-square" />
   <img alt="stack" src="https://img.shields.io/badge/Realtime-sync_engine_·_SSE_·_webhooks-a78bfa?style=flat-square" />
-  <img alt="stack" src="https://img.shields.io/badge/tests-39%2F39_passing-34d399?style=flat-square" />
+  <img alt="stack" src="https://img.shields.io/badge/tests-40%2F40_passing-34d399?style=flat-square" />
   <img alt="stack" src="https://img.shields.io/badge/audit-11_PASS_·_0_GAP-fbbf24?style=flat-square" />
 </p>
 
@@ -52,7 +52,7 @@ Har bir lead **qaysi kampaniya va kreativdan kelganini**, CRM'da **qaysi bosqich
 | **/report**            | Rahbariyat uchun bir sahifalik executive brief — «Chop etish → Save as PDF» (dark temada ham yorug' chiqadi)                                                                                            |
 | **/connections**       | Qaysi platforma ulangan, ma’lumot qayerdan keladi, manba cheklovlari                                                                                                                                    |
 
-**Umumiy:** ⌘K command palette (sahifa/kampaniya/kreativ/CRM-lead qidiruvi) · dark/light tema · ko'p kabinet tanlagich · **live indikator (LIVE · keyingi syncgacha countdown)** · tab fokusga qaytganda darhol yangilanish · mobil moslashuv · SSE + 30s polling fallback.
+**Umumiy:** ⌘K command palette (sahifa/kampaniya/kreativ/CRM-lead qidiruvi) · dark/light tema · ko'p kabinet tanlagich · **live indikator (LIVE · keyingi syncgacha countdown)** · **desktop bildirishnomalar** (kritik signallar + yangi murojaatlar) · **shaffoflik paneli** (nima ma'lum / nima noma'lum va nega) · tab fokusga qaytganda darhol yangilanish · mobil moslashuv · SSE + 30s polling fallback.
 
 **Tushunarlilik:** har bir sahifa tepasida “bu sahifada nima ko'rasiz” yo'riqnomasi, har bir ko'rsatkich nomi
 o'zbekcha + inglizcha qavsda (`Murojaat narxi (CPL)`).
@@ -147,7 +147,7 @@ pnpm dev        # API (3001) + Vite dev (3000) birga — http://localhost:3000
 pnpm build      # production build → dist/
 pnpm start      # production: bitta server (client + API), port 3000
 pnpm check      # TypeScript strict typecheck
-pnpm smoke        # jsdom render test — 39 tekshiruv (barcha sahifalar, drawer, ⌘K, jonli panellar)
+pnpm smoke        # jsdom render test — 40 tekshiruv (barcha sahifalar, drawer, ⌘K, jonli panellar)
 pnpm audit:chain  # skvoznaya zanjir auditi — real snapshot ustida 11 tekshiruv
 
 # Google Ads API (batafsil pull — Variant A)

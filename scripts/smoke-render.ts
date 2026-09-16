@@ -394,6 +394,10 @@ check(
   overview.includes("Kunlik dinamika") &&
     overview.includes("qanday o'zgarmoqda")
 );
+check(
+  "Overview shaffoflik paneli (nima ma'lum)",
+  overview.includes("Nima ma'lum, nima noma'lum")
+);
 
 const routes: [string, string[], string][] = [
   ["/campaigns", ["Batafsil jadval", "Kampaniyalar"], ["FOODERA"]],

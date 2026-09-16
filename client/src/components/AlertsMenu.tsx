@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell } from "lucide-react";
+import { Bell, BellOff } from "lucide-react";
 import { buildAlerts, SEVERITY_META } from "@/lib/alerts";
+import {
+  desktopNotify,
+  disableNotifications,
+  enableNotifications,
+  notificationsEnabled,
+  notificationsSupported,
+} from "@/lib/notify";
 import { useDashboardContext } from "@/contexts/DashboardContext";
 
 export function AlertsMenu() {
   const { snapshot, openCampaign, openCreative } = useDashboardContext();
   const [open, setOpen] = useState(false);
+  const [deskOn, setDeskOn] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   const alerts = useMemo(
@@ -15,6 +23,22 @@ export function AlertsMenu() {
   const criticalCount = alerts.filter(
     a => a.severity === "risk" || a.severity === "warn"
   ).length;
+
+  // Desktop bildirishnoma holatini har ochilganda yangilaymiz
+  useEffect(() => {
+    if (open) setDeskOn(notificationsEnabled());
+  }, [open]);
+
+  const toggleDesktop = async () => {
+    if (deskOn) {
+      disableNotifications();
+      setDeskOn(false);
+      return;
+    }
+    const ok = await enableNotifications();
+    setDeskOn(ok);
+    if (ok) desktopNotify("Bildirishnomalar yoqildi", "Kritik signallar va yangi murojaatlar desktop'ga keladi");
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -97,6 +121,67 @@ export function AlertsMenu() {
                 </span>
               </button>
             ))}
+          </div>
+          {/* Desktop bildirishnomalari — foydalanuvchi o'zi yoqadi */}
+          <div
+            className="ap-foot"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "9px 14px",
+              borderTop: "1px solid var(--line)",
+            }}
+          >
+            {deskOn ? (
+              <Bell size={13} style={{ color: "var(--good)", flex: "none" }} />
+            ) : (
+              <BellOff size={13} style={{ color: "var(--text-3)", flex: "none" }} />
+            )}
+            <span style={{ fontSize: 11.5, color: "var(--text-2)", minWidth: 0 }}>
+              Desktop bildirishnomalar
+              <small style={{ display: "block", fontSize: 10, color: "var(--text-3)" }}>
+                {notificationsSupported()
+                  ? deskOn
+                    ? "yoqilgan — kritik signal va murojaatlar keladi"
+                    : "o'chirilgan — faqat ekranda ko'rinadi"
+                  : "bu brauzerda qo'llab-quvvatlanmaydi"}
+              </small>
+            </span>
+            <button
+              className={`switch ${deskOn ? "on" : ""}`}
+              role="switch"
+              aria-checked={deskOn}
+              disabled={!notificationsSupported()}
+              onClick={() => void toggleDesktop()}
+              title="Desktop bildirishnomalarni yoqish/o'chirish"
+              style={{
+                marginLeft: "auto",
+                flex: "none",
+                width: 34,
+                height: 19,
+                borderRadius: 99,
+                border: "1px solid var(--line)",
+                background: deskOn ? "var(--good)" : "var(--panel-2)",
+                position: "relative",
+                cursor: notificationsSupported() ? "pointer" : "not-allowed",
+                transition: "background .15s",
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: 2,
+                  left: deskOn ? 16 : 2,
+                  width: 13,
+                  height: 13,
+                  borderRadius: 99,
+                  background: "#fff",
+                  transition: "left .15s",
+                  boxShadow: "0 1px 2px rgba(0,0,0,.3)",
+                }}
+              />
+            </button>
           </div>
         </div>
       )}
