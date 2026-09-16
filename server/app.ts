@@ -1477,6 +1477,24 @@ export function createApp(mode: AppMode = "server") {
     res.json({ ok: true, pushed: sseClients.size });
   });
 
+  /* ---------------- /api/* uchun JSON 404 (Express'ning HTML 404'i o'rniga) ----
+   * Nega kerak: route topilmasa Express standart «Cannot POST /api/...» HTML
+   * javobini qaytaradi. Client uni JSON deb o'qiy olmaydi va foydalanuvchiga
+   * hech narsa anglatmaydigan «Server xatosi (404)» ni ko'rsatadi (masalan
+   * App ID / App Secret ni saqlashda). Bu joyda aniq JSON + sabab qaytaramiz:
+   * qaysi manzil topilmadi, server qaysi rejimda va nima qilish kerak.
+   */
+  app.use("/api", (req, res) => {
+    res.status(404).json({
+      error: `API manzili topilmadi: ${req.method} ${req.originalUrl}`,
+      hint:
+        "Bu server versiyasida bunday route yo'q. Sabablari: (1) server eski versiyada ishlayapti — qayta build/deploy yoki restart bering; (2) sayt statik rejimda (API funksiyasi ulanmagan) — `pnpm dev` yoki `pnpm build && pnpm start` bilan ishga tushiring.",
+      notFound: true,
+      mode,
+      path: req.originalUrl,
+    });
+  });
+
   if (mode === "server") {
     // Production: build qilingan client'ni serve qilish (serverless rejimda buni Vercel dist/public'dan to'g'ridan-to'g'ri qiladi)
     const staticPath =

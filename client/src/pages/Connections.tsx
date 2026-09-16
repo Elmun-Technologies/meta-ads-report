@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Settings2,
   Trash2,
+  TriangleAlert,
   Zap,
 } from "lucide-react";
 import { Link } from "wouter";
@@ -21,6 +22,7 @@ import {
   type SetupId,
 } from "@shared/oauthSetup";
 import { dateLabel, whole } from "@/lib/format";
+import { STATIC_MODE_HINT, probeApiHealth, type ApiHealth } from "@/lib/api";
 import { useDashboardContext } from "@/contexts/DashboardContext";
 import { ConnectSetup, type SetupTab } from "@/components/ConnectSetup";
 import { SnapshotUpload } from "@/components/SnapshotUpload";
@@ -318,6 +320,18 @@ function OAuthPanel() {
   const [setup, setSetup] = useState<{ id: SetupId; tab: SetupTab } | null>(null);
   const [apps, setApps] = useState<Partial<Record<SetupId, OAuthAppStatus>> | null>(null);
   const [tgChannels, setTgChannels] = useState<{ count: number; hasToken: boolean } | null>(null);
+  /** API server holati — statik rejimda (server yo'q) kalit saqlab bo'lmaydi */
+  const [api, setApi] = useState<ApiHealth | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void probeApiHealth().then(h => {
+      if (alive) setApi(h);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   /** App/servis kalitlari holati (maydon darajasida) — /api/oauth/apps dan */
   const loadApps = useCallback(async () => {
@@ -433,6 +447,32 @@ function OAuthPanel() {
         shart emas. Tokenlar faqat serverda saqlanadi, ma'lumot har{" "}
         {Math.round(300 / 60)} daqiqada avtomatik yangilanadi.
       </p>
+
+      {/* Server holati — «Server xatosi (404)» kelganda sabab darhol ko'rinsin */}
+      {api && (
+        <div className={`setup-note ${api.ok ? "good" : "risk"}`} style={{ marginBottom: 12 }}>
+          {api.ok ? <Check size={14} /> : <TriangleAlert size={14} />}
+          <span className="setup-note-body">
+            <b>
+              {api.ok
+                ? `API server ishlayapti${api.mode ? ` · ${api.mode}` : ""}`
+                : "API server bilan aloqa yo'q — kalitlarni saqlab bo'lmaydi"}
+            </b>
+            {api.ok ? (
+              <span>
+                App kalitlari shu oynadan kiritiladi va serverda (server/data/store.json) saqlanadi —
+                restart shart emas.
+              </span>
+            ) : (
+              <>
+                <span>{api.error}</span>
+                <span>{STATIC_MODE_HINT}</span>
+              </>
+            )}
+          </span>
+        </div>
+      )}
+
       <div className="conn-grid">
         {SETUP_PLATFORMS.map(id => {
           const spec = ALL_SETUP[id];

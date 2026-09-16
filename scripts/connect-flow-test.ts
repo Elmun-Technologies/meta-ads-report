@@ -389,6 +389,19 @@ const store = JSON.parse(fs.readFileSync(path.join(TMP, "store.json"), "utf-8"))
 check("12.1 oauthApps store.json da", Boolean(store.oauthApps?.meta?.appId) && Boolean(store.oauthApps?.telegram?.token), store.oauthApps);
 check("12.2 Tokenlar store'da, lekin client payload'ida yo'q", JSON.stringify(conns).length > 0 && !JSON.stringify(conns).includes("EAABgoodtoken"));
 
+// 13) API 404 diagnostikasi — «Server xatosi (404)» endi sababini ham aytadi
+//     (route topilmasa Express HTML qaytarardi, client uni o'qiy olmas edi)
+const unknown = await post("/api/oauth/apps-meta-typo", { appId: "1" });
+check("13.1 Noma'lum /api route → 404 JSON (HTML emas)", unknown.status === 404 && typeof unknown.data === "object" && Boolean(unknown.data.error), unknown.data);
+check("13.2 Xato matnida manzil va sabab bor", /topilmadi/.test(String(unknown.data?.error)) && /statik rejimda/.test(String(unknown.data?.hint)), unknown.data);
+check("13.3 Server rejimi javobda ko'rinadi", unknown.data?.mode === "server", unknown.data?.mode);
+const unknownGet = await get("/api/bunday-route-yoq");
+check("13.4 GET uchun ham JSON 404", unknownGet.status === 404 && typeof unknownGet.data === "object" && unknownGet.data.notFound === true, unknownGet.data);
+const health = await get("/api/health");
+check("13.5 /api/health → ok + mode (client diagnostikasi shunga tayanadi)", health.status === 200 && health.data.ok === true && health.data.mode === "server", health.data);
+const metaAgain = await post("/api/oauth/apps/meta", { appId: "1234567890" });
+check("13.6 Haqiqiy route catch-all'ga yutilmadi (200)", metaAgain.status === 200 && metaAgain.data.ok === true, metaAgain.data);
+
 /* ------------------------------------------------------------------ */
 
 console.log(results.join("\n"));

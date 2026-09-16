@@ -277,6 +277,44 @@ Qanday ishlaydi:
 Xavfsizlik: OAuth callbacklar HMAC-imzolangan `state` (CSRF) bilan himoyalangan;
 ulanishlarni boshqarish (toggle, delete) umumiy parol auth ostida.
 
+### ⚠ «Server xatosi (404)» — App ID / App Secret saqlanmayapti
+
+App ID va App Secret ni «Sozlash» oynasiga yozib «Saqlash» bosilganda
+**`Server xatosi (404)`** chiqsa — bu **kalitlar noto'g'ri** degani emas.
+404 deyarli har doim bitta narsani anglatadi: browser'dagi
+`POST /api/oauth/apps/meta` so'rovi **Express serverga yetib bormagan**.
+
+| Javob | Nima bo'lgan | Yechim |
+| ----- | ------------ | ------ |
+| 404 + **HTML** sahifa | Sayt **statik rejimda**: `/api/*` ni ushlaydigan server yo'q (GitHub Pages / Netlify statik / Vercel'da serverless funksiya deploy bo'lmagan) | Loyihani server bilan ishga turing: `pnpm dev` (lokal) yoki `pnpm build && pnpm start`. Vercel'da `api/[[...slug]].ts` funksiyasi borligini tekshiring |
+| 404 + **JSON** (`API manzili topilmadi…`) | Server **eski versiyada** — bunday route unda yo'q | Qayta build + deploy/restart bering |
+| 500 + `text/plain` | Dev'da faqat **web** server ishga tushgan (`pnpm dev:web`), API (3001) o'chiq | `pnpm dev` ni ishlating — u web + api ni birga ko'taradi |
+| `fetch failed` / aloqa yo'q | API server umuman ishga tushmagan | `pnpm dev:api` loglarini tekshiring |
+| 401 `authRequired` | `DASHBOARD_PASSWORD` yoqilgan | Sahifani yangilab, parol bilan kiring |
+
+Ulanishlar sahifasida va «Sozlash» oynasida **API server holati** ko'rsatiladi
+(`/api/health` tekshiriladi): server javob bermasa qizil banner chiqadi va nima
+qilish kerakligi yoziladi — 404 ni kutib o'tirish shart emas.
+
+**Muqobil yo'l (UI ishlamasa ham):** kalitlarni `.env` ga yozing va serverni
+qayta ishga tushiring — ikkala manba birlashtirilib o'qiladi:
+
+```bash
+META_APP_ID=1789456123098765
+META_APP_SECRET=...
+```
+
+Tez tekshirish (server tirikmi?):
+
+```bash
+curl http://localhost:3001/api/health
+# {"ok":true,"mode":"server",...}  → server ishlayapti
+curl -X POST http://localhost:3001/api/oauth/apps/meta \
+  -H 'Content-Type: application/json' \
+  -d '{"appId":"...","appSecret":"..."}'
+# {"ok":true,"ready":true,...}     → kalitlar saqlandi
+```
+
 ### AmoCRM matchlash — muhim qadam
 
 Lead'lar **`utm_campaign`** bo'yicha Meta kampaniyalariga bog'lanadi. Meta'da (bir marta) UTM shabloniga qo'ying:
