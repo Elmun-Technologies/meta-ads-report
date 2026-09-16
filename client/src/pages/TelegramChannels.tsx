@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Send,
   Plus,
+  KeyRound,
   RefreshCw,
   Eye,
   Heart,
@@ -13,6 +14,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { useDashboardContext } from "@/contexts/DashboardContext";
+import { ConnectSetup } from "@/components/ConnectSetup";
 import { PageHint } from "@/components/Help";
 import { toast } from "sonner";
 import { money, whole, compact, pct } from "@/lib/format";
@@ -58,6 +60,8 @@ export default function TelegramChannels() {
   const [newUsername, setNewUsername] = useState("");
   const [adding, setAdding] = useState(false);
   const [editCost, setEditCost] = useState<{ postId: string; value: string } | null>(null);
+  /** TGStat tokenini UI'dan kiritish oynasi (.env tahrirlash shart emas) */
+  const [tokenSetup, setTokenSetup] = useState(false);
 
   const loadChannels = useCallback(async () => {
     try {
@@ -166,12 +170,34 @@ export default function TelegramChannels() {
             {channels.length} kanal ulangan · {totalPosts} post kuzatilmoqda
             {!hasToken && (
               <span style={{ color: "var(--warn)", marginLeft: 8 }}>
-                ⚠ TGSTAT_TOKEN sozlanmagan — .env fayliga qo'shing
+                ⚠ TGStat tokeni kiritilmagan — statistika tortilmaydi
               </span>
             )}
           </p>
         </div>
+        <div className="right">
+          <button className="tf-btn" onClick={() => setTokenSetup(true)}>
+            <KeyRound size={12} /> {hasToken ? "TGStat tokeni" : "TGStat tokenini kiritish"}
+          </button>
+        </div>
       </div>
+
+      {tokenSetup && (
+        <ConnectSetup
+          platform="telegram"
+          tab="keys"
+          status={null}
+          onClose={() => setTokenSetup(false)}
+          onSaved={async () => {
+            await loadChannels();
+            await refresh();
+          }}
+          onConnected={async () => {
+            await loadChannels();
+            await refresh();
+          }}
+        />
+      )}
 
       <PageHint>
         Telegram kanalingizning @username ini kiriting — TGStat API orqali

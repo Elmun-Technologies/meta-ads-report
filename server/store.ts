@@ -14,6 +14,7 @@ import path from "path";
 import crypto from "crypto";
 import type { ActivityEvent, ActivityKind, SyncState, SyncResultItem } from "@shared/types";
 import type { OAuthConnection } from "@shared/types";
+import type { StoredApps } from "@shared/oauthSetup";
 import { DATA_DIR } from "./paths";
 
 /** Store fayli — snapshotlar papkasi yonida (server/data/store.json).
@@ -108,6 +109,8 @@ export interface StoreData {
   sync: SyncState;
   /** OAuth orqali ulangan hisoblar (tokenlar bilan — client'ga yuborilmaydi) */
   oauth?: OAuthConnection[];
+  /** UI'dan kiritilgan OAuth APP kalitlari (.env bilan birlashtirilib o'qiladi) */
+  oauthApps?: StoredApps;
 }
 
 export const DEFAULT_SYNC_INTERVAL_SEC = 300;
@@ -119,6 +122,7 @@ function emptyStore(): StoreData {
     leads: [],
     activity: [],
     oauth: [],
+    oauthApps: {},
     sync: {
       running: false,
       lastSyncAt: null,
@@ -257,20 +261,37 @@ export function syncIntervalSec(): number {
   return DEFAULT_SYNC_INTERVAL_SEC;
 }
 
+/**
+ * "configured" ni kim hisoblaydi — sync.ts ro'yxatdan o'tkazadi.
+ * Sabab: store.ts oauthApps/connections modullarini import qilmasligi kerak
+ * (aks holda aylanma import), lekin holat faqat .env ga emas — UI'dan kiritilgan
+ * kalitlar va ulangan hisoblarga ham qarashi kerak.
+ */
+type ConfiguredResolver = () => SyncState["configured"];
+let configuredResolver: ConfiguredResolver | null = null;
+
+export function setConfiguredResolver(fn: ConfiguredResolver) {
+  configuredResolver = fn;
+}
+
+function envConfigured(): SyncState["configured"] {
+  return {
+    meta: Boolean(process.env.META_ACCESS_TOKEN && process.env.META_AD_ACCOUNT_ID),
+    google: Boolean(
+      process.env.GOOGLE_ADS_DEVELOPER_TOKEN &&
+        process.env.GOOGLE_ADS_CLIENT_ID &&
+        process.env.GOOGLE_ADS_CLIENT_SECRET &&
+        process.env.GOOGLE_ADS_REFRESH_TOKEN
+    ),
+    telegram: Boolean(process.env.TGSTAT_TOKEN),
+  };
+}
+
 export function currentSyncState(): SyncState {
   const s = getStore();
   return {
     ...s.sync,
     intervalSec: syncIntervalSec(),
-    configured: {
-      meta: Boolean(process.env.META_ACCESS_TOKEN && process.env.META_AD_ACCOUNT_ID),
-      google: Boolean(
-        process.env.GOOGLE_ADS_DEVELOPER_TOKEN &&
-          process.env.GOOGLE_ADS_CLIENT_ID &&
-          process.env.GOOGLE_ADS_CLIENT_SECRET &&
-          process.env.GOOGLE_ADS_REFRESH_TOKEN
-      ),
-      telegram: Boolean(process.env.TGSTAT_TOKEN),
-    },
+    configured: configuredResolver ? configuredResolver() : envConfigured(),
   };
 }

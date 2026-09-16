@@ -148,6 +148,7 @@ pnpm build      # production build → dist/
 pnpm start      # production: bitta server (client + API), port 3000
 pnpm check      # TypeScript strict typecheck
 pnpm smoke        # jsdom render test — 46 tekshiruv (barcha sahifalar, drawer, ⌘K, OAuth paneli, kabinet tanlagich)
+pnpm test:connect # ulanish oqimi testi — 55 tekshiruv (app kalitlari, OAuth start, token bilan ulash, Telegram, fayl yuklash)
 pnpm audit:chain  # skvoznaya zanjir auditi — real snapshot ustida 11 tekshiruv
 
 # Google Ads API (batafsil pull — Variant A)
@@ -155,6 +156,25 @@ pnpm google:oauth           # refresh token olish (docs/google-ads-api-setup.md 
 pnpm google:pull            # Google Ads API'dan tortib, google_*.json snapshot yozadi
 pnpm google:test:normalize  # offline normalizer tekshiruvi (tarmoq talab qilmaydi)
 ```
+
+### `pnpm test:connect` — ulanish oqimi testi
+
+`scripts/connect-flow-test.ts` butun ulanish zanjirini **haqiqiy server kodi** bilan
+tekshiradi. Tashqi API'lar (`graph.facebook.com`, `googleapis.com`, `amocrm.ru`,
+`api.tgstat.ru`) `fetch` stub orqali **mock** qilinadi — sandbox/CI'da ularga chiqish
+bloklangan, lekin route → `oauthApps` → `store` → sync dvigateli → snapshot fayli →
+`/api/connections` payload zanjiri haqiqiy.
+
+Qamrab olinadi: app kalitlari holati (maydon darajasida `missing`) va saqlash/niqoblash,
+OAuth start (`redirect_uri` = `PUBLIC_ORIGIN`; kalitsiz holatda tushunarli 400 sahifasi),
+token bilan ulash (Meta: yaroqsiz/bo'sh token, aniq kabinet, dedupe · Google: app kalitsiz
+va yaroqsiz refresh holatlari · AmoCRM: subdomain tozalash, yaroqsiz hisob), ulangandan
+keyingi **darhol sync** (snapshot fayllari yozilganini diskdan tekshiradi), Telegram
+tokenini `usage/stat` orqali tekshirish va kanal qo'shish, eksport fayl yuklash (nom
+sanitariyasi, path traversal, buzilgan format, JSON bo'lmagan matn, bo'sh fayl, o'chirish),
+kabinet toggle, ulanishni o'chirish va kalitlarning `store.json`da saqlanishi (client
+payload'iga sizmasligi). Test vaqtinchalik papka ishlatadi (`SNAPSHOTS_DIR`) va oxirida
+tozalaydi — repo fayllariga tegmaydi.
 
 Google Ads API'ni real ulash bo'yicha to'liq bosqichma-bosqich qo'llanma:
 [**`docs/google-ads-api-setup.md`**](docs/google-ads-api-setup.md) (Google Cloud →
@@ -188,21 +208,63 @@ hisoblaringizni ulaysiz — tokenlar serverda saqlanadi, har sync'da ma'lumot
 o'zi tortiladi. Bu rejim **barcha loyihalaringiz** uchun: istalgan vaqt yangi
 kabinet ulanadi, tepadagi **kabinet tanlagich**dan xohlagan hisob ko'riladi.
 
-| Platforma | Tugma | Serverda (bir marta, .env) | Redirect URL (app sozlamasida) |
-| --------- | ----- | -------------------------- | ------------------------------ |
+| Platforma | Tugma | App kalitlari (OAuth uchun) | Redirect URL (app sozlamasida) |
+| --------- | ----- | --------------------------- | ------------------------------ |
 | Facebook / Instagram | «Facebook bilan ulash» | `META_APP_ID` + `META_APP_SECRET` | https://<host>/api/oauth/meta/callback |
 | Google Ads | «Google bilan ulash» | `GOOGLE_ADS_CLIENT_ID/SECRET/DEVELOPER_TOKEN` | https://<host>/api/oauth/google-ads/callback |
 | AmoCRM | «AmoCRM hisobini ulash» (subdomain kiritiladi) | `AMOCRM_CLIENT_ID/SECRET` | https://<host>/api/oauth/amocrm/callback |
+| Telegram (TGStat) | «TGStat tokenini kiritish» (OAuth yo'q — faqat token) | `TGSTAT_TOKEN` | — (callback kerak emas) |
+
+**Tugmalar har doim bosiladi.** App kalitlari bo'lmasa tugma «o'lik» turmaydi —
+bosilganda sozlash oynasi ochiladi va ikki yo'lni taklif qiladi:
+
+1. **App kalitlarini UI'dan kiritish** (`.env` tahrirlash, serverni qayta ishga
+   tushirish shart emas). Kalitlar `server/data/store.json` ga yoziladi va
+   `.env` dagi qiymatlar bilan birlashtirilib o'qiladi. Saqlagach tugma darhol
+   OAuth dialogni ochadi. Oynada provider sozlamasiga yoziladigan **redirect URI**
+   ham tayyor turadi (bir klikda nusxa olinadi).
+2. **«Token bilan ulash»** — app yaratishga vaqt yo'q bo'lsa:
+   | Platforma | Nima kiritiladi | Qayerdan olinadi |
+   | --------- | --------------- | ---------------- |
+   | Meta | access token (+ ixtiyoriy `act_` id) | Business Settings → System Users → token (`ads_read`) yoki Graph API Explorer |
+   | Google Ads | refresh token (+ client id/secret, developer token) | `pnpm google:oauth` yoki OAuth Playground |
+   | AmoCRM | subdomain + access token | Sozlamalar → Integratsiyalar → «API kalitlari» |
+
+   Token serverda **haqiqiy API so'rovi bilan tekshiriladi** (kabinetlar ro'yxati
+   olinadi), xato bo'lsa aniq xabar qaytadi; to'g'ri bo'lsa ulanish saqlanadi va
+   ma'lumot **shu zahoti** tortiladi (interval kutilmaydi).
+
+**3. Telegram (TGStat)** — OAuth talab qilmaydi, faqat API tokeni:
+`tgstat.ru → Личный кабинет → API token` ni Ulanishlar sahifasidagi «Telegram»
+kartasidan kiritasiz (yoki `TGSTAT_TOKEN` env). Saqlashda server tokenni
+`GET https://api.tgstat.ru/usage/stat` orqali tekshiradi — bu metod **tariflanmaydi**
+(kvota sarflanmaydi) va javobda tarif nomi, muddati hamda sarflangan so'rovlar
+ko'rsatiladi. Keyin «Telegram kanallar» sahifasida kanal @username'lari kiritiladi.
+
+**4. Eksport faylni browser'dan yuklash** — hosting'da papkaga qo'lda fayl
+tashlab bo'lmasa (SSH yo'q), Ulanishlar sahifasidagi «Eksport faylni yuklash»
+panelidan drag&drop bilan yuklanadi. Fayl **yozilishdan oldin** normalizer orqali
+tekshiriladi (format tanilmasa yoki ma'lumot bo'sh bo'lsa — aniq xato, papkaga
+buzilgan fayl tushmaydi), yozilgach `fs.watch` darhol sezadi va barcha ochiq
+dashboardlar SSE orqali yangilanadi. Nomlash qoidalari:
+
+```
+meta_act-<id>_<davr>.json · google_<id>_<davr>.json · yandex_<login>_<davr>.json · amo_<hisob>_<davr>.json
+```
 
 Qanday ishlaydi:
 
-1. Admin bir marta app kalitlarini `.env` ga qo'yadi (yuqoridagi jadval).
-2. Har bir foydalanuvchi o'z hisobini ulaydi: consent → callback → tokenlar
-   `server/data/store.json` ga (gitignore'da) yoziladi — **client'ga hech qachon yuborilmaydi**.
-3. Sync dvigateli har `SYNC_INTERVAL_SEC` da ulangan kabinetlardan tortadi:
-   Meta — `act_*` bo'yicha, Google — har customer id, AmoCRM — v4 API (leadlar + pipeline).
-4. Ulangan kabinetlarni chip'lar bilan yoqib/o'chirib qo'yish mumkin (o'chirilgani sync qilinmaydi).
-5. Token eskirsa — status «TOKEN ESKIRGAN» bo'ladi, bir klikda qayta ulanadi.
+1. Admin app kalitlarini **`.env` ga yoki Ulanishlar sahifasidagi «Sozlash» oynasiga** qo'yadi.
+2. Har bir foydalanuvchi o'z hisobini ulaydi: consent (yoki token) → tokenlar
+   `server/data/store.json` ga (gitignore'da) yoziladi — **client'ga hech qachon yuborilmaydi**
+   (UI'da faqat niqoblangan ko'rinishi ko'rinadi).
+3. Ulanishdan keyin darhol bir martalik sync ketadi, keyin sync dvigateli har
+   `SYNC_INTERVAL_SEC` da tortadi: Meta — `act_*` bo'yicha, Google — har customer id,
+   AmoCRM — v4 API (leadlar + pipeline).
+4. Ulangan kabinetlarni chip'lar bilan yoqib/o'chirib qo'yish mumkin (o'chirilgani sync qilinmaydi);
+   har ulanishda **«Hoziroq tortish»** tugmasi bor.
+5. Qayta ulanganda eski yozuv ustidan yoziladi (bir xil hisob ikki marta ko'paymaydi).
+6. Token eskirsa — status «TOKEN ESKIRGAN» bo'ladi, bir klikda qayta ulanadi.
 
 > **Meta app:** developers.facebook.com da Business tipidagi app yarating,
 > `ads_read` + `business_management` scope'lari bilan. O'z hisoblaringiz uchun
@@ -232,12 +294,22 @@ Bog'lanmagan leadlar "Manbasi aniqlanmagan" deb alohida chiqadi — **taxminiy b
 | Endpoint                          | Tavsif                                                  |
 | --------------------------------- | ------------------------------------------------------- |
 | `GET /api/snapshot?platform=meta` | Eng yangi snapshot (normalized). `?file=` — aniq fayl, `?account=` — kabinet filtri |
-| `GET /api/oauth/status`            | Qaysi platformalar OAuth'ga tayyor (app kalitlari bormi) |
+| `GET /api/oauth/status`            | Qaysi platformalar tayyor: `ready`, `missing[]`, `source` (env/store), niqoblangan qiymatlar |
+| `GET /api/oauth/apps`              | App kalitlari holati (maydon darajasida) + UI uchun sozlash retsepti |
+| `GET /api/oauth/apps/redirect-uris`| Provider sozlamasiga yoziladigan aniq callback URL'lar |
+| `POST /api/oauth/apps/<p>`         | App kalitlarini **UI'dan** saqlash (partial; restart shart emas) |
+| `DELETE /api/oauth/apps/<p>`       | Saqlangan kalitlarni o'chirish (`.env` qiymatlari qoladi) |
+| `POST /api/oauth/<p>/token`        | **Token bilan ulash** — kalit tekshiriladi, hisob saqlanadi, darhol sync |
+| `POST /api/oauth/sync/<p>`         | Bitta platformani hoziroq tortish (interval kutmasdan) |
 | `GET /api/oauth/<p>/start`         | OAuth consent sahifasiga redirect (meta/google-ads/amocrm) |
 | `GET /api/oauth/<p>/callback`      | Provider'dan qaytgan kod → tokenlar serverda saqlanadi |
 | `POST /api/oauth/accounts/:cid/:aid/toggle` | Kabinetni sync'dan yoqish/o'chirish |
 | `DELETE /api/oauth/connections/:id` | Ulanishni olib tashlash                                 |
 | `GET /api/snapshots`              | Mavjud davr/kabinet fayllari ro'yxati (tanlagich uchun) |
+| `GET /api/snapshots/all`          | Barcha fayllar (amo_* ham) + papka yoziladiganmi (`writable`) |
+| `POST /api/snapshots`             | **Eksport faylni yuklash** — tekshiriladi, yoziladi, SSE push ketadi |
+| `DELETE /api/snapshots/:file`     | Snapshot faylini o'chirish (faqat papkadagi .json) |
+| `POST /api/telegram/channels`     | Telegram kanal qo'shish (@username) — TGStat'dan statistika tortiladi |
 | `GET /api/connections`            | Platforma + CRM ulanish holati                          |
 | `GET /api/crm`                    | AmoCRM ma'lumoti (matchlangan)                          |
 | `GET /api/stream`                 | SSE live kanali: hello/ping/sync + **sync_state** + **activity** eventlari |

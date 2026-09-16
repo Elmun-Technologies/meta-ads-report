@@ -1,26 +1,32 @@
 /**
- * OAuth ulanishlari — foydalanuvchi O'Z akkauntlarini ulaydi.
+ * Platformalarni ulash — OAuth dialog VA "token bilan ulash".
  *
- * Oqim (3 ta platforma, bir xil naqshda):
+ * Oqim (OAuth — 3 ta platforma, bir xil naqshda):
  *   1) GET /api/oauth/<platform>/start → tashqi consent sahifasiga redirect
  *   2) Foydalanuvchi ruxsat beradi → browser /api/oauth/<platform>/callback ga qaytadi
  *   3) Kod token'ga almashtiriladi, kabinetlar ro'yxati tortiladi, store'ga saqlanadi
- *   4) Sync dvigateli ulanishlardan muntazam tortadi
+ *   4) Sync dvigateli ulanishlardan muntazam tortadi (ulanishdan keyin DARHOL ham)
+ *
+ * Muqobil oqim (token bilan — app yaratish shart emas):
+ *   POST /api/oauth/<platform>/token → kalit tekshiriladi → ulanish saqlanadi → sync
+ *
+ * App kalitlari endi IKKI joydan o'qiladi (server/oauthApps.ts):
+ *   .env (deploy secrets) + store.json (UI'dan kiritilgan — restart shart emas).
  *
  * CSRF: state parametri HMAC bilan imzolanadi.
  * Redirect URI: so'rov origin'idan avtomatik hosil qilinadi (preview + production ishlaydi).
- *
- * Kerakli app kalitlari (.env — bir marta, admin sozlaydi):
- *   Meta:    META_APP_ID + META_APP_SECRET (developers.facebook.com)
- *   Google:  GOOGLE_ADS_CLIENT_ID + GOOGLE_ADS_CLIENT_SECRET + GOOGLE_ADS_DEVELOPER_TOKEN
- *   AmoCRM:  AMOCRM_CLIENT_ID + AMOCRM_CLIENT_SECRET (amoCRM → Integratsiyalar)
  */
 import { Router } from "express";
 import crypto from "crypto";
-import { loadMetaConfigFromEnv, pullMetaSnapshot } from "@shared/metaApi";
-import { loadAmoAppCredentials } from "@shared/amoApi";
-import type { OAuthAdAccount } from "@shared/types";
-import { GoogleAdsClient, refreshAccessToken, GOOGLE_ADS_API_VERSION } from "@shared/googleAdsApi";
+import type { OAuthAdAccount, OAuthConnection } from "@shared/types";
+import {
+  ALL_SETUP,
+  OAUTH_SETUP,
+  isSetupId,
+  type OAuthPlatformId,
+  type SetupId,
+} from "@shared/oauthSetup";
+import { refreshAccessToken, GOOGLE_ADS_API_VERSION } from "@shared/googleAdsApi";
 import {
   deleteConnection,
   listConnectionsPublic,
@@ -29,18 +35,40 @@ import {
   toggleAccount,
   upsertConnection,
 } from "../connections";
+import {
+  amoApp,
+  appCredentials,
+  appPlatformStatus,
+  appStatusAll,
+  clearAppCredentials,
+  googleApp,
+  googleAppPartial,
+  metaApp,
+  saveAppCredentials,
+  setupStatusAll,
+} from "../oauthApps";
 import { logActivity } from "../store";
 import { broadcast } from "../app";
+import { syncPlatformNow } from "../sync";
 
 export const oauthRouter = Router();
+
+const META_API_VERSION = () => process.env.META_API_VERSION || "v21.0";
 
 /* ------------------------------------------------------------------ */
 /* Yordamchilar                                                        */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Tashqi (browser ko'radigan) manzil — redirect URI shundan hosil qilinadi.
+ * Ustuvorlik: PUBLIC_ORIGIN (deploy'da aniq yoziladi) → X-Forwarded-* → Host.
+ * Preview/proxy ortida ham provider'ga to'g'ri URL ketishi uchun.
+ */
 function originOf(req: import("express").Request): string {
-  const proto = String(req.headers["x-forwarded-proto"] ?? req.protocol ?? "http");
-  const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "localhost");
+  const publicOrigin = (process.env.PUBLIC_ORIGIN ?? "").trim().replace(/\/$/, "");
+  if (publicOrigin) return publicOrigin;
+  const proto = String(req.headers["x-forwarded-proto"] ?? req.protocol ?? "http").split(",")[0].trim();
+  const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "localhost").split(",")[0].trim();
   return `${proto}://${host}`;
 }
 
@@ -98,32 +126,108 @@ function successPage(req: import("express").Request, platform: string, label: st
 <style>body{font-family:system-ui,sans-serif;background:#0e1116;color:#e6e9ef;display:grid;place-items:center;min-height:100vh;margin:0}
 .panel{max-width:460px;padding:28px;background:#161a22;border:1px solid #262c38;border-radius:14px;text-align:center}
 h1{font-size:16px;margin:0 0 8px}p{font-size:13px;color:#9aa3b2;line-height:1.6}</style></head><body><div class="panel">
-<h1>✓ ${label} ulandi</h1><p>${platform} hisobi qo'shildi${accounts > 0 ? ` — ${accounts} kabinet topildi` : ""}.<br>Ulanishlar sahifasiga qaytilyapti…</p>
+<h1>✓ ${label} ulandi</h1><p>${platform} hisobi qo'shildi${accounts > 0 ? ` — ${accounts} kabinet topildi` : ""}.<br>Ma'lumot hozir tortilmoqda, Ulanishlar sahifasiga qaytilyapti…</p>
 </div></body></html>`;
+}
+
+/**
+ * Ulanishdan keyin DARHOL sync — foydalanuvchi 5 daqiqa kutmasligi uchun.
+ * Javob qaytgach ishga tushadi (fire-and-forget), xato bo'lsa log'ga yoziladi.
+ */
+function syncSoon(platform: OAuthPlatformId | "telegram") {
+  setTimeout(() => {
+    void syncPlatformNow(platform).catch(err => {
+      console.warn(`[oauth] ${platform} sync xatosi:`, err instanceof Error ? err.message : err);
+    });
+  }, 250);
+}
+
+/**
+ * Tarmoq xatosini odam tiliga o'girish.
+ * Serverdan tashqi API'ga chiqish bloklangan bo'lsa (firewall/proxy/DNS) fetch
+ * "fetch failed" deb qaytadi — foydalanuvchi bundan hech narsa tushunmaydi.
+ */
+function netError(err: unknown, host: string): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  const cause = (err as { cause?: { code?: string; message?: string } } | null)?.cause;
+  const code = cause?.code ?? "";
+  if (/fetch failed|socket hang up|network/i.test(msg) || /^(ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|ECONNRESET|EHOSTUNREACH|CERT_|UNABLE_TO_)/.test(code)) {
+    return `Server ${host} ga ulanmadi (${code || msg}). Bu serverdan tashqi API'ga chiqishga ruxsat bormi — internet/proxy/firewall sozlamalarini tekshiring.`;
+  }
+  return msg;
+}
+
+function str(body: unknown, key: string): string {
+  const v = (body as Record<string, unknown> | undefined)?.[key];
+  return typeof v === "string" ? v.trim() : "";
+}
+
+function isPlatform(id: string): id is OAuthPlatformId {
+  return id === "meta" || id === "google-ads" || id === "amocrm";
+}
+
+/* ------------------------------------------------------------------ */
+/* TGStat (Telegram) — token tekshiruvi                                */
+/* ------------------------------------------------------------------ */
+
+const TGSTAT_BASE = "https://api.tgstat.ru";
+
+/**
+ * Token haqiqiymi? — `GET /usage/stat` bilan tekshiriladi.
+ * Bu metod TGStat'da barcha tariflarda mavjud va TARIFLANMAYDI (kvotani yemaydi),
+ * shuning uchun tekshiruv uchun ideal. Javob: { status: "ok", response: [...] }.
+ *
+ * "unverified" — TGStat'ga umuman ulanib bo'lmadi (tarmoq/firewall): token
+ * SAQLANADI, lekin foydalanuvchiga "tekshirib bo'lmadi" deyiladi (bloklamaymiz).
+ */
+async function probeTgstat(token: string): Promise<{ state: "ok" | "invalid" | "unverified"; message: string }> {
+  try {
+    const res = await fetch(`${TGSTAT_BASE}/usage/stat?token=${encodeURIComponent(token)}`);
+    const json = (await res.json().catch(() => ({}))) as any;
+    const errText = String(json?.error ?? json?.message ?? "");
+    if (res.status === 404) {
+      return { state: "unverified", message: "TGStat tekshiruv metodini topmadi — token saqlandi" };
+    }
+    if (!res.ok || (json?.status && json.status !== "ok")) {
+      const msg = errText || `TGStat ${res.status}`;
+      const invalid = res.status === 401 || res.status === 403 || /token|токен|auth|invalid/i.test(msg);
+      return { state: invalid ? "invalid" : "unverified", message: msg };
+    }
+    const tariffs = Array.isArray(json?.response) ? json.response : [];
+    if (tariffs.length === 0) {
+      return {
+        state: "ok",
+        message: "Token to'g'ri, lekin faol tarif ko'rinmadi — TGStat kabinetida API ulanishini tekshiring",
+      };
+    }
+    const t = tariffs[0] as { title?: string; expiredAt?: number; spentRequests?: string };
+    return {
+      state: "ok",
+      message: `Token ishlayapti${t?.title ? ` — ${t.title}` : ""}${
+        t?.expiredAt ? ` (muddati: ${new Date(Number(t.expiredAt) * 1000).toISOString().slice(0, 10)})` : ""
+      }${t?.spentRequests ? ` · so'rovlar: ${t.spentRequests}` : ""}`,
+    };
+  } catch (err) {
+    return { state: "unverified", message: netError(err, "api.tgstat.ru") };
+  }
 }
 
 /* ------------------------------------------------------------------ */
 /* Status — qaysi platformalar ulashga tayyor                          */
 /* ------------------------------------------------------------------ */
 
+/** Har platforma uchun: ready / yetishmayotgan maydonlar / qiymatlar qayerdan */
 export function oauthStatus() {
-  return {
-    meta:
-      process.env.META_APP_ID && process.env.META_APP_SECRET
-        ? { ready: true }
-        : { ready: false, reason: "META_APP_ID va META_APP_SECRET .env da yo'q (developers.facebook.com da app yarating)" },
-    "google-ads":
-      process.env.GOOGLE_ADS_CLIENT_ID && process.env.GOOGLE_ADS_CLIENT_SECRET && process.env.GOOGLE_ADS_DEVELOPER_TOKEN
-        ? { ready: true }
-        : { ready: false, reason: "GOOGLE_ADS_CLIENT_ID / SECRET / DEVELOPER_TOKEN .env da yo'q" },
-    amocrm: loadAmoAppCredentials()
-      ? { ready: true }
-      : { ready: false, reason: "AMOCRM_CLIENT_ID va AMOCRM_CLIENT_SECRET .env da yo'q (amoCRM → Sozlamalar → Integratsiyalar)" },
-  } as Record<"meta" | "google-ads" | "amocrm", { ready: boolean; reason?: string }>;
+  return appStatusAll();
 }
 
 oauthRouter.get("/status", (_req, res) => {
   res.json(oauthStatus());
+});
+
+/** Barcha manbalar holati (Telegram servisi ham) — UI'dagi «Sozlash» oynasi uchun */
+oauthRouter.get("/setup", (_req, res) => {
+  res.json({ platforms: setupStatusAll(), setup: ALL_SETUP });
 });
 
 /** Ulangan hisoblar ro'yxati (tokensiz!) */
@@ -150,21 +254,183 @@ oauthRouter.delete("/connections/:id", (req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
+/* APP kalitlari — UI'dan kiritiladi (restart shart emas)              */
+/* ------------------------------------------------------------------ */
+
+/** Kalitlar holati: nima bor (niqoblangan), nima yetishmayapti, qayerdan */
+oauthRouter.get("/apps", (_req, res) => {
+  res.json({
+    // Barcha manbalar (meta / google-ads / amocrm / telegram) holati
+    platforms: setupStatusAll(),
+    setup: ALL_SETUP,
+  });
+});
+
+/** Host bilan birga — provider sozlamasiga yoziladigan aniq redirect URI'lar */
+oauthRouter.get("/apps/redirect-uris", (req, res) => {
+  const origin = originOf(req);
+  const uris: Record<string, string> = {};
+  for (const id of Object.keys(OAUTH_SETUP) as OAuthPlatformId[]) {
+    if (OAUTH_SETUP[id].callbackPath) uris[id] = `${origin}${OAUTH_SETUP[id].callbackPath}`;
+  }
+  res.json({ origin, uris });
+});
+
+/**
+ * App/servis kalitlarini saqlash (partial — bo'sh maydon eskisini o'chirmaydi).
+ * Telegram uchun token darhol TGStat'da tekshiriladi (saqlash baribir bajariladi).
+ */
+oauthRouter.post("/apps/:platform", async (req, res) => {
+  const id = req.params.platform;
+  if (!isSetupId(id)) {
+    res.status(404).json({ error: `Noma'lum manba: ${id}` });
+    return;
+  }
+  const saved = saveAppCredentials(id, (req.body ?? {}) as Record<string, unknown>);
+  if (Object.keys(saved).length === 0 && appPlatformStatus(id).source === "none") {
+    res.status(400).json({
+      error: "Hech qanday kalit qabul qilinmadi — maydonlarni to'ldiring",
+      status: appPlatformStatus(id),
+    });
+    return;
+  }
+  const status = appPlatformStatus(id);
+
+  // Telegram: token tekshiruvi (saqlashga to'sqinlik qilmaydi)
+  let probe: { state: string; message: string } | undefined;
+  if (id === "telegram") {
+    const token = appCredentials("telegram").token;
+    if (token) probe = await probeTgstat(token);
+  }
+
+  logActivity({
+    kind: "channel",
+    source: `oauth-apps-${id}`,
+    tone: probe?.state === "invalid" ? "warn" : status.ready ? "good" : "warn",
+    title: `${ALL_SETUP[id].name} — kalitlar saqlandi`,
+    body: probe
+      ? probe.message
+      : status.ready
+        ? "Kalitlar to'liq — ulash tugmasi ishlaydi"
+        : `Hali yetishmayapti: ${status.missing.map(m => m.label).join(", ")}`,
+  });
+  broadcast("sync", { at: new Date().toISOString(), source: "app-credentials" });
+  // Telegram tokeni saqlangach kanallarni darhol tortishga urinamiz
+  if (id === "telegram" && status.ready) syncSoon("telegram");
+  res.json({ ok: true, ready: status.ready, status, probe });
+});
+
+/** Store'dagi kalitlarni o'chirish (.env qiymatlari qoladi) */
+oauthRouter.delete("/apps/:platform", (req, res) => {
+  const id = req.params.platform;
+  if (!isSetupId(id)) {
+    res.status(404).json({ error: `Noma'lum manba: ${id}` });
+    return;
+  }
+  const removed = clearAppCredentials(id);
+  logActivity({
+    kind: "channel",
+    source: `oauth-apps-${id}`,
+    tone: "warn",
+    title: `${ALL_SETUP[id].name} — saqlangan kalitlar o'chirildi`,
+  });
+  res.json({ ok: removed, status: appPlatformStatus(id) });
+});
+
+/* ------------------------------------------------------------------ */
 /* Meta (Facebook Login)                                               */
 /* ------------------------------------------------------------------ */
 
 oauthRouter.get("/meta/start", (req, res) => {
-  const appId = process.env.META_APP_ID;
-  if (!appId) {
-    res.status(400).type("html").send(errorPage(req, "META_APP_ID sozlanmagan", ".env ga META_APP_ID va META_APP_SECRET qo'shing (developers.facebook.com da app yaratib oling)."));
+  const app = metaApp();
+  if (!app) {
+    const st = appPlatformStatus("meta");
+    res.status(400).type("html").send(
+      errorPage(
+        req,
+        "Meta app kalitlari sozlanmagan",
+        `${st.reason ?? ""}\n\nKerakli maydonlar: ${st.missing.map(m => `${m.label} (${m.env})`).join(", ")}`
+      )
+    );
     return;
   }
-  const url = new URL("https://www.facebook.com/v21.0/dialog/oauth");
-  url.searchParams.set("client_id", appId);
+  const url = new URL(`https://www.facebook.com/${META_API_VERSION()}/dialog/oauth`);
+  url.searchParams.set("client_id", app.appId);
   url.searchParams.set("redirect_uri", redirectUri(req, "meta"));
   url.searchParams.set("state", makeState(req, "meta"));
   url.searchParams.set("scope", "ads_read,business_management");
   res.redirect(url.toString());
+});
+
+/** Meta — access token bilan ulash (app yaratmasdan) */
+oauthRouter.post("/meta/token", async (req, res) => {
+  const accessToken = str(req.body, "accessToken");
+  const wanted = str(req.body, "adAccountId").replace(/^act_/, "");
+  if (!accessToken) {
+    res.status(400).json({ error: "Access token bo'sh — Meta'dan olingan tokenni qo'ying" });
+    return;
+  }
+  const v = META_API_VERSION();
+  try {
+    // 1) Token haqiqiymi? (ism olish — eng yengil so'rov)
+    const meRes = await fetch(`https://graph.facebook.com/${v}/me?fields=name&access_token=${encodeURIComponent(accessToken)}`);
+    const me = (await meRes.json().catch(() => ({}))) as any;
+    if (!meRes.ok || me?.error) {
+      throw new Error(me?.error?.message ?? `Meta token yaroqsiz (${meRes.status})`);
+    }
+
+    // 2) Kabinetlar ro'yxati
+    const accRes = await fetch(
+      `https://graph.facebook.com/${v}/me/adaccounts?fields=name,account_id,currency,account_status&limit=200&access_token=${encodeURIComponent(accessToken)}`
+    );
+    const accJson = (await accRes.json().catch(() => ({}))) as any;
+    if (!accRes.ok && accJson?.error) {
+      throw new Error(`Kabinetlar olinmadi: ${accJson.error.message} (tokenda ads_read huquqi bormi?)`);
+    }
+    const list = (accJson?.data ?? []) as any[];
+    let accounts: OAuthAdAccount[] = list
+      .filter(a => a.account_id)
+      .map(a => ({
+        id: String(a.account_id),
+        name: a.name ?? `act_${a.account_id}`,
+        currency: a.currency ?? "USD",
+        enabled: true,
+        lastSyncAt: null,
+      }));
+    if (wanted) {
+      const found = accounts.find(a => a.id === wanted);
+      accounts = found ? [found] : [{ id: wanted, name: `act_${wanted}`, currency: "USD", enabled: true, lastSyncAt: null }];
+    }
+    if (accounts.length === 0) {
+      throw new Error("Bu token bilan hech qanday reklama kabineti topilmadi (ads_read huquqi yoki kabinet ruxsati yo'q)");
+    }
+
+    const conn = upsertConnection({
+      platform: "meta",
+      label: me?.name ? `Facebook — ${me.name}` : "Facebook (token)",
+      status: "active",
+      method: "token",
+      accessToken,
+      tokenExpiresAt: null,
+      accounts,
+      lastSyncAt: null,
+    });
+    setConnectionAccounts(conn.id, accounts);
+    logActivity({
+      kind: "channel",
+      source: "oauth-meta-token",
+      tone: "good",
+      title: `Facebook ulandi: ${conn.label}`,
+      body: `${accounts.length} kabinet topildi — ma'lumot hozir tortiladi`,
+    });
+    broadcast("sync", { at: new Date().toISOString(), source: "oauth-meta-token" });
+    syncSoon("meta");
+    res.json({ ok: true, connection: conn.id, label: conn.label, accounts });
+  } catch (err) {
+    const message = netError(err, "graph.facebook.com");
+    logActivity({ kind: "error", source: "oauth-meta-token", tone: "risk", title: "Facebook ulanmadi", body: message });
+    res.status(400).json({ error: message });
+  }
 });
 
 oauthRouter.get("/meta/callback", async (req, res) => {
@@ -177,13 +443,17 @@ oauthRouter.get("/meta/callback", async (req, res) => {
     res.status(400).type("html").send(errorPage(req, "Noto'g'ri holat (state) — qaytadan urinib ko'ring"));
     return;
   }
-  const appId = process.env.META_APP_ID;
-  const appSecret = process.env.META_APP_SECRET;
+  const app = metaApp();
+  if (!app) {
+    res.status(400).type("html").send(errorPage(req, "META_APP_ID / META_APP_SECRET sozlanmagan", appPlatformStatus("meta").reason));
+    return;
+  }
+  const v = META_API_VERSION();
   try {
     // Kod → short-lived token
-    const tokenUrl = new URL("https://graph.facebook.com/v21.0/oauth/access_token");
-    tokenUrl.searchParams.set("client_id", appId!);
-    tokenUrl.searchParams.set("client_secret", appSecret!);
+    const tokenUrl = new URL(`https://graph.facebook.com/${v}/oauth/access_token`);
+    tokenUrl.searchParams.set("client_id", app.appId);
+    tokenUrl.searchParams.set("client_secret", app.appSecret);
     tokenUrl.searchParams.set("redirect_uri", redirectUri(req, "meta"));
     tokenUrl.searchParams.set("code", code);
     const tokenRes = await fetch(tokenUrl);
@@ -192,10 +462,10 @@ oauthRouter.get("/meta/callback", async (req, res) => {
       throw new Error(tokenJson?.error?.message ?? "kod token'ga almashtirilmadi");
     }
     // Short-lived → long-lived (60 kun)
-    const longUrl = new URL("https://graph.facebook.com/v21.0/oauth/access_token");
+    const longUrl = new URL(`https://graph.facebook.com/${v}/oauth/access_token`);
     longUrl.searchParams.set("grant_type", "fb_exchange_token");
-    longUrl.searchParams.set("client_id", appId!);
-    longUrl.searchParams.set("client_secret", appSecret!);
+    longUrl.searchParams.set("client_id", app.appId);
+    longUrl.searchParams.set("client_secret", app.appSecret);
     longUrl.searchParams.set("fb_exchange_token", tokenJson.access_token);
     const longRes = await fetch(longUrl);
     const longJson = (await longRes.json()) as any;
@@ -206,11 +476,11 @@ oauthRouter.get("/meta/callback", async (req, res) => {
 
     // Foydalanuvchi va kabinetlar ro'yxati
     const meRes = await fetch(
-      `https://graph.facebook.com/v21.0/me?fields=name&access_token=${encodeURIComponent(accessToken)}`
+      `https://graph.facebook.com/${v}/me?fields=name&access_token=${encodeURIComponent(accessToken)}`
     );
     const me = (await meRes.json()) as any;
     const accRes = await fetch(
-      `https://graph.facebook.com/v21.0/me/adaccounts?fields=name,account_id,currency&limit=200&access_token=${encodeURIComponent(accessToken)}`
+      `https://graph.facebook.com/${v}/me/adaccounts?fields=name,account_id,currency&limit=200&access_token=${encodeURIComponent(accessToken)}`
     );
     const accJson = (await accRes.json()) as any;
     const adAccounts = (accJson?.data ?? []) as any[];
@@ -227,7 +497,9 @@ oauthRouter.get("/meta/callback", async (req, res) => {
     const conn = upsertConnection({
       platform: "meta",
       label: me?.name ? `Facebook — ${me.name}` : "Facebook hisob",
-      status: "active",
+      status: accounts.length > 0 ? "active" : "error",
+      error: accounts.length > 0 ? undefined : "Kabinet topilmadi — token huquqlarini tekshiring",
+      method: "oauth",
       accessToken,
       tokenExpiresAt: expiresAt,
       accounts,
@@ -237,14 +509,15 @@ oauthRouter.get("/meta/callback", async (req, res) => {
     logActivity({
       kind: "channel",
       source: "oauth-meta",
-      tone: "good",
+      tone: accounts.length > 0 ? "good" : "warn",
       title: `Facebook ulandi: ${conn.label}`,
       body: accounts.length > 0 ? `${accounts.length} kabinet topildi` : "Kabinet topilmadi (ruxsatlarni tekshiring)",
     });
     broadcast("sync", { at: new Date().toISOString(), source: "oauth-meta" });
+    syncSoon("meta");
     res.type("html").send(successPage(req, "Facebook", conn.label, accounts.length));
   } catch (err) {
-    res.status(500).type("html").send(errorPage(req, "Facebook ulanmadi", (err as Error).message));
+    res.status(500).type("html").send(errorPage(req, "Facebook ulanmadi", netError(err, "graph.facebook.com")));
   }
 });
 
@@ -253,13 +526,20 @@ oauthRouter.get("/meta/callback", async (req, res) => {
 /* ------------------------------------------------------------------ */
 
 oauthRouter.get("/google-ads/start", (req, res) => {
-  const clientId = process.env.GOOGLE_ADS_CLIENT_ID;
-  if (!clientId) {
-    res.status(400).type("html").send(errorPage(req, "GOOGLE_ADS_CLIENT_ID sozlanmagan", ".env ga GOOGLE_ADS_CLIENT_ID / SECRET / DEVELOPER_TOKEN qo'shing (docs/google-ads-api-setup.md)."));
+  const app = googleApp();
+  if (!app) {
+    const st = appPlatformStatus("google-ads");
+    res.status(400).type("html").send(
+      errorPage(
+        req,
+        "Google Ads app kalitlari sozlanmagan",
+        `${st.reason ?? ""}\n\nKerakli maydonlar: ${st.missing.map(m => `${m.label} (${m.env})`).join(", ")}`
+      )
+    );
     return;
   }
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-  url.searchParams.set("client_id", clientId);
+  url.searchParams.set("client_id", app.clientId);
   url.searchParams.set("redirect_uri", redirectUri(req, "google-ads"));
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", "https://www.googleapis.com/auth/adwords");
@@ -267,6 +547,121 @@ oauthRouter.get("/google-ads/start", (req, res) => {
   url.searchParams.set("prompt", "consent");
   url.searchParams.set("state", makeState(req, "google-ads"));
   res.redirect(url.toString());
+});
+
+/** Google'ga tegishli kabinetlarni topish (access token bilan) */
+async function googleAccessibleAccounts(accessToken: string, developerToken: string): Promise<OAuthAdAccount[]> {
+  const lcRes = await fetch(
+    `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers:listAccessibleCustomers`,
+    { headers: { Authorization: `Bearer ${accessToken}`, "developer-token": developerToken } }
+  );
+  const lc = (await lcRes.json().catch(() => ({}))) as any;
+  if (!lcRes.ok) {
+    throw new Error(lc?.error?.message ?? `listAccessibleCustomers → ${lcRes.status}`);
+  }
+  return (lc?.resourceNames ?? [])
+    .map((rn: string) => String(rn).replace("customers/", ""))
+    .filter(Boolean)
+    .map((cid: string) => ({
+      id: cid,
+      name: `Google Ads ${cid}`,
+      currency: "USD",
+      enabled: true,
+      lastSyncAt: null,
+    }));
+}
+
+/** Google Ads — refresh token bilan ulash */
+oauthRouter.post("/google-ads/token", async (req, res) => {
+  const refreshToken = str(req.body, "refreshToken");
+  const developerToken = str(req.body, "developerToken");
+  const clientId = str(req.body, "clientId");
+  const clientSecret = str(req.body, "clientSecret");
+  const managerId = str(req.body, "managerId");
+  const customerIds = str(req.body, "customerIds")
+    .split(/[\s,;]+/)
+    .map(s => s.replace(/\D/g, ""))
+    .filter(Boolean);
+
+  const saved = googleAppPartial();
+  const eff = {
+    clientId: clientId || saved.clientId || "",
+    clientSecret: clientSecret || saved.clientSecret || "",
+    developerToken: developerToken || saved.developerToken || "",
+    managerId: managerId || saved.managerId || undefined,
+  };
+  if (!refreshToken) {
+    res.status(400).json({ error: "Refresh token bo'sh — pnpm google:oauth yoki OAuth Playground orqali oling" });
+    return;
+  }
+  if (!eff.clientId || !eff.clientSecret) {
+    res.status(400).json({
+      error: "OAuth Client ID va Client Secret kerak — «App kalitlari» bo'limida saqlang yoki shu formada qo'shing",
+    });
+    return;
+  }
+  try {
+    const accessToken = await refreshAccessToken({
+      clientId: eff.clientId,
+      clientSecret: eff.clientSecret,
+      refreshToken,
+    });
+    let accounts: OAuthAdAccount[] = customerIds.map(cid => ({
+      id: cid,
+      name: `Google Ads ${cid}`,
+      currency: "USD",
+      enabled: true,
+      lastSyncAt: null,
+    }));
+    let accountsWarning: string | undefined;
+    if (accounts.length === 0) {
+      if (!eff.developerToken) {
+        accountsWarning =
+          "Developer token yo'q — kabinetlar ro'yxatini olib bo'lmadi. Customer ID'ni qo'lda kiriting yoki developer tokenni saqlang.";
+      } else {
+        accounts = await googleAccessibleAccounts(accessToken, eff.developerToken);
+      }
+    }
+    if (accounts.length === 0 && !accountsWarning) {
+      accountsWarning = "Kabinet topilmadi — hisobda Google Ads kabineti bormi?";
+    }
+
+    // Forma orqali berilgan app kalitlarini saqlab qo'yamiz — sync ham ishlatadi
+    saveAppCredentials("google-ads", {
+      clientId: eff.clientId,
+      clientSecret: eff.clientSecret,
+      ...(eff.developerToken ? { developerToken: eff.developerToken } : {}),
+      ...(eff.managerId ? { managerId: eff.managerId } : {}),
+    });
+
+    const conn = upsertConnection({
+      platform: "google-ads",
+      label: "Google hisob",
+      status: accounts.length > 0 ? "active" : "error",
+      error: accountsWarning,
+      method: "token",
+      accessToken,
+      refreshToken,
+      tokenExpiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
+      accounts,
+      lastSyncAt: null,
+    });
+    setConnectionAccounts(conn.id, accounts);
+    logActivity({
+      kind: "channel",
+      source: "oauth-google-token",
+      tone: accounts.length > 0 ? "good" : "warn",
+      title: "Google Ads ulandi (refresh token)",
+      body: accounts.length > 0 ? `${accounts.length} kabinet topildi` : accountsWarning,
+    });
+    broadcast("sync", { at: new Date().toISOString(), source: "oauth-google-token" });
+    if (accounts.length > 0) syncSoon("google-ads");
+    res.json({ ok: true, connection: conn.id, label: conn.label, accounts, warning: accountsWarning });
+  } catch (err) {
+    const message = netError(err, "oauth2.googleapis.com");
+    logActivity({ kind: "error", source: "oauth-google-token", tone: "risk", title: "Google Ads ulanmadi", body: message });
+    res.status(400).json({ error: message });
+  }
 });
 
 oauthRouter.get("/google-ads/callback", async (req, res) => {
@@ -279,14 +674,19 @@ oauthRouter.get("/google-ads/callback", async (req, res) => {
     res.status(400).type("html").send(errorPage(req, "Noto'g'ri holat (state) — qaytadan urinib ko'ring"));
     return;
   }
+  const app = googleApp();
+  if (!app) {
+    res.status(400).type("html").send(errorPage(req, "Google app kalitlari sozlanmagan", appPlatformStatus("google-ads").reason));
+    return;
+  }
   try {
     // Kod → refresh + access token
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        client_id: process.env.GOOGLE_ADS_CLIENT_ID!,
-        client_secret: process.env.GOOGLE_ADS_CLIENT_SECRET!,
+        client_id: app.clientId,
+        client_secret: app.clientSecret,
         code,
         grant_type: "authorization_code",
         redirect_uri: redirectUri(req, "google-ads"),
@@ -298,34 +698,22 @@ oauthRouter.get("/google-ads/callback", async (req, res) => {
     }
 
     // Mavjud customerlar ro'yxati
-    const accessToken = tokens.access_token;
-    const accounts: OAuthAdAccount[] = [];
+    let accounts: OAuthAdAccount[] = [];
+    let accountsError: string | undefined;
     try {
-      const lcRes = await fetch(
-        `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers:listAccessibleCustomers`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN ?? "",
-          },
-        }
-      );
-      const lc = (await lcRes.json()) as any;
-      for (const rn of lc?.resourceNames ?? []) {
-        const cid = String(rn).replace("customers/", "");
-        if (cid)
-          accounts.push({ id: cid, name: `Google Ads ${cid}`, currency: "USD", enabled: true, lastSyncAt: null });
-      }
+      accounts = await googleAccessibleAccounts(tokens.access_token, app.developerToken);
     } catch (err) {
-      console.warn("[oauth:google] listAccessibleCustomers xato:", (err as Error).message);
+      accountsError = err instanceof Error ? err.message : String(err);
+      console.warn("[oauth:google] listAccessibleCustomers xato:", accountsError);
     }
 
     const conn = upsertConnection({
       platform: "google-ads",
       label: "Google hisob",
       status: accounts.length > 0 ? "active" : "error",
-      error: accounts.length > 0 ? undefined : "Kabinet topilmadi — developer token / ruxsatlarni tekshiring",
-      accessToken,
+      error: accounts.length > 0 ? undefined : (accountsError ?? "Kabinet topilmadi — developer token / ruxsatlarni tekshiring"),
+      method: "oauth",
+      accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       tokenExpiresAt: new Date(Date.now() + Number(tokens.expires_in ?? 3600) * 1000).toISOString(),
       accounts,
@@ -340,9 +728,10 @@ oauthRouter.get("/google-ads/callback", async (req, res) => {
       body: accounts.length > 0 ? `${accounts.length} kabinet topildi` : "Kabinet topilmadi",
     });
     broadcast("sync", { at: new Date().toISOString(), source: "oauth-google" });
+    if (accounts.length > 0) syncSoon("google-ads");
     res.type("html").send(successPage(req, "Google Ads", conn.label, accounts.length));
   } catch (err) {
-    res.status(500).type("html").send(errorPage(req, "Google Ads ulanmadi", (err as Error).message));
+    res.status(500).type("html").send(errorPage(req, "Google Ads ulanmadi", netError(err, "oauth2.googleapis.com")));
   }
 });
 
@@ -351,10 +740,17 @@ oauthRouter.get("/google-ads/callback", async (req, res) => {
 /* ------------------------------------------------------------------ */
 
 oauthRouter.get("/amocrm/start", (req, res) => {
-  const app = loadAmoAppCredentials();
-  const subdomain = String(req.query.subdomain ?? "").trim().toLowerCase().replace(/\.amocrm\.ru$/, "");
+  const app = amoApp();
+  const subdomain = str(req.query, "subdomain").toLowerCase().replace(/\.amocrm\.ru$/, "");
   if (!app) {
-    res.status(400).type("html").send(errorPage(req, "AMOCRM_CLIENT_ID sozlanmagan", "amoCRM → Sozlamalar → Integratsiyalar → yangi integratsiya yarating, client_id/secret ni .env ga qo'ying."));
+    const st = appPlatformStatus("amocrm");
+    res.status(400).type("html").send(
+      errorPage(
+        req,
+        "AmoCRM app kalitlari sozlanmagan",
+        `${st.reason ?? ""}\n\nKerakli maydonlar: ${st.missing.map(m => `${m.label} (${m.env})`).join(", ")}`
+      )
+    );
     return;
   }
   if (!subdomain) {
@@ -370,6 +766,60 @@ oauthRouter.get("/amocrm/start", (req, res) => {
   res.redirect(url.toString());
 });
 
+/** AmoCRM — tayyor API kaliti (uzun muddatli token) bilan ulash */
+oauthRouter.post("/amocrm/token", async (req, res) => {
+  const subdomain = str(req.body, "subdomain").toLowerCase().replace(/\.amocrm\.ru$/, "").replace(/^https?:\/\//, "");
+  const accessToken = str(req.body, "accessToken");
+  const refreshToken = str(req.body, "refreshToken");
+  if (!subdomain) {
+    res.status(400).json({ error: "Subdomain bo'sh (masalan: sofexpo)" });
+    return;
+  }
+  if (!accessToken) {
+    res.status(400).json({ error: "Access token bo'sh — AmoCRM → Integratsiyalar → API kalitlari" });
+    return;
+  }
+  try {
+    // Token tekshiruvi — hisob ma'lumoti
+    const accRes = await fetch(`https://${subdomain}.amocrm.ru/api/v4/account`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const accJson = (await accRes.json().catch(() => ({}))) as any;
+    if (!accRes.ok) {
+      throw new Error(
+        accJson?.detail || accJson?.title || `AmoCRM ${accRes.status} — subdomain yoki tokenni tekshiring`
+      );
+    }
+    const conn = upsertConnection({
+      platform: "amocrm",
+      label: `${subdomain}.amocrm.ru`,
+      subdomain,
+      status: "active",
+      method: "token",
+      accessToken,
+      refreshToken: refreshToken || undefined,
+      // Refresh token bo'lmasa muddat belgilanmaydi — kalit uzoq muddatli
+      tokenExpiresAt: refreshToken ? new Date(Date.now() + 24 * 3600 * 1000).toISOString() : null,
+      accounts: [],
+      lastSyncAt: null,
+    });
+    logActivity({
+      kind: "channel",
+      source: "oauth-amocrm-token",
+      tone: "good",
+      title: `AmoCRM ulandi: ${conn.label}`,
+      body: "Leadlar hozir API'dan tortiladi",
+    });
+    broadcast("sync", { at: new Date().toISOString(), source: "oauth-amocrm-token" });
+    syncSoon("amocrm");
+    res.json({ ok: true, connection: conn.id, label: conn.label, account: accJson?.name ?? subdomain });
+  } catch (err) {
+    const message = netError(err, `${subdomain}.amocrm.ru`);
+    logActivity({ kind: "error", source: "oauth-amocrm-token", tone: "risk", title: "AmoCRM ulanmadi", body: message });
+    res.status(400).json({ error: message });
+  }
+});
+
 oauthRouter.get("/amocrm/callback", async (req, res) => {
   const { code, state, error } = req.query as Record<string, string>;
   if (error) {
@@ -382,14 +832,18 @@ oauthRouter.get("/amocrm/callback", async (req, res) => {
     res.status(400).type("html").send(errorPage(req, "Noto'g'ri holat (state) — qaytadan urinib ko'ring"));
     return;
   }
-  const app = loadAmoAppCredentials();
+  const app = amoApp();
+  if (!app) {
+    res.status(400).type("html").send(errorPage(req, "AmoCRM app kalitlari sozlanmagan", appPlatformStatus("amocrm").reason));
+    return;
+  }
   try {
     const tokenRes = await fetch(`https://${sub}.amocrm.ru/oauth2/access_token`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        client_id: app!.clientId,
-        client_secret: app!.clientSecret,
+        client_id: app.clientId,
+        client_secret: app.clientSecret,
         grant_type: "authorization_code",
         code,
         redirect_uri: redirectUri(req, "amocrm"),
@@ -405,6 +859,7 @@ oauthRouter.get("/amocrm/callback", async (req, res) => {
       label: `${sub}.amocrm.ru`,
       subdomain: sub,
       status: "active",
+      method: "oauth",
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       tokenExpiresAt: new Date(Date.now() + Number(tokens.expires_in ?? 86400) * 1000).toISOString(),
@@ -419,8 +874,42 @@ oauthRouter.get("/amocrm/callback", async (req, res) => {
       body: "Leadlar endi har sync'da API'dan tortiladi",
     });
     broadcast("sync", { at: new Date().toISOString(), source: "oauth-amocrm" });
+    syncSoon("amocrm");
     res.type("html").send(successPage(req, "AmoCRM", conn.label, 0));
   } catch (err) {
-    res.status(500).type("html").send(errorPage(req, "AmoCRM ulanmadi", (err as Error).message));
+    res.status(500).type("html").send(errorPage(req, "AmoCRM ulanmadi", netError(err, `${sub}.amocrm.ru`)));
   }
+});
+
+/* ------------------------------------------------------------------ */
+/* Mavjud ulanishni darhol yangilash (bitta platforma)                  */
+/* ------------------------------------------------------------------ */
+
+oauthRouter.post("/sync/:platform", async (req, res) => {
+  const id = req.params.platform;
+  if (!isPlatform(id) && id !== "telegram") {
+    res.status(404).json({ error: `Noma'lum platforma: ${id}` });
+    return;
+  }
+  try {
+    const result = await syncPlatformNow(id);
+    res.json({ ok: result?.ok ?? false, result });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+/** Ulanish holatini tuzatish (masalan token yangilangach) */
+oauthRouter.post("/connections/:id/status", (req, res) => {
+  const status = str(req.body, "status");
+  if (!["active", "expired", "error"].includes(status)) {
+    res.status(400).json({ error: "status: active | expired | error" });
+    return;
+  }
+  setConnectionStatus(
+    req.params.id,
+    status as OAuthConnection["status"],
+    str(req.body, "error") || undefined
+  );
+  res.json({ ok: true });
 });

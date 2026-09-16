@@ -31,11 +31,30 @@ export function listConnectionsPublic() {
     tokenExpiresAt: c.tokenExpiresAt,
     accounts: c.accounts,
     subdomain: c.subdomain,
+    method: c.method,
   }));
 }
 
 export function getConnection(id: string): OAuthConnection | null {
   return listConnections().find(c => c.id === id) ?? null;
+}
+
+/**
+ * Ulanishning "shaxsi" — qayta ulanganda yangi yozuv emas, eskisi yangilanadi.
+ * (Aks holda bir xil hisobni ikki marta ulaganda kartalar ko'payib ketardi.)
+ */
+function identityOf(c: Partial<OAuthConnection>): string | null {
+  if (!c.platform) return null;
+  if (c.platform === "amocrm") return c.subdomain ? `amocrm:${c.subdomain.toLowerCase()}` : null;
+  if (c.platform === "google-ads") {
+    const t = c.refreshToken ?? c.accessToken;
+    return t ? `google-ads:${crypto.createHash("sha256").update(t).digest("hex").slice(0, 16)}` : null;
+  }
+  if (c.platform === "meta") {
+    const first = c.accounts?.[0]?.id;
+    return c.label ? `meta:${c.label.toLowerCase()}` : first ? `meta:act:${first}` : null;
+  }
+  return null;
 }
 
 export function upsertConnection(
@@ -44,7 +63,10 @@ export function upsertConnection(
   return mutate(store => {
     store.oauth = store.oauth ?? [];
     const now = new Date().toISOString();
-    const existing = conn.id ? store.oauth.find(c => c.id === conn.id) : undefined;
+    const identity = identityOf(conn);
+    const existing =
+      (conn.id ? store.oauth.find(c => c.id === conn.id) : undefined) ??
+      (identity ? store.oauth.find(c => identityOf(c) === identity) : undefined);
     if (existing) {
       Object.assign(existing, conn, { id: existing.id, createdAt: existing.createdAt });
       return existing;
@@ -104,6 +126,20 @@ export function markSynced(connectionId: string, accountId?: string, at?: string
       const acc = conn.accounts.find(a => a.id === accountId);
       if (acc) acc.lastSyncAt = ts;
     }
+  });
+}
+
+/** Tokenlarni yangilash (refresh'dan keyin) — sync dvigateli ishlatadi */
+export function setConnectionTokens(
+  id: string,
+  tokens: { accessToken: string; refreshToken?: string; tokenExpiresAt?: string | null }
+): void {
+  mutate(store => {
+    const conn = (store.oauth ?? []).find(c => c.id === id);
+    if (!conn) return;
+    conn.accessToken = tokens.accessToken;
+    if (tokens.refreshToken) conn.refreshToken = tokens.refreshToken;
+    if (tokens.tokenExpiresAt !== undefined) conn.tokenExpiresAt = tokens.tokenExpiresAt;
   });
 }
 

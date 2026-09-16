@@ -14,11 +14,13 @@ import { Router } from "express";
 import { broadcast } from "../app";
 import { getStore, mutate, logActivity, type TelegramChannel } from "../store";
 import { registerTelegramSyncer } from "../sync";
+import { tgstatToken } from "../oauthApps";
 
 const TGSTAT_BASE = "https://api.tgstat.ru";
 
+/** Token .env DAN yoki UI'dan kiritilgan holda (server/data/store.json) olinadi */
 function getToken(): string | null {
-  return process.env.TGSTAT_TOKEN ?? null;
+  return tgstatToken();
 }
 
 async function tgstatGet<T>(endpoint: string, params: Record<string, string> = {}): Promise<T | null> {
