@@ -72,3 +72,76 @@
 - [ ] Alertlar: CPL/CTR chegara buzilganda bildirishnoma (browser notification).
 - [ ] Lead sifati integratsiyasi (CRM webhook → lead status qayta hisoblash).
 - [ ] Foydalanuvchi rollari va ko'p til (uz/en/ru).
+
+## Bajarildi (V3 — real-time + yagona oyna, 2026-09-16)
+
+- [x] **Real-time sync dvigateli** (`server/sync.ts`): Meta Graph API / Google Ads API /
+      TGStat'dan har SYNC_INTERVAL_SEC da avtomatik pull; `POST /api/sync` — qo'lda
+      hoziroq tortish; scheduler faqat "server" rejimida (serverless'da on-demand).
+- [x] **Meta Graph API puller** (`shared/metaApi.ts`): kampaniya + ad + yosh kesimi +
+      summary — normalizeMetaExport formatida (MCP eksportiga muhtojlik yo'q).
+- [x] **AmoCRM webhook** (`/api/webhooks/amocrm`): leads.add/status/update parsing,
+      UTM/telefon ajratish, store'ga upsert — leadlar real-time CRM'ga tushadi.
+- [x] **Jonli harakat feed'i**: activity log (store) + SSE `activity` eventlari +
+      Overview'da "Hoziroq nima bo'ldi?" paneli.
+- [x] **Yagona oyna kesimi**: /api/snapshot?platform=all endi `platforms[]` qaytaradi —
+      har platformaning sarf/murojaat/CPL/qamrovi; Overview'da "Pul qaysi kanalga
+      ketayapti?" paneli (stacked bar + jadval + auto chip).
+- [x] **Prisma → JSON store** (`server/store.ts`): tashqi DB yo'q, serverless'da ham
+      ishlaydi, prisma engine yuklashga bog'liqlik yo'q. store.json gitignore'da.
+- [x] **UI to'liq o'zbekchaga qaytarildi** (ruscha qoldiqlar 10+ sahifadan olib tashlandi).
+- [x] **Live indikator**: LIVE + keyingi syncgacha countdown (Topbar/Sidebar), tab
+      fokusda darhol yangilanish, polling fallback 60s→30s.
+- [x] Sync state endpointlari: `GET /api/sync`, `GET /api/activity`, SSE `sync_state`.
+- [x] Smoke-test 36 tekshiruvga kengaytirildi (jonli harakat + platforma kesimi) — 36/36.
+- [x] .env.example: META_*, TGSTAT_TOKEN, SYNC_INTERVAL_SEC valyutalar.
+
+### Keyingi qadamlar
+- [ ] Kredensiallar berilgach: Meta/Google real pull'ni ishlab ko'rish.
+- [ ] Kunlik timeseries (time_increment=1) → trend chartlar.
+- [ ] Browser notification (kritik signallar desktop'ga).
+- [ ] Ko'p kabinet tanlagich Google/Yandex uchun.
+
+## Bajarildi (V3.1 — kunlik trend, offline to'liq, real-time toastlar)
+
+- [x] Kunlik timeseries (time_increment=1): Meta Graph API puller kunlik kesimni
+      tortadi → NormalizedSnapshot.daily → Overview'da "Kunlik dinamika" charti
+      (sarf ustunlari + murojaatlar chizigi). Yagona oynada platformalar bo'yicha
+      sanaga jamlanadi. Mavjud snapshot fayllarida daily yo'q — panel faqat
+      real-time rejimda ko'rinadi (taxminiy ma'lumot o'ylab topilmaydi).
+- [x] /offline sahifasi to'liq ishlaydi: manbalar ro'yxati (sarf/murojaat/CPL),
+      har bir manbaga inline murojaat qo'shish formasi, oxirgi murojaatlar jadvali,
+      real-time yangilanish (SSE lastEventAt orqali).
+- [x] Real-time toastlar: yangi murojaat / bosqich o'zgarishi / xato hodisalari
+      desktop bildirishnomasi sifatida ko'rinadi (faqat obunadan keyingi
+      hodisalar — server replayi toast qilmaydi).
+- [x] /telegram sahifasi ham real-time hodisalarda avtomatik qayta yuklanadi.
+- [x] Smoke-test 39 tekshiruvga kengaytirildi (kunlik trend + offline sahifa) — 39/39.
+
+## Bajarildi (V3.2 — bildirishnomalar, shaffoflik, hisobot kesimi)
+
+- [x] Desktop bildirishnomalari (Browser Notification API): AlertsMenu'dagi
+      qo\'ng\'iroq tugmasi ostida kalit — yoqilganda kritik signallar, xatolar va
+      yangi murojaatlar desktop\'ga keladi (fon rejimidagi tab uchun ham).
+      Ruxsat faqat foydalanuvchi xohishi bilan so\'raladi.
+- [x] Overview\'da "Nima ma\'lum, nima noma\'lum?" shaffoflik paneli: har manba
+      uchun ✓ mavjud ma\'lumotlar / ✕ yo\'q metrikalar (har birining sababi
+      tooltip\'da) — "nega bu raqam yo\'q" savoli yopildi.
+- [x] Hisobot (Report) sahifasiga platformalar kesimi jadvali — rahbariyat
+      bir qarashda pul qaysi kanalga ketganini ko\'radi (2+ manba ulanganda).
+- [x] Smoke-test 40 tekshiruvga kengaytirildi (shaffoflik paneli) — 40/40.
+
+## Bajarildi (V3.3 — ko\'p kabinet, parol himoyasi)
+
+- [x] Ko\'p kabinet birlashtirish: bir platformaning BARCHA hisob fayllari
+      (meta_<act>/google_<cid>/yandex_<login>) avtomatik jamlanadi — har
+      kabinetdan eng yangi fayl olinadi, kampaniyalar/sarf/leadlar qo\'shiladi,
+      nomi "Google Ads — 2 kabinet" ko\'rinishida. Ulanishlar sahifasida
+      barcha kabinetlar ro\'yxati. Oldin faqat eng yangi bitta fayl o\'qilar,
+      qolgan kabinetlar ma\'lumoti yo\'qolardi.
+- [x] Parol himoyasi (DASHBOARD_PASSWORD): butun /api/* HMAC-cookie sessiya
+      ostiga o\'tadi, brauzerda login ekrani. Statik zaxira (bootstrap.json)
+      401 holatda ishlatilmaydi — himoya chetlab o\'tilmaydi.
+      /api/health ochiq (monitoring), webhooklar alohida: WEBHOOK_SECRET
+      qo\'yilganda ?secret=... talab qiladi.
+- [x] Session: 30 kun, HttpOnly cookie, timing-safe parol tekshiruvi.

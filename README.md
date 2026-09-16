@@ -12,8 +12,8 @@
 <p align="center">
   <img alt="stack" src="https://img.shields.io/badge/React_19-Vite_7-5e8bff?style=flat-square" />
   <img alt="stack" src="https://img.shields.io/badge/TypeScript-strict-2dd4bf?style=flat-square" />
-  <img alt="stack" src="https://img.shields.io/badge/Express-SSE_live-a78bfa?style=flat-square" />
-  <img alt="stack" src="https://img.shields.io/badge/tests-34%2F34_passing-34d399?style=flat-square" />
+  <img alt="stack" src="https://img.shields.io/badge/Realtime-sync_engine_·_SSE_·_webhooks-a78bfa?style=flat-square" />
+  <img alt="stack" src="https://img.shields.io/badge/tests-46%2F46_passing-34d399?style=flat-square" />
   <img alt="stack" src="https://img.shields.io/badge/audit-11_PASS_·_0_GAP-fbbf24?style=flat-square" />
 </p>
 
@@ -32,7 +32,8 @@ Har bir lead **qaysi kampaniya va kreativdan kelganini**, CRM'da **qaysi bosqich
 ### Nima uchun boshqacha?
 
 - **Faqt real ma'lumot.** Hech qanday demo/uydirma raqam yo'q. Qaytmagan metrika `N/A` deb ochiq ko'rsatiladi, manba cheklovlari alohida ro'yxatda.
-- **Snapshot arxitekturasi.** MCP/Manus eksporti papkaga fayl tushgani zahoti dashboard o'zi yangilanadi (fs.watch → SSE). Kod yozish talab qilinmaydi.
+- **Real-time sync dvigateli.** Server ulangan manbalardan (Meta Graph API, Google Ads API, TGStat) o'zi ma'lumot tortadi — har `SYNC_INTERVAL_SEC` (default 5 daqiqa) da yoki "Yangilash" tugmasi bilan hoziroq. AmoCRM webhook'i ulansa yangi murojaatlar dashboardga **soniyalar ichida** tushadi (SSE). Kod yozish talab qilinmaydi.
+- **Snapshot arxitekturasi.** MCP/Manus eksporti papkaga fayl tushgani zahoti dashboard o'zi yangilanadi (fs.watch → SSE).
 - **Signal dvigateli.** Dashboard sizni izlamaydi — u o'zi aytadi: nima buzilgan (risk), nima tekshirish kerak (warn), qayerda pul ko'paytirish mumkin (imkoniyat).
 
 ---
@@ -41,7 +42,7 @@ Har bir lead **qaysi kampaniya va kreativdan kelganini**, CRM'da **qaysi bosqich
 
 | Sahifa                 | Nima bor                                                                                                                                                                                                |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **/** Umumiy natijalar | 6 KPI karta, skvoznaya voronka (har qadamda konversiya), diqqat signallari, pacing + prognoz, interaksiya/video/messaging metrikalari, CRM yopiq sikl paneli |
+| **/** Umumiy natijalar | 6 KPI karta, **platformalar kesimi** (pul qaysi kanalda — Meta/Google/Yandex/Telegram/Offline), **jonli harakat feed'i** (real-time), **kunlik dinamika charti** (real-time rejimda), skvoznaya voronka, diqqat signallari, pacing + prognoz, CRM yopiq sikl paneli |
 | **/campaigns**         | Saralanadigan ledger (Expo filtri, CPL vs o'rtacha benchmark, CSV eksport), detail drawer (15+ metrika)                                                                                                 |
 | **/creatives**         | Kreativ reytingi (Spend/CTR/Clicks/CPL), CTR liderlari charti, status chip'lari (ACTIVE/PAUSED/DISAPPROVED)                                                                                             |
 | **/audience**          | Yosh segmentlari: spend/leads chart, CPL kesimi, to'liq jadval                                                                                                                                          |
@@ -51,7 +52,7 @@ Har bir lead **qaysi kampaniya va kreativdan kelganini**, CRM'da **qaysi bosqich
 | **/report**            | Rahbariyat uchun bir sahifalik executive brief — «Chop etish → Save as PDF» (dark temada ham yorug' chiqadi)                                                                                            |
 | **/connections**       | Qaysi platforma ulangan, ma’lumot qayerdan keladi, manba cheklovlari                                                                                                                                    |
 
-**Umumiy:** ⌘K command palette (sahifa/kampaniya/kreativ/CRM-lead qidiruvi) · dark/light tema · ko'p kabinet tanlagich · live-sync indikator · mobil moslashuv · SSE + polling fallback.
+**Umumiy:** ⌘K command palette (sahifa/kampaniya/kreativ/CRM-lead qidiruvi) · dark/light tema · ko'p kabinet tanlagich · **live indikator (LIVE · keyingi syncgacha countdown)** · **desktop bildirishnomalar** (kritik signallar + yangi murojaatlar) · **shaffoflik paneli** (nima ma'lum / nima noma'lum va nega) · tab fokusga qaytganda darhol yangilanish · mobil moslashuv · SSE + 30s polling fallback.
 
 **Tushunarlilik:** har bir sahifa tepasida “bu sahifada nima ko'rasiz” yo'riqnomasi, har bir ko'rsatkich nomi
 o'zbekcha + inglizcha qavsda (`Murojaat narxi (CPL)`).
@@ -146,8 +147,8 @@ pnpm dev        # API (3001) + Vite dev (3000) birga — http://localhost:3000
 pnpm build      # production build → dist/
 pnpm start      # production: bitta server (client + API), port 3000
 pnpm check      # TypeScript strict typecheck
-pnpm smoke      # jsdom render test — 37 tekshiruv (barcha sahifalar, drawer, ⌘K)
-pnpm audit      # skvoznaya zanjir auditi — real snapshot ustida 11 tekshiruv
+pnpm smoke        # jsdom render test — 46 tekshiruv (barcha sahifalar, drawer, ⌘K, OAuth paneli, kabinet tanlagich)
+pnpm audit:chain  # skvoznaya zanjir auditi — real snapshot ustida 11 tekshiruv
 
 # Google Ads API (batafsil pull — Variant A)
 pnpm google:oauth           # refresh token olish (docs/google-ads-api-setup.md 3-qadam)
@@ -180,6 +181,40 @@ Fayl tushgani zahoti: `fs.watch` sezadi → SSE orqali barcha ochiq dashboardlar
 
 > To'liq JSON namunalari: [`server/data/README.md`](server/data/README.md)
 
+## 🔗 O'z hisoblaringizni ulang (OAuth — V4.0)
+
+Fayl tashlash endi ixtiyoriy: **Ulanishlar** sahifasida bitta tugma bilan o'z
+hisoblaringizni ulaysiz — tokenlar serverda saqlanadi, har sync'da ma'lumot
+o'zi tortiladi. Bu rejim **barcha loyihalaringiz** uchun: istalgan vaqt yangi
+kabinet ulanadi, tepadagi **kabinet tanlagich**dan xohlagan hisob ko'riladi.
+
+| Platforma | Tugma | Serverda (bir marta, .env) | Redirect URL (app sozlamasida) |
+| --------- | ----- | -------------------------- | ------------------------------ |
+| Facebook / Instagram | «Facebook bilan ulash» | `META_APP_ID` + `META_APP_SECRET` | https://<host>/api/oauth/meta/callback |
+| Google Ads | «Google bilan ulash» | `GOOGLE_ADS_CLIENT_ID/SECRET/DEVELOPER_TOKEN` | https://<host>/api/oauth/google-ads/callback |
+| AmoCRM | «AmoCRM hisobini ulash» (subdomain kiritiladi) | `AMOCRM_CLIENT_ID/SECRET` | https://<host>/api/oauth/amocrm/callback |
+
+Qanday ishlaydi:
+
+1. Admin bir marta app kalitlarini `.env` ga qo'yadi (yuqoridagi jadval).
+2. Har bir foydalanuvchi o'z hisobini ulaydi: consent → callback → tokenlar
+   `server/data/store.json` ga (gitignore'da) yoziladi — **client'ga hech qachon yuborilmaydi**.
+3. Sync dvigateli har `SYNC_INTERVAL_SEC` da ulangan kabinetlardan tortadi:
+   Meta — `act_*` bo'yicha, Google — har customer id, AmoCRM — v4 API (leadlar + pipeline).
+4. Ulangan kabinetlarni chip'lar bilan yoqib/o'chirib qo'yish mumkin (o'chirilgani sync qilinmaydi).
+5. Token eskirsa — status «TOKEN ESKIRGAN» bo'ladi, bir klikda qayta ulanadi.
+
+> **Meta app:** developers.facebook.com da Business tipidagi app yarating,
+> `ads_read` + `business_management` scope'lari bilan. O'z hisoblaringiz uchun
+> app'ni Development rejimida qoldirish kifoya (o'zingizni developer/test user
+> qilib qo'shasiz). Boshqa odamlar hisobini ulashi uchun App Review kerak.
+>
+> **Google:** `docs/google-ads-api-setup.md` bo'yicha OAuth client + developer token.
+> `prompt=consent` bilan refresh token olinadi va avtomatik yangilanadi.
+
+Xavfsizlik: OAuth callbacklar HMAC-imzolangan `state` (CSRF) bilan himoyalangan;
+ulanishlarni boshqarish (toggle, delete) umumiy parol auth ostida.
+
 ### AmoCRM matchlash — muhim qadam
 
 Lead'lar **`utm_campaign`** bo'yicha Meta kampaniyalariga bog'lanadi. Meta'da (bir marta) UTM shabloniga qo'ying:
@@ -196,15 +231,57 @@ Bog'lanmagan leadlar "Manbasi aniqlanmagan" deb alohida chiqadi — **taxminiy b
 
 | Endpoint                          | Tavsif                                                  |
 | --------------------------------- | ------------------------------------------------------- |
-| `GET /api/snapshot?platform=meta` | Eng yangi snapshot (normalized). `?file=` — aniq fayl   |
+| `GET /api/snapshot?platform=meta` | Eng yangi snapshot (normalized). `?file=` — aniq fayl, `?account=` — kabinet filtri |
+| `GET /api/oauth/status`            | Qaysi platformalar OAuth'ga tayyor (app kalitlari bormi) |
+| `GET /api/oauth/<p>/start`         | OAuth consent sahifasiga redirect (meta/google-ads/amocrm) |
+| `GET /api/oauth/<p>/callback`      | Provider'dan qaytgan kod → tokenlar serverda saqlanadi |
+| `POST /api/oauth/accounts/:cid/:aid/toggle` | Kabinetni sync'dan yoqish/o'chirish |
+| `DELETE /api/oauth/connections/:id` | Ulanishni olib tashlash                                 |
 | `GET /api/snapshots`              | Mavjud davr/kabinet fayllari ro'yxati (tanlagich uchun) |
 | `GET /api/connections`            | Platforma + CRM ulanish holati                          |
 | `GET /api/crm`                    | AmoCRM ma'lumoti (matchlangan)                          |
-| `GET /api/stream`                 | SSE live-sync kanali (hello/ping/sync eventlari)        |
+| `GET /api/stream`                 | SSE live kanali: hello/ping/sync + **sync_state** + **activity** eventlari |
+| `POST /api/sync`                  | Haqiqiy sync — sozlangan manbalardan hoziroq tortadi (Meta/Google/Telegram) |
+| `GET /api/sync`                   | Sync dvigateli holati: interval, keyingi sync, natijalar |
+| `GET /api/activity`               | Jonli harakat feed'i — sync, yangi leadlar, webhooklar |
+| `POST /api/webhooks/amocrm`       | AmoCRM real-time webhook — leadlar darhol CRM + feed'ga tushadi |
 | `POST /api/refresh`               | Barcha clientlarga push (yangi snapshot haqida)         |
 | `GET /api/health`                 | Healthcheck                                             |
 
 ---
+
+## ⚡ Real-time: sync dvigateli + webhooklar
+
+Ma'lumot ikki yo'lda jonli yangilanadi — fayl tashlash shart emas:
+
+| Manba | Real-time usul | Sozlash |
+| --- | --- | --- |
+| **Meta Ads** | Graph API'dan avtomatik pull (har intervalda) | `.env`: `META_ACCESS_TOKEN`, `META_AD_ACCOUNT_ID` |
+| **Google Ads** | API'dan avtomatik pull | `.env`: `GOOGLE_ADS_*` (qo'llanma: `docs/google-ads-api-setup.md`) |
+| **Telegram** | TGStat'dan avtomatik pull (kanallar + postlar) | `.env`: `TGSTAT_TOKEN` + kanal qo'shish |
+| **AmoCRM** | Webhook push (leadlar soniyalar ichida) | AmoCRM → Webhook'lar → `https://<host>/api/webhooks/amocrm` |
+| **Offline** | API orqali qo'lda kiritish | `/offline` sahifasi yoki `POST /api/channels/offline/*` |
+| **Har qanday manba** | Snapshot fayl tushishi | `server/data/snapshots/` (fs.watch → SSE) |
+
+- **Interval**: `SYNC_INTERVAL_SEC` (default 300 = 5 daqiqa, minimum 30).
+- **Qo'lda sync**: tepadagi ↻ tugma yoki `POST /api/sync` — barcha manbalardan hoziroq tortadi.
+- **Jonli harakat feed'i**: har bir sync/lead/webhook hodisasi Overview'da real-time ko'rinadi (SSE `activity` eventlari).
+- **Transparenslik**: qaysi manba sozlangan, qaysi ma'lumot bor/yo'q — Overview'dagi platformalar kesimi va /api/sync javobida aniq ko'rsatiladi.
+- Ma'lumotlar `server/data/store.json` (yengil JSON store) da saqlanadi — tashqi DB talab qilinmaydi.
+
+## 🔒 Xavfsizlik (ixtiyoriy)
+
+Ochiq URL'da deploy qilganda dashboardni parol bilan himoyalang — `.env` ga:
+
+```
+DASHBOARD_PASSWORD=...      # login ekrani yoqiladi
+AUTH_SECRET=...             # sessiya imzosi (random satr; ixtiyoriy)
+WEBHOOK_SECRET=...          # AmoCRM webhook faqat ?secret=... bilan qabul qilinadi
+```
+
+- Sessiya: 30 kun, HttpOnly cookie, HMAC imzolangan; parol timing-safe tekshiriladi.
+- `/api/health` ochiq (monitoring uchun), `/api/webhooks/*` — alohida `WEBHOOK_SECRET` bilan.
+- Statik zaxira (bootstrap.json) parol so\'ralganda ishlatilmaydi — himoya chetlab o\'tilmaydi.
 
 ## 🧠 Signal dvigateli (avtomatik xulosalar)
 
@@ -221,7 +298,7 @@ Hammasi snapshotdagi real raqamlardan hisoblanadi — qo'lda yozilgan "fact" yo'
 ## 🧪 Sifat
 
 - **TypeScript strict** — typecheck toza
-- **jsdom smoke-test** — 37/37: barcha 9 sahifa render, drawer ochilishi, ⌘K palette, CRM match kuchi
+- **jsdom smoke-test** — 46/46: barcha sahifalar render, drawer ochilishi, ⌘K palette, CRM match kuchi, OAuth paneli, kabinet tanlagich
 - **Skvoznaya audit** (`scripts/audit-chain.ts`) — 11 PASS · 0 GAP: Account → Expo → Kampaniya → Ad set → Kreativ → CRM lead zanjiri, referential integrity, metrikalar qamrovi
 - **Production build** — muvaffaqiyatli
 
@@ -229,12 +306,15 @@ Hammasi snapshotdagi real raqamlardan hisoblanadi — qo'lda yozilgan "fact" yo'
 
 ## 🗺 Yo'l xaritasi
 
-- [ ] Google/Yandex uchun ko'p kabinet tanlagich (Meta'da bor)
+- [x] Yagona oyna: platformalar kesimi Overview'da (Meta/Google/Yandex/Telegram/Offline bir joyda) — V3.
+- [x] Ko'p kabinet: bir platformaning barcha hisoblari avtomatik jamlanadi (V3.3); aniq davr/kabinet tanlash — tepadagi tanlagich.
+- [x] Kunlik timeseries (Meta `time_increment=1`) → trend chartlar — V3.1.
+- [x] Desktop bildirishnomalar + signal shaffoflik paneli — V3.2.
+- [x] Parol himoyasi + webhook secret — V3.3.
+- [x] **OAuth ko'p ijarachilik (multi-tenant)**: o'z Facebook/Google/AmoCRM hisoblarini bitta tugma bilan ulash, kabinet tanlagich, tokenlar serverda — V4.0.
+- [ ] Yandex Direct API pull (hozir fayl orqali)
 - [ ] Ko'p platformali CRM atributsiyasi (Google/Yandex leadlarini ham bog'lash)
-- [ ] Kunlik timeseries (`time_increment=1`) → trend chartlar, kunlik anomaliyalar
-- [ ] Placement/gender/geo kesimlari
-- [ ] Browser notification (kritik signallar desktop'ga)
-- [ ] Auth + rollar (admin/agent/mijoz), ko'p til (uz/en/ru)
+- [ ] Rollar (admin/agent/mijoz), ko'p til (uz/en/ru)
 - [ ] Avtomatik email hisobot (haftalik PDF)
 
 ---

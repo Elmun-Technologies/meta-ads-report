@@ -1,15 +1,19 @@
 /**
- * Telegram kanal statistikasi — TGStat API integratsiyasi
- * 
+ * Telegram kanal statistikasi — TGStat API integratsiyasi (JSON store ustida).
+ *
  * Endpointlar:
- *   GET  /api/telegram/channels       — barcha ulangan kanallar
- *   POST /api/telegram/channels       — yangi kanal qo'shish (@username)
+ *   GET  /api/telegram/channels        — barcha ulangan kanallar
+ *   POST /api/telegram/channels        — yangi kanal qo'shish (@username)
  *   GET  /api/telegram/channels/:id/sync — kanalni TGStat dan yangilash
- *   GET  /api/telegram/posts          — kanal postlari (query: channelId)
- *   POST /api/telegram/posts/:id/cost — post uchun narx kiritish
+ *   GET  /api/telegram/posts           — kanal postlari (query: channelId)
+ *   POST /api/telegram/posts/:id/cost  — post uchun narx kiritish
+ *
+ * Har bir o'zgarish SSE orqali barcha clientlarga broadcast qilinadi.
  */
 import { Router } from "express";
-import { prisma } from "../db";
+import { broadcast } from "../app";
+import { getStore, mutate, logActivity, type TelegramChannel } from "../store";
+import { registerTelegramSyncer } from "../sync";
 
 const TGSTAT_BASE = "https://api.tgstat.ru";
 
@@ -74,17 +78,12 @@ interface TGStatPost {
 export const telegramRouter = Router();
 
 // GET /api/telegram/channels — barcha kanallar
-telegramRouter.get("/channels", async (_req, res) => {
+telegramRouter.get("/channels", (_req, res) => {
   try {
-    const channels = await prisma.telegramChannel.findMany({
-      include: {
-        posts: {
-          orderBy: { date: "desc" },
-          take: 5,
-        },
-      },
-      orderBy: { syncedAt: "desc" },
-    });
+    const channels = getStore().channels.map(ch => ({
+      ...ch,
+      posts: [...ch.posts].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5),
+    }));
     const hasToken = !!getToken();
     res.json({ channels, hasToken });
   } catch (err) {
@@ -109,39 +108,37 @@ telegramRouter.post("/channels", async (req, res) => {
   });
 
   try {
-    const channel = await prisma.telegramChannel.upsert({
-      where: { username: cleanUsername },
-      create: {
+    const now = new Date().toISOString();
+    const channel = mutate(store => {
+      const existing = store.channels.find(c => c.username === cleanUsername);
+      const fields = {
+        name: stat?.title ?? cleanUsername,
+        subscribers: stat?.participants_count ?? 0,
+        avgPostReach: stat?.avg_post_reach ?? 0,
+        advReach12h: stat?.adv_post_reach_12h ?? 0,
+        advReach24h: stat?.adv_post_reach_24h ?? 0,
+        advReach48h: stat?.adv_post_reach_48h ?? 0,
+        errPercent: stat?.err_percent ?? 0,
+        dailyReach: stat?.daily_reach ?? 0,
+        forwardsCount: stat?.forwards_count ?? 0,
+        mentionsCount: stat?.mentions_count ?? 0,
+        postsCount: stat?.posts_count ?? 0,
+        tgstatId: stat?.id ?? null,
+        syncedAt: now,
+      };
+      if (existing) {
+        Object.assign(existing, fields);
+        return existing;
+      }
+      const created: TelegramChannel = {
+        id: `tg-${cleanUsername.replace(/[^a-z0-9_]/gi, "")}-${Date.now()}`,
         username: cleanUsername,
-        name: stat?.title ?? cleanUsername,
-        subscribers: stat?.participants_count ?? 0,
-        avgPostReach: stat?.avg_post_reach ?? 0,
-        advReach12h: stat?.adv_post_reach_12h ?? 0,
-        advReach24h: stat?.adv_post_reach_24h ?? 0,
-        advReach48h: stat?.adv_post_reach_48h ?? 0,
-        errPercent: stat?.err_percent ?? 0,
-        dailyReach: stat?.daily_reach ?? 0,
-        forwardsCount: stat?.forwards_count ?? 0,
-        mentionsCount: stat?.mentions_count ?? 0,
-        postsCount: stat?.posts_count ?? 0,
-        tgstatId: stat?.id ?? null,
-        syncedAt: new Date(),
-      },
-      update: {
-        name: stat?.title ?? cleanUsername,
-        subscribers: stat?.participants_count ?? 0,
-        avgPostReach: stat?.avg_post_reach ?? 0,
-        advReach12h: stat?.adv_post_reach_12h ?? 0,
-        advReach24h: stat?.adv_post_reach_24h ?? 0,
-        advReach48h: stat?.adv_post_reach_48h ?? 0,
-        errPercent: stat?.err_percent ?? 0,
-        dailyReach: stat?.daily_reach ?? 0,
-        forwardsCount: stat?.forwards_count ?? 0,
-        mentionsCount: stat?.mentions_count ?? 0,
-        postsCount: stat?.posts_count ?? 0,
-        tgstatId: stat?.id ?? null,
-        syncedAt: new Date(),
-      },
+        createdAt: now,
+        posts: [],
+        ...fields,
+      };
+      store.channels.push(created);
+      return created;
     });
 
     // Postlarni ham sync qilish
@@ -149,6 +146,14 @@ telegramRouter.post("/channels", async (req, res) => {
       await syncChannelPosts(channel.id, cleanUsername);
     }
 
+    logActivity({
+      kind: "channel",
+      source: "telegram",
+      tone: "good",
+      title: `Telegram kanal qo'shildi: ${channel.name}`,
+      body: stat ? `${stat.participants_count} obunachi · TGStat'dan sinxronlandi` : "TGStat token yo'q — qo'lda kiritildi",
+    });
+    broadcast("sync", { at: new Date().toISOString(), source: "telegram-channel-added" });
     res.json({ channel, synced: !!stat });
   } catch (err) {
     console.error("[telegram] kanal qo'shishda xato:", err);
@@ -159,9 +164,7 @@ telegramRouter.post("/channels", async (req, res) => {
 // GET /api/telegram/channels/:id/sync — kanalni qayta sync qilish
 telegramRouter.get("/channels/:id/sync", async (req, res) => {
   try {
-    const channel = await prisma.telegramChannel.findUnique({
-      where: { id: req.params.id },
-    });
+    const channel = getStore().channels.find(c => c.id === req.params.id);
     if (!channel) {
       res.status(404).json({ error: "Kanal topilmadi" });
       return;
@@ -172,49 +175,55 @@ telegramRouter.get("/channels/:id/sync", async (req, res) => {
     });
 
     if (stat) {
-      await prisma.telegramChannel.update({
-        where: { id: channel.id },
-        data: {
-          name: stat.title,
-          subscribers: stat.participants_count,
-          avgPostReach: stat.avg_post_reach,
-          advReach12h: stat.adv_post_reach_12h ?? 0,
-          advReach24h: stat.adv_post_reach_24h ?? 0,
-          advReach48h: stat.adv_post_reach_48h ?? 0,
-          errPercent: stat.err_percent,
-          dailyReach: stat.daily_reach,
-          forwardsCount: stat.forwards_count,
-          mentionsCount: stat.mentions_count,
-          postsCount: stat.posts_count,
-          tgstatId: stat.id,
-          syncedAt: new Date(),
-        },
+      mutate(store => {
+        const c = store.channels.find(x => x.id === channel.id);
+        if (!c) return;
+        c.name = stat.title;
+        c.subscribers = stat.participants_count;
+        c.avgPostReach = stat.avg_post_reach;
+        c.advReach12h = stat.adv_post_reach_12h ?? 0;
+        c.advReach24h = stat.adv_post_reach_24h ?? 0;
+        c.advReach48h = stat.adv_post_reach_48h ?? 0;
+        c.errPercent = stat.err_percent;
+        c.dailyReach = stat.daily_reach;
+        c.forwardsCount = stat.forwards_count;
+        c.mentionsCount = stat.mentions_count;
+        c.postsCount = stat.posts_count;
+        c.tgstatId = stat.id;
+        c.syncedAt = new Date().toISOString();
       });
 
       await syncChannelPosts(channel.id, channel.username);
     }
 
-    const updated = await prisma.telegramChannel.findUnique({
-      where: { id: channel.id },
-      include: { posts: { orderBy: { date: "desc" }, take: 20 } },
+    const updated = getStore().channels.find(c => c.id === channel.id) ?? null;
+    logActivity({
+      kind: "channel",
+      source: "telegram",
+      tone: stat ? "good" : "warn",
+      title: `Kanal yangilandi: ${updated?.name ?? channel.username}`,
+      body: stat ? "TGStat'dan ma'lumot tortildi" : "TGStat javob bermadi (token/limit)",
     });
+    broadcast("sync", { at: new Date().toISOString(), source: "telegram-sync" });
     res.json({ channel: updated, synced: !!stat });
   } catch (err) {
     console.error("[telegram] sync xato:", err);
-    res.status(500).json({ error: "Sync xatosi" });
+    res.status(500).json({ error: "Kanalni yangilashda xato" });
   }
 });
 
 // GET /api/telegram/posts — kanal postlari
-telegramRouter.get("/posts", async (req, res) => {
-  const channelId = req.query.channelId as string | undefined;
+telegramRouter.get("/posts", (req, res) => {
   try {
-    const posts = await prisma.telegramPost.findMany({
-      where: channelId ? { channelId } : undefined,
-      include: { channel: { select: { username: true, name: true } } },
-      orderBy: { date: "desc" },
-      take: 50,
-    });
+    const channelId = req.query.channelId ? String(req.query.channelId) : null;
+    const store = getStore();
+    const channels = channelId ? store.channels.filter(c => c.id === channelId) : store.channels;
+    const posts = channels.flatMap(c =>
+      [...c.posts]
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 30)
+        .map(p => ({ ...p, channel: { username: c.username, name: c.name } }))
+    );
     res.json({ posts });
   } catch (err) {
     console.error("[telegram] posts xato:", err);
@@ -223,17 +232,35 @@ telegramRouter.get("/posts", async (req, res) => {
 });
 
 // POST /api/telegram/posts/:id/cost — post narxini kiritish
-telegramRouter.post("/posts/:id/cost", async (req, res) => {
+telegramRouter.post("/posts/:id/cost", (req, res) => {
   const { cost } = req.body as { cost?: number };
   if (cost == null || cost < 0) {
     res.status(400).json({ error: "cost maydoni kerak (0 yoki undan katta son)" });
     return;
   }
   try {
-    const post = await prisma.telegramPost.update({
-      where: { id: req.params.id },
-      data: { cost },
+    const post = mutate(store => {
+      for (const ch of store.channels) {
+        const p = ch.posts.find(x => x.id === req.params.id);
+        if (p) {
+          p.cost = cost;
+          return p;
+        }
+      }
+      return null;
     });
+    if (!post) {
+      res.status(404).json({ error: "Post topilmadi" });
+      return;
+    }
+    logActivity({
+      kind: "channel",
+      source: "telegram",
+      tone: "info",
+      title: "Post narxi kiritildi",
+      body: `Reklama narxi: ${cost}`,
+    });
+    broadcast("sync", { at: new Date().toISOString(), source: "telegram-cost" });
     res.json({ post });
   } catch (err) {
     console.error("[telegram] cost update xato:", err);
@@ -241,7 +268,11 @@ telegramRouter.post("/posts/:id/cost", async (req, res) => {
   }
 });
 
-/** TGStat dan kanal postlarini tortib, bazaga yozish */
+/* ------------------------------------------------------------------ */
+/* TGStat pull (sync dvigateli uchun ham ishlatiladi)                  */
+/* ------------------------------------------------------------------ */
+
+/** TGStat dan kanal postlarini tortib, store'ga yozish */
 async function syncChannelPosts(dbChannelId: string, username: string) {
   const posts = await tgstatGet<{ items: TGStatPost[] }>("/channels/posts", {
     channelId: username,
@@ -250,46 +281,79 @@ async function syncChannelPosts(dbChannelId: string, username: string) {
 
   if (!posts?.items) return;
 
-  for (const p of posts.items) {
-    if (p.is_deleted) continue;
-
-    const postId = String(p.id);
-    await prisma.telegramPost.upsert({
-      where: { id: postId },
-      create: {
-        id: postId,
-        tgstatPostId: postId,
-        channelId: dbChannelId,
+  mutate(store => {
+    const ch = store.channels.find(c => c.id === dbChannelId);
+    if (!ch) return;
+    for (const p of posts.items!) {
+      if (p.is_deleted) continue;
+      const postId = String(p.id);
+      const fields = {
         text: (p.text ?? "").slice(0, 500),
-        date: new Date(p.date * 1000),
+        date: new Date(p.date * 1000).toISOString(),
         views: p.views ?? 0,
         shares: p.shares ?? 0,
         forwards: p.forwards ?? 0,
         reactions: p.reactions ?? 0,
         commentsCount: p.comments_count ?? 0,
         link: p.link ?? "",
-        syncedAt: new Date(),
-      },
-      update: {
-        text: (p.text ?? "").slice(0, 500),
-        views: p.views ?? 0,
-        shares: p.shares ?? 0,
-        forwards: p.forwards ?? 0,
-        reactions: p.reactions ?? 0,
-        commentsCount: p.comments_count ?? 0,
-        link: p.link ?? "",
-        syncedAt: new Date(),
-      },
-    });
-  }
+        syncedAt: new Date().toISOString(),
+      };
+      const existing = ch.posts.find(x => x.id === postId);
+      if (existing) {
+        Object.assign(existing, fields);
+      } else {
+        ch.posts.push({
+          id: postId,
+          tgstatPostId: postId,
+          channelId: dbChannelId,
+          cost: 0,
+          ...fields,
+        });
+      }
+    }
+    // Eng yangi 60 post saqlanadi
+    ch.posts.sort((a, b) => b.date.localeCompare(a.date));
+    if (ch.posts.length > 60) ch.posts.length = 60;
+  });
 }
 
-/** Telegram ma'lumotlarini unified snapshot uchun olish */
-export async function getTelegramStats() {
-  const channels = await prisma.telegramChannel.findMany({
-    include: {
-      posts: { orderBy: { date: "desc" }, take: 30 },
-    },
-  });
-  return channels;
+/** Barcha kanallarni TGStat'dan yangilash — sync.ts uchun ro'yxatdan o'tkaziladi */
+async function syncAllTelegram(): Promise<{ channels: number; posts: number }> {
+  const channels = getStore().channels;
+  let posts = 0;
+  for (const ch of channels) {
+    const stat = await tgstatGet<TGStatChannelStat>("/channels/stat", { channelId: ch.username });
+    if (stat) {
+      mutate(store => {
+        const c = store.channels.find(x => x.id === ch.id);
+        if (!c) return;
+        c.name = stat.title;
+        c.subscribers = stat.participants_count;
+        c.avgPostReach = stat.avg_post_reach;
+        c.advReach12h = stat.adv_post_reach_12h ?? 0;
+        c.advReach24h = stat.adv_post_reach_24h ?? 0;
+        c.advReach48h = stat.adv_post_reach_48h ?? 0;
+        c.errPercent = stat.err_percent;
+        c.dailyReach = stat.daily_reach;
+        c.forwardsCount = stat.forwards_count;
+        c.mentionsCount = stat.mentions_count;
+        c.postsCount = stat.posts_count;
+        c.tgstatId = stat.id;
+        c.syncedAt = new Date().toISOString();
+      });
+      const before = getStore().channels.find(x => x.id === ch.id)?.posts.length ?? 0;
+      await syncChannelPosts(ch.id, ch.username);
+      const after = getStore().channels.find(x => x.id === ch.id)?.posts.length ?? 0;
+      posts += after;
+      void before;
+    }
+  }
+  return { channels: channels.length, posts };
+}
+
+registerTelegramSyncer(syncAllTelegram);
+
+/** Unified snapshot uchun Telegram ma'lumotlari */
+export function getTelegramStats() {
+  return getStore().channels;
 }

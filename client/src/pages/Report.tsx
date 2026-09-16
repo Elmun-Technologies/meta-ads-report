@@ -24,6 +24,7 @@ export default function Report() {
 
   if (!snapshot || !pacing) return null;
   const { totals, campaigns, meta } = snapshot;
+  const platforms = snapshot.platforms ?? null;
   const avgCpl = totals.cpl ?? 0;
   const topSpend = [...campaigns]
     .sort((a, b) => b.metrics.spend - a.metrics.spend)
@@ -129,6 +130,37 @@ export default function Report() {
 
         <div className="rs-cols">
           <div>
+            {/* Platformalar kesimi — yagona oyna */}
+            {platforms && platforms.filter(p => p.campaigns > 0).length > 1 && (
+              <>
+                <div className="rs-sec">PLATFORMALAR KESIMI</div>
+                <table className="tbl rs-table">
+                  <thead>
+                    <tr>
+                      <th>Platforma</th>
+                      <th>Sarf</th>
+                      <th>Murojaat</th>
+                      <th>CPL</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {platforms
+                      .filter(p => p.campaigns > 0)
+                      .sort((a, b) => b.spend - a.spend)
+                      .map(p => (
+                        <tr key={p.platform} style={{ cursor: "default" }}>
+                          <td>
+                            <b style={{ fontSize: 11.5 }}>{p.name}</b>
+                          </td>
+                          <td className="num">{money(p.spend)}</td>
+                          <td className="num">{p.leads > 0 ? whole(p.leads) : "—"}</td>
+                          <td className="num">{p.cpl != null && p.cpl > 0 ? money(p.cpl) : "—"}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </>
+            )}
             <div className="rs-sec">Ko'rishdan murojaatgacha</div>
             <Funnel
               stages={[

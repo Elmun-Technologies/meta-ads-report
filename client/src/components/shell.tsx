@@ -3,7 +3,6 @@ import { Link, useLocation } from "wouter";
 import {
   Activity,
   ArrowLeftRight,
-  BarChart3,
   Command,
   Gauge,
   LayoutDashboard,
@@ -21,6 +20,7 @@ import {
   X,
   FileText,
   Send,
+  Radio,
 } from "lucide-react";
 import { PLATFORM_META, type PlatformId } from "@shared/types";
 import { ago } from "@/lib/format";
@@ -39,71 +39,71 @@ export interface NavItem {
 export const NAV: NavItem[] = [
   {
     path: "/",
-    label: "Общие результаты",
-    hint: "Затраты, стоимость лида и кампании, требующие внимания",
+    label: "Umumiy natijalar",
+    hint: "Sarf, murojaat narxi va diqqat talab qiladigan kampaniyalar",
     icon: LayoutDashboard,
   },
   {
     path: "/campaigns",
-    label: "Кампании",
-    hint: "Полная таблица и детали в разрезе каждой кампании",
+    label: "Kampaniyalar",
+    hint: "Har bir kampaniya bo'yicha to'liq jadval va tafsilotlar",
     icon: Target,
     count: "campaigns",
   },
   {
     path: "/creatives",
-    label: "Креативы",
-    hint: "Какие изображения/видео работают лучше",
+    label: "Kreativlar",
+    hint: "Qaysi rasm/video yaxshiroq ishlayapti",
     icon: Sparkles,
     count: "creatives",
   },
   {
     path: "/audience",
-    label: "Аудитория",
-    hint: "Затраты, лиды и их стоимость по возрасту",
+    label: "Auditoriya",
+    hint: "Yosh bo'yicha sarf, murojaatlar va ularning narxi",
     icon: Users,
   },
   {
     path: "/leads",
-    label: "Структура кампаний",
-    hint: "Структура: Expo → кампания → группа → креатив",
+    label: "Kampaniya tuzilmasi",
+    hint: "Tuzilma: Expo → kampaniya → guruh → kreativ",
     icon: Gauge,
   },
   {
     path: "/pipeline",
-    label: "Воронка (CRM)",
-    hint: "Статус лидов, на каком этапе они находятся",
+    label: "Murojaat yo'li (CRM)",
+    hint: "Leadlar holati va qaysi bosqichda turgani",
     icon: Workflow,
     count: "crmLeads",
   },
   {
     path: "/offline",
-    label: "Офлайн источники",
-    hint: "Баннеры, QR-коды, флаеры и другие офлайн-ресурсы",
+    label: "Offline manbalar",
+    hint: "Banner, QR-kod, flyer va boshqa offline resurslar",
     icon: Megaphone,
   },
   {
     path: "/telegram",
-    label: "Telegram",
-    hint: "Статистика каналов и рекламы через TGStat",
+    label: "Telegram kanallar",
+    hint: "Kanallar statistikasi va TGStat orqali reklama",
     icon: Send,
   },
   {
     path: "/compare",
-    label: "Сравнение",
-    hint: "Сравнение двух периодов или кампаний",
+    label: "Taqqoslash",
+    hint: "Ikki davr yoki kampaniyalarni solishtirish",
     icon: ArrowLeftRight,
   },
   {
     path: "/report",
-    label: "Отчет",
-    hint: "Краткий одностраничный отчет для руководства (печать/PDF)",
+    label: "Hisobot",
+    hint: "Rahbariyat uchun bir sahifalik qisqa hisobot (chop etish/PDF)",
     icon: FileText,
   },
   {
     path: "/connections",
-    label: "Подключения",
-    hint: "Подключенные платформы и источники данных",
+    label: "Ulanishlar",
+    hint: "Ulangan platformalar va ma'lumot manbalari",
     icon: Plug,
   },
 ];
@@ -133,6 +133,27 @@ function PlatformLogo({ id, size = 22 }: { id: PlatformId; size?: number }) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Yordamchi — keyingi syncgacha qolgan vaqt (ticking)                 */
+/* ------------------------------------------------------------------ */
+
+function useCountdown(iso: string | null | undefined): string | null {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick(x => x + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return useMemo(() => {
+    if (!iso) return null;
+    const ms = new Date(iso).getTime() - Date.now();
+    if (ms <= 0) return "hozir";
+    const min = Math.floor(ms / 60000);
+    const sec = Math.floor((ms % 60000) / 1000);
+    if (min >= 1) return `${min} daqiqa`;
+    return `${sec} soniya`;
+  }, [iso, Math.floor(Date.now() / 1000)]);
+}
+
+/* ------------------------------------------------------------------ */
 /* Sidebar                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -151,12 +172,15 @@ export function Sidebar({
     live,
     lastEventAt,
     source,
+    syncState,
     setPlatform,
   } = useDashboardContext();
   const [location] = useLocation();
   const meta = snapshot?.meta;
   const adsConnections = connections.filter(c => c.kind !== "crm");
   const crmConnection = connections.find(c => c.kind === "crm");
+  const nextIn = useCountdown(syncState?.nextSyncAt);
+  const anyAuto = syncState?.configured?.meta || syncState?.configured?.google || syncState?.configured?.telegram;
 
   return (
     <aside className={`sidebar ${open ? "open" : ""}`}>
@@ -166,20 +190,20 @@ export function Sidebar({
         </span>
         <div style={{ minWidth: 0 }}>
           <b>SOF·EXPO</b>
-          <small>Рекламные отчеты</small>
+          <small>Marketing boshqaruv markazi</small>
         </div>
         <button
           className="icon-btn mobile-only"
           style={{ marginLeft: "auto", width: 30, height: 30 }}
           onClick={onClose}
-          aria-label="Закрыть"
+          aria-label="Yopish"
         >
           <X size={16} />
         </button>
       </div>
 
       <div className="side-section">
-        <div className="side-caption">Платформы</div>
+        <div className="side-caption">Platformalar</div>
         <div className="platform-switch">
           <Link
             href="/"
@@ -192,7 +216,7 @@ export function Sidebar({
             <PlatformLogo id="all" />
             <span className="p-info">
               <b>{PLATFORM_META["all"].name}</b>
-              <small>Объединенные показатели</small>
+              <small>Barcha manbalar bir oynada</small>
             </span>
           </Link>
           {adsConnections.map(conn => {
@@ -213,12 +237,12 @@ export function Sidebar({
                   <b>{pm?.name ?? conn.name}</b>
                   <small>
                     {connected
-                      ? `${conn.accounts.length} каб. подключено`
-                      : "не подключено"}
+                      ? `${conn.accounts.length} kabinet ulangan`
+                      : "ulanmagan"}
                   </small>
                 </span>
                 <span className={`p-status ${connected ? "on" : "off"}`}>
-                  {connected ? "Подключено" : "Ожидается"}
+                  {connected ? "Ulangan" : "Kutilmoqda"}
                 </span>
               </Link>
             );
@@ -228,7 +252,7 @@ export function Sidebar({
 
       {crmConnection && (
         <div className="side-section">
-          <div className="side-caption">CRM · до сделки</div>
+          <div className="side-caption">CRM · bitimgacha</div>
           <Link
             href="/pipeline"
             onClick={onClose}
@@ -254,19 +278,19 @@ export function Sidebar({
               <b>AmoCRM</b>
               <small>
                 {crmConnected
-                  ? `${crm?.leads.length ?? 0} лидов отслеживается`
-                  : "не подключено — страница /pipeline"}
+                  ? `${crm?.leads.length ?? 0} murojaat kuzatilmoqda`
+                  : "ulanmagan — /pipeline sahifasi"}
               </small>
             </span>
             <span className={`p-status ${crmConnected ? "on" : "off"}`}>
-              {crmConnected ? "Подключено" : "Ожидается"}
+              {crmConnected ? "Ulangan" : "Kutilmoqda"}
             </span>
           </Link>
         </div>
       )}
 
       <div className="side-section">
-        <div className="side-caption">Кабинет</div>
+        <div className="side-caption">Kabinet</div>
         <div className="account-card">
           <span
             className="a-dot"
@@ -274,13 +298,13 @@ export function Sidebar({
           />
           <div className="a-info">
             <small>{meta?.account.externalId ?? "—"}</small>
-            <b>{meta?.account.name ?? "Кабинет не подключен"}</b>
+            <b>{meta?.account.name ?? "Kabinet ulanmagan"}</b>
           </div>
         </div>
       </div>
 
       <div className="side-section">
-        <div className="side-caption">Разделы</div>
+        <div className="side-caption">Bo'limlar</div>
         <nav className="side-nav">
           {NAV.map(item => {
             const active = location === item.path;
@@ -314,20 +338,34 @@ export function Sidebar({
           <span className={`live-dot ${live ? "pulse" : "off"}`} />
           <b style={{ fontSize: 11.5, fontWeight: 600 }}>
             {source === "static"
-              ? "Данные: статичная копия"
+              ? "Ma'lumot: build vaqtidagi nusxa"
               : live
-                ? "Автообновление включено"
-                : "Проверяется периодически"}
+                ? anyAuto
+                  ? `Live · keyingi sync: ${nextIn ?? "—"}`
+                  : "Live ulanish (SSE)"
+                : "Muntazam tekshirib turadi"}
           </b>
         </div>
         <div className="s-meta">
-          Источник: <b>{meta?.sourceLabel ?? "—"}</b>
+          Manba: <b>{meta?.sourceLabel ?? "—"}</b>
           <br />
-          Обновлено: <b>{ago(meta?.syncedAt ?? lastEventAt)}</b>
+          Yangilangan: <b>{ago(meta?.syncedAt ?? lastEventAt)}</b>
           {meta && (
             <>
               <br />
-              Период: <b>{meta.period.label || "—"}</b>
+              Davr: <b>{meta.period.label || "—"}</b>
+            </>
+          )}
+          {syncState?.lastSyncAt != null && (
+            <>
+              <br />
+              Oxirgi sync: <b>{ago(syncState.lastSyncAt)}</b>
+              {syncState.results?.length > 0 && (
+                <>
+                  {" "}
+                  · {syncState.results.filter(r => r.ok).length}/{syncState.results.length} manba
+                </>
+              )}
             </>
           )}
         </div>
@@ -346,18 +384,32 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
     snapshots,
     snapshotFile,
     setSnapshotFile,
+    connections,
+    account,
+    setAccount,
     syncing,
-    refresh,
+    syncRunning,
+    syncNow,
     theme,
     toggleTheme,
     setPaletteOpen,
     live,
     source,
+    syncState,
   } = useDashboardContext();
+  /** Barcha kabinet nomlari (platformalar bo'yicha unique) — kabinet tanlagich uchun */
+  const accountNames = [
+    ...new Set(
+      connections
+        .flatMap(c => (c.kind !== "crm" ? c.accounts.map(a => a.name) : []))
+        .filter(n => n && n !== "all")
+    ),
+  ].sort((a, b) => a.localeCompare(b));
   const [location] = useLocation();
   const platformName = snapshot
     ? PLATFORM_META[snapshot.meta.platform].name
     : "—";
+  const nextIn = useCountdown(syncState?.nextSyncAt);
   const initials =
     (snapshot?.meta.account.name ?? "SE")
       .split(/[\s|·-]+/)
@@ -371,27 +423,42 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
       <button
         className="icon-btn mobile-only"
         onClick={onMenu}
-        aria-label="Меню"
+        aria-label="Menyu"
       >
         <Menu size={17} />
       </button>
       <div className="crumb">
         <span>{platformName}</span>
         <Chevron className="sep" />
-        <b title={PAGE_HINTS[location]}>{PAGE_TITLES[location] ?? "Страница"}</b>
+        <b title={PAGE_HINTS[location]}>{PAGE_TITLES[location] ?? "Sahifa"}</b>
       </div>
       <div className="top-actions">
         <button className="search-trigger" onClick={() => setPaletteOpen(true)}>
           <Search size={14} />
-          <span className="st-label">Поиск и команды…</span>
+          <span className="st-label">Qidiruv va buyruqlar…</span>
           <span className="kbd">⌘K</span>
         </button>
+        {accountNames.length > 1 && (
+          <select
+            className="select-btn snap-select desktop-only"
+            value={account}
+            onChange={e => setAccount(e.target.value)}
+            title="Kabinet tanlash — faqat shu hisobning ma'lumoti ko'rinadi"
+          >
+            <option value="all">Barcha kabinetlar ({accountNames.length})</option>
+            {accountNames.map(n => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        )}
         {snapshots.length > 1 && (
           <select
             className="select-btn snap-select desktop-only"
             value={snapshotFile ?? snapshots[0]?.file ?? ""}
             onChange={e => setSnapshotFile(e.target.value)}
-            title="Выбор кабинета / периода"
+            title="Kabinet / davr tanlash"
           >
             {snapshots.map(s => (
               <option key={s.file} value={s.file}>
@@ -400,39 +467,60 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
             ))}
           </select>
         )}
+        {/* Haqiqiy sync — serverdan barcha manbalarni hoziroq tortadi */}
         <button
-          className={`icon-btn ${syncing ? "spin" : ""}`}
-          onClick={() => void refresh()}
-          title="Обновить данные"
+          className={`icon-btn ${syncRunning || syncing ? "spin" : ""}`}
+          onClick={() => void syncNow()}
+          title="Barcha manbalardan hoziroq yangilash (Meta / Google / Telegram)"
         >
           <RefreshCw size={15} />
         </button>
-        <span className="pill desktop-only">
+        <span
+          className="pill desktop-only"
+          title={
+            live
+              ? nextIn
+                ? `Live ulanish · keyingi avtomatik sync: ${nextIn} dan keyin`
+                : "Live ulanish (SSE)"
+              : "Server bilan uzilgan — 30 sekundda bir qayta uriniladi"
+          }
+        >
           <span
             className={`live-dot ${live ? "pulse" : "off"}`}
             style={{ width: 6, height: 6 }}
           />
-          {snapshot?.meta.period.label || "период не указан"}
+          {live ? (
+            nextIn ? (
+              <>
+                <Radio size={11} style={{ marginRight: 4 }} />
+                LIVE · {nextIn}
+              </>
+            ) : (
+              "LIVE"
+            )
+          ) : (
+            "OFFLINE"
+          )}
         </span>
         {source === "static" && (
           <span
             className="src-badge static desktop-only"
-            title="Сервер (API) не ответил — отображаются данные, сохраненные при сборке (build). Для обновления сделайте deploy проекта заново."
+            title="Server (API) javob bermadi — build vaqtida saqlangan ma'lumot ko'rsatilmoqda. Yangilash uchun loyihani qayta deploy qiling yoki serverni yoqing."
           >
-            Данные во время сборки
+            Build vaqtidagi ma'lumot
           </span>
         )}
         <button
           className="icon-btn"
           onClick={toggleTheme}
-          title={theme === "dark" ? "Светлая тема" : "Темная тема"}
+          title={theme === "dark" ? "Yorug' tema" : "Tungi tema"}
         >
           {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
         </button>
         <AlertsMenu />
         <div
           className="avatar"
-          title={snapshot?.meta.account.name ?? "Кабинет не подключен"}
+          title={snapshot?.meta.account.name ?? "Kabinet ulanmagan"}
         >
           {initials}
         </div>
@@ -474,7 +562,7 @@ export function CommandPalette() {
     openLead,
     toggleTheme,
     theme,
-    refresh,
+    syncNow,
   } = useDashboardContext();
   const [, navigate] = useLocation();
   const [query, setQuery] = useState("");
@@ -500,18 +588,18 @@ export function CommandPalette() {
     const actions = [
       {
         group: "Amallar",
+        label: "Barcha manbalarni hoziroq yangilash (sync)",
+        icon: <RefreshCw size={13} />,
+        meta: "",
+        run: () => void syncNow(),
+      },
+      {
+        group: "Amallar",
         label:
           theme === "dark" ? "Yorug' temaga o'tish" : "Tungi temaga o'tish",
         icon: <Sun size={13} />,
         meta: "",
         run: toggleTheme,
-      },
-      {
-        group: "Amallar",
-        label: "Ma'lumotni yangilash (sync)",
-        icon: <RefreshCw size={13} />,
-        meta: "",
-        run: () => void refresh(),
       },
     ];
     const campaigns = (snapshot?.campaigns ?? []).slice(0, 30).map(c => ({
@@ -529,13 +617,13 @@ export function CommandPalette() {
       run: () => openCreative(c.id),
     }));
     const leads = (crm?.leads ?? []).slice(0, 25).map(l => ({
-      group: "CRM Leadlar",
+      group: "CRM murojaatlar",
       label: l.name,
       icon: <Target size={13} />,
       meta: l.stageName,
       run: () => openLead(l.id),
     }));
-    const all = [...nav, ...actions, ...campaigns, ...creatives, ...leads];
+    const all = [...actions, ...nav, ...campaigns, ...creatives, ...leads];
     if (!query.trim()) return all.slice(0, 22);
     const q = query.toLowerCase();
     return all.filter(i => i.label.toLowerCase().includes(q)).slice(0, 22);
@@ -544,7 +632,7 @@ export function CommandPalette() {
     snapshot,
     theme,
     toggleTheme,
-    refresh,
+    syncNow,
     openCampaign,
     openCreative,
   ]);

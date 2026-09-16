@@ -69,10 +69,56 @@ const raw = JSON.parse(
     "utf8"
   )
 );
-const snapshot = normalizeMetaExport(raw, {
+const metaSnapshot = normalizeMetaExport(raw, {
   syncedAt: new Date().toISOString(),
   sourceLabel: "smoke-test",
 });
+// Yagona oyna ("all") snapshoti — real /api/snapshot?platform=all kabi platforms kesimi bilan
+const snapshot = {
+  ...metaSnapshot,
+  meta: { ...metaSnapshot.meta, platform: "all" as const },
+  daily: Array.from({ length: 14 }, (_, i) => ({
+    date: `2026-08-${String(i + 1).padStart(2, "0")}`,
+    spend: 40 + Math.round(Math.sin(i / 2) * 25 + i * 2),
+    leads: 8 + (i % 5),
+    impressions: 9000 + i * 350,
+    clicks: 220 + i * 9,
+  })),
+  platforms: [
+    {
+      platform: "meta" as const,
+      name: "Meta Ads",
+      color: "#0866FF",
+      spend: metaSnapshot.totals.spend,
+      leads: metaSnapshot.totals.leads,
+      cpl: metaSnapshot.totals.cpl,
+      impressions: metaSnapshot.totals.impressions,
+      clicks: metaSnapshot.totals.clicks,
+      ctr: metaSnapshot.totals.ctr,
+      campaigns: metaSnapshot.campaigns.length,
+      syncedAt: new Date().toISOString(),
+      autoSync: true,
+      coverage: ["Sarf", "Murojaatlar", "Kliklar", "Ko'rsatuvlar", "Kreativlar", "Yosh kesimi"],
+      limitations: [],
+    },
+    {
+      platform: "google-ads" as const,
+      name: "Google Ads",
+      color: "#4285F4",
+      spend: 0,
+      leads: 0,
+      cpl: null,
+      impressions: 0,
+      clicks: 0,
+      ctr: null,
+      campaigns: 0,
+      syncedAt: null,
+      autoSync: false,
+      coverage: [],
+      limitations: ["Hali ulanmagan"],
+    },
+  ],
+};
 
 // AmoCRM fixture — real kampaniya IDlariga bog'langan leadlar
 const amoRaw = {
@@ -185,9 +231,28 @@ const connections = [
     vendor: "Facebook / Instagram",
     kind: "ads",
     status: "connected",
-    accounts: [{ id: "act_1", name: "Sof-Expo l Nazir", currency: "USD" }],
+    accounts: [
+      { id: "act_1", name: "Sof-Expo l Nazir", currency: "USD" },
+      { id: "act_2", name: "Foodera Test Akt", currency: "USD" },
+    ],
     syncedAt: new Date().toISOString(),
     note: "test",
+    oauth: {
+      ready: true,
+      connections: [
+        {
+          id: "conn-meta-1",
+          label: "Facebook — Test User",
+          status: "active",
+          lastSyncAt: new Date().toISOString(),
+          tokenExpiresAt: null,
+          accounts: [
+            { id: "act_1", name: "Sof-Expo l Nazir", currency: "USD", enabled: true, lastSyncAt: null },
+            { id: "act_2", name: "Foodera Test Akt", currency: "USD", enabled: false, lastSyncAt: null },
+          ],
+        },
+      ],
+    },
   },
   {
     id: "google-ads",
@@ -198,6 +263,11 @@ const connections = [
     accounts: [],
     syncedAt: null,
     note: "test",
+    oauth: {
+      ready: false,
+      reason: "GOOGLE_ADS_CLIENT_ID / SECRET / DEVELOPER_TOKEN .env da yo‘q",
+      connections: [],
+    },
   },
   {
     id: "yandex-direct",
@@ -218,6 +288,7 @@ const connections = [
     accounts: [{ id: "sofexpo", name: "Sof-Expo AmoCRM", currency: "UZS" }],
     syncedAt: new Date().toISOString(),
     note: "test",
+    oauth: { ready: true, connections: [] },
   },
 ];
 
@@ -228,7 +299,57 @@ g.fetch = async (url: string) => ({
   json: async () => {
     const u = String(url);
     if (u.includes("connections")) return connections;
+    if (u.includes("channels/offline"))
+      return {
+        campaigns: [
+          {
+            id: "offline-1",
+            name: "Test Expo Banner",
+            expo: "FOODERA EXPO",
+            createdAt: new Date().toISOString(),
+            metrics: { spend: 1200000, impressions: 0, clicks: 0, linkClicks: 0, leadsCount: 3 },
+          },
+        ],
+        leads: [
+          {
+            id: "lead-offline-1",
+            name: "Offline Test Lead",
+            phone: "+998901234567",
+            source: "offline",
+            createdAt: new Date().toISOString(),
+            stageName: "Yangi",
+            price: 2000000,
+            campaignId: "offline-1",
+          },
+        ],
+      };
     if (u.includes("/api/crm")) return { connected: true, ...crm };
+    if (u.includes("/api/sync"))
+      return {
+        running: false,
+        lastSyncAt: new Date().toISOString(),
+        nextSyncAt: new Date(Date.now() + 300000).toISOString(),
+        intervalSec: 300,
+        trigger: "auto",
+        results: [
+          { id: "meta", label: "Meta Ads", ok: true, message: "12 kampaniya", durationMs: 900, at: new Date().toISOString() },
+        ],
+        configured: { meta: true, google: false, telegram: false },
+      };
+    if (u.includes("/api/activity"))
+      return {
+        events: [
+          {
+            id: "ev-1",
+            at: new Date().toISOString(),
+            kind: "sync",
+            title: "Avtomatik sync boshlandi",
+            body: "Ulangan manbalardan yangi ma'lumot tortilmoqda…",
+            source: "sync-engine",
+            tone: "info",
+          },
+        ],
+      };
     if (u.includes("/api/snapshots"))
       return [
         {
@@ -288,16 +409,35 @@ check(
   overview.includes("Qiziqish reytingi") &&
     overview.includes("Video va yozishmalar")
 );
+check("Overview jonli harakat paneli", overview.includes("Jonli harakat"));
+check(
+  "Overview platforma kesimi (yagona oyna)",
+  overview.includes("Pul qaysi kanalga ketayapti")
+);
+check(
+  "Overview kunlik trend chart",
+  overview.includes("Kunlik dinamika") &&
+    overview.includes("qanday o'zgarmoqda")
+);
+check(
+  "Overview shaffoflik paneli (nima ma'lum)",
+  overview.includes("Nima ma'lum, nima noma'lum")
+);
 
 const routes: [string, string[], string][] = [
-  ["/campaigns", ["Batafsil jadval", "Kampaniyalar"], ["FOODERA"]],
+  ["/campaigns", ["Batafsil jadval", "Kampaniyalar"], ["FOODERA", "Barcha kabinetlar"]],
   ["/creatives", ["Reyting", "Kreativlar"], ["Bosish ulushi"]],
   ["/audience", ["Qaysi yosh javob berayapti"], ["18-24"]],
   ["/leads", ["Kampaniya tuzilmasi"], ["PROMOTORS"]],
   ["/pipeline", ["Murojaatdan bitimgacha", "Doska"], ["OOO Chorrak", "Qaytim"]],
   ["/compare", ["Nima o\'zgardi?", "Yo\'nalishlar taqqoslash"], ["FOODERA"]],
+  ["/offline", ["Offline manba qo\'shish", "Test Expo Banner"], ["Offline Test Lead"]],
   ["/report", ["Rahbariyat uchun", "Chop etish"], ["murojaatgacha"]],
-  ["/connections", ["Ulanishlar"], ["Google Ads"]],
+  [
+    "/connections",
+    ["Ulanishlar", "O'z hisoblaringizni ulang"],
+    ["Facebook bilan ulash", "Google bilan ulash", "AmoCRM hisobini ulash", "Facebook — Test User", "Foodera Test Akt"],
+  ],
   ["/not-exist", ["404"], []],
 ];
 

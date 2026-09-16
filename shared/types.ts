@@ -26,6 +26,24 @@ export interface ConnectionInfo {
   accounts: AccountRef[];
   syncedAt: string | null;
   note?: string;
+  /** Sync dvigateli bu manbadan avtomatik (INTERVAL bilan) tortadi */
+  autoSync?: boolean;
+  /** OAuth orqali ulangan shaxsiy hisoblar (Ulanishlar sahifasi) */
+  oauth?: {
+    /** Platformani hozir ulash mumkinmi (app kalitlari .env da bormi) */
+    ready: boolean;
+    reason?: string;
+    connections: {
+      id: string;
+      label: string;
+      status: "active" | "expired" | "error";
+      error?: string;
+      lastSyncAt: string | null;
+      tokenExpiresAt: string | null;
+      accounts: OAuthAdAccount[];
+      subdomain?: string;
+    }[];
+  };
 }
 
 export interface Metrics {
@@ -107,6 +125,7 @@ export const GOAL_META: Record<CampaignGoal, { label: string; short: string }> =
   other: { label: "Aniqlanmagan", short: "—" },
 };
 
+/** Yosh kesimi qatori (Audience sahifasi uchun) */
 export interface AgeRow {
   age: string;
   spend: number;
@@ -117,6 +136,15 @@ export interface AgeRow {
   clicks: number;
   ctr: number | null;
   cpm: number | null;
+}
+
+/** Bitta kun ko'rsatkichi — kunlik trend chart uchun (time_increment=1) */
+export interface DailyRow {
+  date: string; // YYYY-MM-DD
+  spend: number;
+  leads: number;
+  impressions: number;
+  clicks: number;
 }
 
 export interface SnapshotMeta {
@@ -145,6 +173,10 @@ export interface NormalizedSnapshot {
   campaigns: CampaignNode[];
   creatives: CreativeNode[];
   age: AgeRow[];
+  /** Kunlik timeseries (Meta API real-time rejimida to'ladi) — trend chart uchun */
+  daily?: DailyRow[];
+  /** "all" (yagona oyna) rejimida — har bir platformaning alohida jami ko'rsatkichlari */
+  platforms?: PlatformTotals[];
 }
 
 export const PLATFORM_META: Record<PlatformId, { name: string; short: string; color: string }> = {
@@ -155,6 +187,120 @@ export const PLATFORM_META: Record<PlatformId, { name: string; short: string; co
   telegram: { name: "Telegram", short: "TG", color: "#0088cc" },
   offline: { name: "Offline", short: "Offline", color: "#10b981" },
 };
+
+/* ------------------------------------------------------------------ */
+/* Yagona oyna — platformalar kesimi                                   */
+/* ------------------------------------------------------------------ */
+
+/** Bitta platformaning umumiy (jamlangan) ko'rsatkichlari — Overview'dagi kesim paneli uchun */
+export interface PlatformTotals {
+  platform: PlatformId;
+  name: string;
+  color: string;
+  spend: number;
+  leads: number;
+  cpl: number | null;
+  impressions: number;
+  clicks: number;
+  ctr: number | null;
+  campaigns: number;
+  /** Bu manbadan oxirgi ma'lumot olingan vaqt (ISO) */
+  syncedAt: string | null;
+  /** Sync dvigateli bu manbadan faol (avtomatik) tortadi */
+  autoSync: boolean;
+  /** Ushbu manbada qaysi ma'lumot bor / yo'q — "nima ma'lum" shaffofligi uchun */
+  coverage: string[];
+  limitations: string[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Real-time sync + jonli harakat                                       */
+/* ------------------------------------------------------------------ */
+
+export type ActivityKind =
+  | "sync"
+  | "lead"
+  | "stage"
+  | "channel"
+  | "webhook"
+  | "snapshot"
+  | "manual"
+  | "error";
+
+/** Bitta jonli hodisa — serverda ro'y bergan vaqtda SSE orqali clientlarga yetib boradi */
+export interface ActivityEvent {
+  id: string;
+  at: string;
+  kind: ActivityKind;
+  title: string;
+  body?: string;
+  source?: string;
+  tone?: "good" | "info" | "warn" | "risk";
+}
+
+/** Bitta manba (platforma) bo'yicha sync natijasi */
+export interface SyncResultItem {
+  id: string;
+  label: string;
+  ok: boolean;
+  message: string;
+  durationMs: number;
+  at: string;
+}
+
+/** Sync dvigatelining hozirgi holati — /api/sync va SSE sync_state orqali */
+export interface SyncState {
+  running: boolean;
+  lastSyncAt: string | null;
+  nextSyncAt: string | null;
+  intervalSec: number;
+  trigger: "auto" | "manual" | "startup" | null;
+  results: SyncResultItem[];
+  /** Qaysi manbalar avtomatik tortilishi uchun sozlangan (env to'ldirilgan) */
+  configured: { meta: boolean; google: boolean; telegram: boolean };
+}
+
+/* ------------------------------------------------------------------ */
+/* OAuth orqali ulangan hisoblar (foydalanuvchining o'z akkauntlari)     */
+/* ------------------------------------------------------------------ */
+
+/** Bitta ulanish ostidagi reklama kabineti (Meta act_ / Google cid) */
+export interface OAuthAdAccount {
+  id: string;
+  name: string;
+  currency: string;
+  enabled: boolean;
+  lastSyncAt: string | null;
+}
+
+/** Client'ga ko'rinadigan ulanish (tokensiz — maxfiy ma'lumot yuborilmaydi) */
+export interface OAuthConnectionPublic {
+  id: string;
+  platform: "meta" | "google-ads" | "amocrm";
+  label: string;
+  status: "active" | "expired" | "error";
+  error?: string;
+  createdAt: string;
+  lastSyncAt: string | null;
+  tokenExpiresAt: string | null;
+  /** Meta/Google: ulanish ostidagi kabinetlar */
+  accounts: OAuthAdAccount[];
+  /** AmoCRM: subdomain */
+  subdomain?: string;
+}
+
+/** Server tomonda saqlanadigan to'liq ulanish (tokenlar bilan) — client'ga YUBORILMAYDI */
+export interface OAuthConnection extends OAuthConnectionPublic {
+  accessToken?: string;
+  refreshToken?: string;
+}
+
+/** /api/oauth/status javobi — qaysi platformalar ulashga tayyor (app kalitlari bor) */
+export interface OAuthConfigStatus {
+  meta: { ready: boolean; reason?: string };
+  "google-ads": { ready: boolean; reason?: string };
+  amocrm: { ready: boolean; reason?: string };
+}
 
 /* ------------------------------------------------------------------ */
 /* CRM (AmoCRM) — lead lifecycle                                       */
