@@ -83,6 +83,65 @@ functions:        api/[[...slug]].ts  (includeFiles: server/data/snapshots/**)
 Statik rejimda ma'lumotni yangilash uchun — yangi snapshot qo'shib, loyihani qayta deploy qiling
 (yoki uzoq muddatli server rejimida ishga tushiring: `pnpm build && pnpm start` — unda SSE live-sync ishlaydi).
 
+## 🪰 Fly.io — tavsiya etilgan (real-time + ulanishlar to'liq ishlaydi)
+
+Vercel serverless funksiyasi **so'rov orasida o'chib turadi**, shuning uchun unda
+SSE (live), sync scheduler va `fs.watch` ishlamaydi; ustiga Deployment Protection
+yoqilgan bo'lsa `/api/*` umuman funksiyaga yetib bormaydi («Server xatosi (404)»).
+Fly.io'da ilova **doim ishlaydigan process** — barchasi joyida.
+
+Repo'da tayyor fayllar bor: `Dockerfile` (ikki bosqichli build), `fly.toml`,
+`docker-entrypoint.sh`, `.dockerignore`.
+
+```bash
+# 1) Fly CLI (bir marta): https://fly.io/docs/hands-on/install-flyctl/
+fly auth login
+
+# 2) Loyihani ulash — app nomi va region so'raladi (fly.toml shunga yangilanadi)
+fly launch --no-deploy --copy-config
+
+# 3) Ma'lumot uchun volume (tokenlar + snapshotlar shu yerda yashaydi)
+fly volumes create ads_data --size 1
+
+# 4) Maxfiy kalitlar (ixtiyoriy, lekin ochiq URL'da tavsiya etiladi)
+fly secrets set DASHBOARD_PASSWORD="kuchli-parol" AUTH_SECRET="uzun-random-satr"
+
+# 5) Deploy
+fly deploy
+```
+
+Deploy qilingach: `https://<app-nomi>.fly.dev`.
+
+| Nima | Qayerda |
+| ---- | ------- |
+| App kalitlari, tokenlar, kanallar | `/data/store.json` (volume — deploy'da **yo'qolmaydi**) |
+| Tortilgan snapshotlar | `/data/snapshots/*.json` (volume) |
+| Port | `8080` (`API_PORT`), Fly tashqariga `443` (HTTPS) beradi |
+| Health check | `GET /api/health` (`fly.toml` → `http_service.checks`) |
+
+Muhim sozlamalar (`fly.toml` da allaqachon yozilgan):
+
+- `auto_stop_machines = false` + `min_machines_running = 1` — aks holda traffic
+  bo'lmaganda machine uxlaydi va **sync scheduler / SSE / webhook'lar to'xtaydi**.
+- `force_https = true` — OAuth redirect URI'lar `https://…` bo'lishi uchun.
+- `SNAPSHOTS_DIR=/data/snapshots` — `store.json` ham shu volume'ga
+  (`dirname(SNAPSHOTS_DIR)`) yoziladi, ya'ni **bitta volume ikkalasini saqlaydi**.
+- Entrypoint volume bo'sh bo'lsa repo'dagi boshlang'ich snapshotlarni ko'chiradi
+  (`cp -n` — mavjud fayl ustidan yozmaydi).
+
+Facebook app sozlamasiga yoziladigan redirect URI (deploy'dan keyin aniq
+manzilni `Ulanishlar → Sozlash` oynasida ko'rasiz, bir klikda nusxa olinadi):
+
+```
+https://<app-nomi>.fly.dev/api/oauth/meta/callback
+```
+
+Foydali buyruqlar: `fly logs` · `fly status` · `fly ssh console` (volume'ni
+ko'rish: `ls /data/snapshots`) · `fly machine list`.
+
+> Lokalda xuddi shu rejimni tekshirish: `pnpm build && pnpm start`
+> (`NODE_ENV=production` + `dist/public` ni ham o'zi serve qiladi).
+
 ## 🏗 Arxitektura
 
 ```mermaid

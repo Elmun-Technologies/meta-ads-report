@@ -1,0 +1,67 @@
+# ============================================================================
+# Fly.io deploy sozlamalari — Sof-Expo · Ads Command Center
+#
+# Birinchi marta:
+#   fly launch --no-deploy --copy-config      # app nomini va regionni so'raydi
+#   fly volumes create ads_data --size 1      # ma'lumot uchun volume (1 GB)
+#   fly secrets set DASHBOARD_PASSWORD=... AUTH_SECRET=... WEBHOOK_SECRET=...
+#   fly deploy
+#
+# Keyin har deploy:  fly deploy
+# Loglar:            fly logs
+# Shell:             fly ssh console
+# ============================================================================
+
+# `fly launch` bu nomni o'zgartiradi — o'zingizniki bilan almashtiring
+app = "sofexpo-ads"
+
+# Region: O'zbekistonga eng yaqin variantlar — `waw` (Varshava), `fra`, `ams`.
+# `fly launch` o'zi qo'yadi; o'zgartirish: `fly platform regions`
+# primary_region = "waw"
+
+[build]
+  # Dockerfile ishlatiladi (build bosqichida pnpm build — client + server bundle)
+
+[env]
+  NODE_ENV = "production"
+  # Ilova shu portda tinglaydi (fly.toml → http_service.internal_port bilan bir xil)
+  API_PORT = "8080"
+  # Ma'lumot volume'da: /data/snapshots/*.json + /data/store.json
+  SNAPSHOTS_DIR = "/data/snapshots"
+  # Sync dvigateli har 5 daqiqada tortadi (minimum 30)
+  SYNC_INTERVAL_SEC = "300"
+  # Valyuta (umumiy hisobda ko'rsatiladi)
+  AMOCRM_CURRENCY = "UZS"
+  OFFLINE_CURRENCY = "UZS"
+  TELEGRAM_CURRENCY = "UZS"
+  #
+  # IXTIYORIY — PUBLIC_ORIGIN bo'lmasa redirect URI X-Forwarded-Host/Proto dan
+  # olinadi (Fly proxy buni to'g'ri yuboradi), shuning uchun odatda shart emas.
+  # Aniq yozmoqchi bo'lsangiz:
+  # PUBLIC_ORIGIN = "https://sofexpo-ads.fly.dev"
+
+# Ma'lumotlar volume'i — machine disk'i vaqtinchalik, tokenlar/snapshotlar shu yerda
+[[mounts]]
+  source = "ads_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # MUHIM: auto_stop_machines = false — aks holda traffic bo'lmaganda machine
+  # uxlaydi va sync scheduler / SSE / webhook'lar ishlamay qoladi.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/api/health"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
