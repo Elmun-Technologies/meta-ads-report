@@ -40,6 +40,9 @@ export interface DashboardState {
   /** Tanlangan platforma (file tanlanmagan bo'lsa shu platformaning eng yangi snapshoti ko'rsatiladi) */
   platform: PlatformId;
   setPlatform: (platform: PlatformId) => void;
+  /** Kabinet tanlagich — "all" (barcha kabinetlar) yoki aniq kabinet nomi */
+  account: string;
+  setAccount: (account: string) => void;
   loading: boolean;
   syncing: boolean;
   /** Haqiqiy manbalardan tortish (POST /api/sync) ishlab turibdi */
@@ -89,6 +92,8 @@ export function useDashboard(): DashboardState {
   const [snapshots, setSnapshots] = useState<SnapshotInfo[]>([]);
   const [snapshotFile, setSnapshotFile] = useState<string | null>(null);
   const [platform, setPlatformState] = useState<PlatformId>("all");
+  /** Account switcher — "all" yoki kabinet nomi (/api/snapshot?account=) */
+  const [account, setAccountState] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncRunning, setSyncRunning] = useState(false);
@@ -102,12 +107,18 @@ export function useDashboard(): DashboardState {
   const esRef = useRef<EventSource | null>(null);
 
   const load = useCallback(
-    async (showSync = true, file = snapshotFile, plat = platform) => {
+    async (
+      showSync = true,
+      file = snapshotFile,
+      plat = platform,
+      acc = account
+    ) => {
       if (showSync) setSyncing(true);
       try {
         const snapUrl = file
           ? `/api/snapshot?file=${encodeURIComponent(file)}`
-          : `/api/snapshot?platform=${encodeURIComponent(plat)}`;
+          : `/api/snapshot?platform=${encodeURIComponent(plat)}` +
+            (acc && acc !== "all" ? `&account=${encodeURIComponent(acc)}` : "");
         // 401 (parol) holatini alohida ushlaymiz — statik zaxiraga O'TMAYMIZ,
         // aks holda parol himoyasi chetlab o'tilgan bo'lardi.
         let snapStatus: number | null = null;
@@ -184,7 +195,7 @@ export function useDashboard(): DashboardState {
         setSyncing(false);
       }
     },
-    [snapshotFile, platform]
+    [snapshotFile, platform, account]
   );
 
   useEffect(() => {
@@ -327,6 +338,16 @@ export function useDashboard(): DashboardState {
     [load]
   );
 
+  /** Kabinet tanlash — "all" (barchasi) yoki aniq kabinet nomi */
+  const selectAccount = useCallback(
+    (acc: string) => {
+      setAccountState(acc);
+      setSnapshotFile(null);
+      void load(true, null, platform, acc);
+    },
+    [load, platform]
+  );
+
   return {
     snapshot,
     connections,
@@ -337,6 +358,8 @@ export function useDashboard(): DashboardState {
     setSnapshotFile: selectFile,
     platform,
     setPlatform: selectPlatform,
+    account,
+    setAccount: selectAccount,
     loading,
     syncing,
     syncRunning,

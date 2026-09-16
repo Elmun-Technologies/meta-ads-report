@@ -37,6 +37,8 @@ import type {
 import { webhooksRouter } from "./routes/webhooks";
 import { offlineChannelsRouter } from "./routes/offline-channels";
 import { telegramRouter, getTelegramStats } from "./routes/telegram";
+import { oauthRouter, oauthStatus } from "./routes/oauth";
+import { listConnectionsPublic } from "./connections";
 import {
   authEnabled,
   clearCookie,
@@ -75,7 +77,7 @@ interface Connector {
   autoSync?: boolean;
   /** Papkadagi eng yangi snapshot fayli */
   latestFile?: () => { file: string; mtime: Date } | null;
-  resolve: (file?: string) => NormalizedSnapshot | null;
+  resolve: (accountFilter?: string) => NormalizedSnapshot | null;
 }
 
 function platformForFile(file: string): PlatformId {
@@ -287,25 +289,32 @@ function latestFilePerAccount(
   return [...byAccount.values()].sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
 }
 
-/** Meta — BARCHA kabinetlar (act-lar) birlashtiriladi */
-function readMetaSnapshotAll(): NormalizedSnapshot | null {
+/** Meta — BARCHA kabinetlar (act-lar) birlashtiriladi; accountFilter bo'lsa faqat o'sha kabinet */
+function readMetaSnapshotAll(accountFilter?: string): NormalizedSnapshot | null {
   const perAccount = latestFilePerAccount("meta", raw =>
     String(raw?.account?.id ?? raw?.account_id ?? "unknown")
   );
   if (perAccount.length === 0) return readMetaSnapshot();
   if (perAccount.length === 1) {
-    return readMetaSnapshot(path.basename(perAccount[0].file));
+    const snap = readMetaSnapshot(path.basename(perAccount[0].file));
+    return snap && (!accountFilter || accountMatches(snap.meta.account.name, accountFilter))
+      ? snap
+      : accountFilter
+        ? null
+        : snap;
   }
   const snaps = perAccount
     .map(e => readMetaSnapshot(path.basename(e.file)))
-    .filter((s): s is NormalizedSnapshot => s != null);
+    .filter((s): s is NormalizedSnapshot => s != null)
+    .filter(s => !accountFilter || accountMatches(s.meta.account.name, accountFilter));
   if (snaps.length === 0) return null;
   return mergeSnapshots(snaps, { platform: "meta", name: "Meta Ads" });
 }
 
-/** Google Ads / Yandex Direct — barcha kabinetlar birlashtiriladi */
+/** Google Ads / Yandex Direct — barcha kabinetlar birlashtiriladi; accountFilter bo'lsa faqat o'sha kabinet */
 function readGenericSnapshotAll(
-  platform: "google-ads" | "yandex-direct"
+  platform: "google-ads" | "yandex-direct",
+  accountFilter?: string
 ): NormalizedSnapshot | null {
   const prefix = platform === "google-ads" ? "google" : "yandex";
   const perAccount = latestFilePerAccount(
@@ -315,7 +324,8 @@ function readGenericSnapshotAll(
   if (perAccount.length === 0) return readGenericSnapshot(platform);
   const snaps = perAccount
     .map(e => readGenericSnapshotFile(platform, e.file, e.mtime))
-    .filter((s): s is NormalizedSnapshot => s != null);
+    .filter((s): s is NormalizedSnapshot => s != null)
+    .filter(s => !accountFilter || accountMatches(s.meta.account.name, accountFilter));
   if (snaps.length === 0) return null;
   if (snaps.length === 1) return snaps[0];
   return mergeSnapshots(snaps, {
@@ -370,18 +380,66 @@ function latestAmoFile(): { file: string; mtime: Date } | null {
   return files[0] ?? null;
 }
 
+/** Har bir AmoCRM hisobidan (subdomain) eng yangi fayl — ko'p hisobli rejim */
+function latestAmoFilesPerAccount(): { file: string; mtime: Date; key: string }[] {
+  if (!fs.existsSync(DATA_DIR)) return [];
+  const files = fs
+    .readdirSync(DATA_DIR)
+    .filter(f => f.startsWith("amo") && f.endsWith(".json"))
+    .map(file => {
+      const full = path.join(DATA_DIR, file);
+      let key = file; // fallback: fayl nomi
+      try {
+        const raw = JSON.parse(fs.readFileSync(full, "utf-8")) as any;
+        key = String(raw?.account?.subdomain ?? raw?.account?.name ?? file);
+      } catch {
+        /* buzilgan fayl */
+      }
+      return { file: full, mtime: fs.statSync(full).mtime, key };
+    })
+    .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+  const byAccount = new Map<string, (typeof files)[number]>();
+  for (const f of files) if (!byAccount.has(f.key)) byAccount.set(f.key, f);
+  return [...byAccount.values()];
+}
+
 export function readAmoSnapshot(): CrmData | null {
-  const latest = latestAmoFile();
-  if (!latest) return null;
+  const perAccount = latestAmoFilesPerAccount();
+  if (perAccount.length === 0) return null;
   try {
-    const raw = JSON.parse(
-      fs.readFileSync(latest.file, "utf-8")
-    ) as RawAmoExport;
-    const crm = normalizeAmoExport(raw, {
-      syncedAt: latest.mtime.toISOString(),
-      file: path.basename(latest.file),
-    });
-    return matchLeadsToAds(crm, readMetaSnapshot());
+    const crms = perAccount
+      .map(e => {
+        try {
+          const raw = JSON.parse(fs.readFileSync(e.file, "utf-8")) as RawAmoExport;
+          return normalizeAmoExport(raw, {
+            syncedAt: e.mtime.toISOString(),
+            file: path.basename(e.file),
+          });
+        } catch (err) {
+          console.error("[amo] snapshot o'qishda xato:", err);
+          return null;
+        }
+      })
+      .filter((c): c is CrmData => c != null);
+    if (crms.length === 0) return null;
+    if (crms.length === 1) return matchLeadsToAds(crms[0], readMetaSnapshot());
+    // Ko'p AmoCRM hisob — leadlar va bosqichlar jamlanadi
+    const stageById = new Map<string, CrmData["stages"][number]>();
+    for (const c of crms) for (const st of c.stages) stageById.set(String(st.id), st);
+    const merged: CrmData = {
+      account: crms.map(c => c.account).join(" + "),
+      currency: crms[0].currency,
+      syncedAt: crms
+        .map(c => c.syncedAt)
+        .sort()
+        .at(-1)!,
+      sourceLabel: crms.map(c => c.sourceLabel).join(" + "),
+      stages: [...stageById.values()],
+      leads: crms.flatMap(c => c.leads),
+      matchedLeads: crms.reduce((n, c) => n + c.matchedLeads, 0),
+      unmatchedLeads: crms.reduce((n, c) => n + c.unmatchedLeads, 0),
+    };
+    return matchLeadsToAds(merged, readMetaSnapshot());
   } catch (err) {
     console.error("[amo] snapshot o'qishda xato:", err);
     return null;
@@ -477,23 +535,23 @@ const CONNECTORS: Connector[] = [
     id: "meta",
     name: "Meta Ads",
     vendor: "Facebook / Instagram",
-    note: metaConfigured()
-      ? "Real-time: Graph API'dan har sync intervalda avtomatik tortiladi (META_ACCESS_TOKEN sozlangan)."
-      : "META_ACCESS_TOKEN + META_AD_ACCOUNT_ID berilsa — real-time Graph API pull yoqiladi. Aks holda meta_*.json eksporti papkaga tushganda ulanadi.",
+    note:
+      "Ulanishlar sahifasida «Facebook bilan ulash» (OAuth) yoki META_ACCESS_TOKEN env — ikkalasi ham real-time Graph API pull. Aks holda meta_*.json eksporti papkaga tushganda ulanadi.",
     autoSync: metaConfigured(),
     latestFile: latestMetaFile,
-    resolve: () => readMetaSnapshotAll(),
+    resolve: (accountFilter?: string) => readMetaSnapshotAll(accountFilter),
   },
   {
     id: "google-ads",
     name: "Google Ads",
     vendor: "Google",
-    note: "GOOGLE_ADS_* env to'ldirilsa — API'dan avtomatik tortiladi. Aks holda google_*.json snapshot papkaga tushganda avtomatik ulanadi. Bir nechta kabinet fayli bo'lsa — hammasi jamlanadi.",
+    note:
+      "Ulanishlar sahifasida «Google bilan ulash» (OAuth) yoki GOOGLE_ADS_* env — API'dan avtomatik tortiladi. Bir nechta kabinet bo'lsa — hammasi jamlanadi, tepadan kabinet tanlanadi.",
     autoSync: Boolean(
       process.env.GOOGLE_ADS_DEVELOPER_TOKEN && process.env.GOOGLE_ADS_REFRESH_TOKEN
     ),
     latestFile: () => latestFileFor("google"),
-    resolve: () => readGenericSnapshotAll("google-ads"),
+    resolve: (accountFilter?: string) => readGenericSnapshotAll("google-ads", accountFilter),
   },
   {
     id: "yandex-direct",
@@ -501,18 +559,30 @@ const CONNECTORS: Connector[] = [
     vendor: "Yandex",
     note: "yandex_*.json snapshot papkaga tushganda avtomatik ulanadi (Name, Spend, Clicks, Conversions maydonlari taniladi — README). Bir nechta login bo'lsa — hammasi jamlanadi.",
     latestFile: () => latestFileFor("yandex"),
-    resolve: () => readGenericSnapshotAll("yandex-direct"),
+    resolve: (accountFilter?: string) => readGenericSnapshotAll("yandex-direct", accountFilter),
   },
 ];
 
-/** Har bir ulangan platforma uchun eng yangi snapshot — statik bootstrap uchun (build-static-data.ts) */
-export function readSnapshotsByPlatform(): Partial<Record<PlatformId, NormalizedSnapshot>> {
+/** Har bir ulangan platforma uchun eng yangi snapshot — statik bootstrap uchun (build-static-data.ts).
+ *  accountFilter berilsa — faqat shu nomdagi kabinet hisoblanadi (account switcher). */
+export function readSnapshotsByPlatform(
+  accountFilter?: string
+): Partial<Record<PlatformId, NormalizedSnapshot>> {
   const out: Partial<Record<PlatformId, NormalizedSnapshot>> = {};
   for (const c of CONNECTORS) {
-    const snap = c.resolve();
+    const snap = c.resolve(accountFilter);
     if (snap) out[c.id] = snap;
   }
   return out;
+}
+
+/** Kabinet nomi filtrga mos keladimi (case-insensitive, qismiy aloqada ham) */
+function accountMatches(name: string | undefined, filter: string): boolean {
+  if (!filter) return true;
+  if (!name) return false;
+  const n = name.toLowerCase();
+  const f = filter.toLowerCase();
+  return n === f || n.includes(f) || f.includes(n);
 }
 
 const CRM_CONNECTIONS: ConnectionInfo[] = [
@@ -524,7 +594,8 @@ const CRM_CONNECTIONS: ConnectionInfo[] = [
     status: "ready",
     accounts: [],
     syncedAt: null,
-    note: "amo_*.json snapshot + /api/webhooks/amocrm (real-time). Webhook ulansa leadlar darhol ko'rinadi.",
+    note:
+      "Ulanishlar sahifasida «AmoCRM ulash» (OAuth API pull) yoki webhook/snapshot — leadlar har syncda avtomatik yangilanadi.",
   },
 ];
 
@@ -538,10 +609,28 @@ export function connectionsPayload(): ConnectionInfo[] {
       : [],
     syncedAt: crm?.syncedAt ?? null,
   };
+  const oauthConns = listConnectionsPublic();
+  const oauthFor = (platform: string) => ({
+    ready: oauthStatus()[platform as "meta" | "google-ads" | "amocrm"]?.ready ?? false,
+    reason: oauthStatus()[platform as "meta" | "google-ads" | "amocrm"]?.reason,
+    connections: oauthConns
+      .filter(c => c.platform === platform)
+      .map(c => ({
+        id: c.id,
+        label: c.label,
+        status: c.status,
+        error: c.error,
+        lastSyncAt: c.lastSyncAt,
+        tokenExpiresAt: c.tokenExpiresAt,
+        accounts: c.accounts,
+        subdomain: c.subdomain,
+      })),
+  });
   return [
     ...CONNECTORS.map(c => {
       const snapshot = c.resolve();
       const latest = c.latestFile?.();
+      const oauth = oauthFor(c.id);
       // Kabinetlar ro'yxati — shu platformaning barcha fayllaridan (unique nomlar)
       const seen = new Set<string>();
       const accounts = listSnapshots()
@@ -570,9 +659,13 @@ export function connectionsPayload(): ConnectionInfo[] {
         syncedAt: latest?.mtime.toISOString() ?? null,
         note: c.note,
         autoSync: c.autoSync,
+        oauth: oauth.connections.length > 0 || !oauth.ready ? oauth : { ...oauth, reason: undefined },
       } satisfies ConnectionInfo;
     }),
-    amoInfo,
+    {
+      ...amoInfo,
+      oauth: oauthFor("amocrm"),
+    },
   ];
 }
 
@@ -669,8 +762,10 @@ function platformTotalsFor(
   };
 }
 
-export async function buildUnifiedSnapshot(): Promise<NormalizedSnapshot | null> {
-  const byPlatform = readSnapshotsByPlatform();
+export async function buildUnifiedSnapshot(
+  accountFilter?: string
+): Promise<NormalizedSnapshot | null> {
+  const byPlatform = readSnapshotsByPlatform(accountFilter);
   const snapshots: NormalizedSnapshot[] = [];
   const platforms: PlatformTotals[] = [];
 
@@ -968,7 +1063,9 @@ export function createApp(mode: AppMode = "server") {
     const openPath =
       req.path.startsWith("/auth") ||
       req.path === "/health" ||
-      req.path.startsWith("/webhooks");
+      req.path.startsWith("/webhooks") ||
+      // OAuth callback — provider'dan browser redirect keladi; state HMAC bilan himoyalangan
+      (req.path.startsWith("/oauth/") && req.path.endsWith("/callback"));
     if (openPath || !authEnabled()) return next();
     const token = sessionFromCookie(req.headers.cookie);
     if (verifySessionToken(token)) return next();
@@ -1016,6 +1113,7 @@ export function createApp(mode: AppMode = "server") {
   app.use("/api/webhooks", webhooksRouter);
   app.use("/api/channels/offline", offlineChannelsRouter);
   app.use("/api/telegram", telegramRouter);
+  app.use("/api/oauth", oauthRouter);
 
   // API CORS (dev proxy same-origin ishlatadi, lekin alohida deploymentda ham ishlashi uchun)
   app.use("/api", (_req, res, next) => {
@@ -1113,7 +1211,9 @@ export function createApp(mode: AppMode = "server") {
     const platform = String(req.query.platform || "all") as PlatformId;
 
     if (platform === "all") {
-      const unified = await buildUnifiedSnapshot();
+      const unified = await buildUnifiedSnapshot(
+        String(req.query.account || "") || undefined
+      );
       if (!unified) {
         res.status(503).json({ error: "Hali hech qanday manba ulanmagan" });
         return;

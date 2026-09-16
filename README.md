@@ -13,7 +13,7 @@
   <img alt="stack" src="https://img.shields.io/badge/React_19-Vite_7-5e8bff?style=flat-square" />
   <img alt="stack" src="https://img.shields.io/badge/TypeScript-strict-2dd4bf?style=flat-square" />
   <img alt="stack" src="https://img.shields.io/badge/Realtime-sync_engine_·_SSE_·_webhooks-a78bfa?style=flat-square" />
-  <img alt="stack" src="https://img.shields.io/badge/tests-40%2F40_passing-34d399?style=flat-square" />
+  <img alt="stack" src="https://img.shields.io/badge/tests-46%2F46_passing-34d399?style=flat-square" />
   <img alt="stack" src="https://img.shields.io/badge/audit-11_PASS_·_0_GAP-fbbf24?style=flat-square" />
 </p>
 
@@ -147,7 +147,7 @@ pnpm dev        # API (3001) + Vite dev (3000) birga — http://localhost:3000
 pnpm build      # production build → dist/
 pnpm start      # production: bitta server (client + API), port 3000
 pnpm check      # TypeScript strict typecheck
-pnpm smoke        # jsdom render test — 40 tekshiruv (barcha sahifalar, drawer, ⌘K, jonli panellar)
+pnpm smoke        # jsdom render test — 46 tekshiruv (barcha sahifalar, drawer, ⌘K, OAuth paneli, kabinet tanlagich)
 pnpm audit:chain  # skvoznaya zanjir auditi — real snapshot ustida 11 tekshiruv
 
 # Google Ads API (batafsil pull — Variant A)
@@ -181,6 +181,40 @@ Fayl tushgani zahoti: `fs.watch` sezadi → SSE orqali barcha ochiq dashboardlar
 
 > To'liq JSON namunalari: [`server/data/README.md`](server/data/README.md)
 
+## 🔗 O'z hisoblaringizni ulang (OAuth — V4.0)
+
+Fayl tashlash endi ixtiyoriy: **Ulanishlar** sahifasida bitta tugma bilan o'z
+hisoblaringizni ulaysiz — tokenlar serverda saqlanadi, har sync'da ma'lumot
+o'zi tortiladi. Bu rejim **barcha loyihalaringiz** uchun: istalgan vaqt yangi
+kabinet ulanadi, tepadagi **kabinet tanlagich**dan xohlagan hisob ko'riladi.
+
+| Platforma | Tugma | Serverda (bir marta, .env) | Redirect URL (app sozlamasida) |
+| --------- | ----- | -------------------------- | ------------------------------ |
+| Facebook / Instagram | «Facebook bilan ulash» | `META_APP_ID` + `META_APP_SECRET` | https://<host>/api/oauth/meta/callback |
+| Google Ads | «Google bilan ulash» | `GOOGLE_ADS_CLIENT_ID/SECRET/DEVELOPER_TOKEN` | https://<host>/api/oauth/google-ads/callback |
+| AmoCRM | «AmoCRM hisobini ulash» (subdomain kiritiladi) | `AMOCRM_CLIENT_ID/SECRET` | https://<host>/api/oauth/amocrm/callback |
+
+Qanday ishlaydi:
+
+1. Admin bir marta app kalitlarini `.env` ga qo'yadi (yuqoridagi jadval).
+2. Har bir foydalanuvchi o'z hisobini ulaydi: consent → callback → tokenlar
+   `server/data/store.json` ga (gitignore'da) yoziladi — **client'ga hech qachon yuborilmaydi**.
+3. Sync dvigateli har `SYNC_INTERVAL_SEC` da ulangan kabinetlardan tortadi:
+   Meta — `act_*` bo'yicha, Google — har customer id, AmoCRM — v4 API (leadlar + pipeline).
+4. Ulangan kabinetlarni chip'lar bilan yoqib/o'chirib qo'yish mumkin (o'chirilgani sync qilinmaydi).
+5. Token eskirsa — status «TOKEN ESKIRGAN» bo'ladi, bir klikda qayta ulanadi.
+
+> **Meta app:** developers.facebook.com da Business tipidagi app yarating,
+> `ads_read` + `business_management` scope'lari bilan. O'z hisoblaringiz uchun
+> app'ni Development rejimida qoldirish kifoya (o'zingizni developer/test user
+> qilib qo'shasiz). Boshqa odamlar hisobini ulashi uchun App Review kerak.
+>
+> **Google:** `docs/google-ads-api-setup.md` bo'yicha OAuth client + developer token.
+> `prompt=consent` bilan refresh token olinadi va avtomatik yangilanadi.
+
+Xavfsizlik: OAuth callbacklar HMAC-imzolangan `state` (CSRF) bilan himoyalangan;
+ulanishlarni boshqarish (toggle, delete) umumiy parol auth ostida.
+
 ### AmoCRM matchlash — muhim qadam
 
 Lead'lar **`utm_campaign`** bo'yicha Meta kampaniyalariga bog'lanadi. Meta'da (bir marta) UTM shabloniga qo'ying:
@@ -197,7 +231,12 @@ Bog'lanmagan leadlar "Manbasi aniqlanmagan" deb alohida chiqadi — **taxminiy b
 
 | Endpoint                          | Tavsif                                                  |
 | --------------------------------- | ------------------------------------------------------- |
-| `GET /api/snapshot?platform=meta` | Eng yangi snapshot (normalized). `?file=` — aniq fayl   |
+| `GET /api/snapshot?platform=meta` | Eng yangi snapshot (normalized). `?file=` — aniq fayl, `?account=` — kabinet filtri |
+| `GET /api/oauth/status`            | Qaysi platformalar OAuth'ga tayyor (app kalitlari bormi) |
+| `GET /api/oauth/<p>/start`         | OAuth consent sahifasiga redirect (meta/google-ads/amocrm) |
+| `GET /api/oauth/<p>/callback`      | Provider'dan qaytgan kod → tokenlar serverda saqlanadi |
+| `POST /api/oauth/accounts/:cid/:aid/toggle` | Kabinetni sync'dan yoqish/o'chirish |
+| `DELETE /api/oauth/connections/:id` | Ulanishni olib tashlash                                 |
 | `GET /api/snapshots`              | Mavjud davr/kabinet fayllari ro'yxati (tanlagich uchun) |
 | `GET /api/connections`            | Platforma + CRM ulanish holati                          |
 | `GET /api/crm`                    | AmoCRM ma'lumoti (matchlangan)                          |
@@ -259,7 +298,7 @@ Hammasi snapshotdagi real raqamlardan hisoblanadi — qo'lda yozilgan "fact" yo'
 ## 🧪 Sifat
 
 - **TypeScript strict** — typecheck toza
-- **jsdom smoke-test** — 37/37: barcha 9 sahifa render, drawer ochilishi, ⌘K palette, CRM match kuchi
+- **jsdom smoke-test** — 46/46: barcha sahifalar render, drawer ochilishi, ⌘K palette, CRM match kuchi, OAuth paneli, kabinet tanlagich
 - **Skvoznaya audit** (`scripts/audit-chain.ts`) — 11 PASS · 0 GAP: Account → Expo → Kampaniya → Ad set → Kreativ → CRM lead zanjiri, referential integrity, metrikalar qamrovi
 - **Production build** — muvaffaqiyatli
 
@@ -269,11 +308,13 @@ Hammasi snapshotdagi real raqamlardan hisoblanadi — qo'lda yozilgan "fact" yo'
 
 - [x] Yagona oyna: platformalar kesimi Overview'da (Meta/Google/Yandex/Telegram/Offline bir joyda) — V3.
 - [x] Ko'p kabinet: bir platformaning barcha hisoblari avtomatik jamlanadi (V3.3); aniq davr/kabinet tanlash — tepadagi tanlagich.
+- [x] Kunlik timeseries (Meta `time_increment=1`) → trend chartlar — V3.1.
+- [x] Desktop bildirishnomalar + signal shaffoflik paneli — V3.2.
+- [x] Parol himoyasi + webhook secret — V3.3.
+- [x] **OAuth ko'p ijarachilik (multi-tenant)**: o'z Facebook/Google/AmoCRM hisoblarini bitta tugma bilan ulash, kabinet tanlagich, tokenlar serverda — V4.0.
+- [ ] Yandex Direct API pull (hozir fayl orqali)
 - [ ] Ko'p platformali CRM atributsiyasi (Google/Yandex leadlarini ham bog'lash)
-- [ ] Kunlik timeseries (`time_increment=1`) → trend chartlar, kunlik anomaliyalar
-- [ ] Placement/gender/geo kesimlari
-- [ ] Browser notification (kritik signallar desktop'ga)
-- [ ] Auth + rollar (admin/agent/mijoz), ko'p til (uz/en/ru)
+- [ ] Rollar (admin/agent/mijoz), ko'p til (uz/en/ru)
 - [ ] Avtomatik email hisobot (haftalik PDF)
 
 ---

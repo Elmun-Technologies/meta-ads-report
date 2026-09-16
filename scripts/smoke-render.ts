@@ -231,9 +231,28 @@ const connections = [
     vendor: "Facebook / Instagram",
     kind: "ads",
     status: "connected",
-    accounts: [{ id: "act_1", name: "Sof-Expo l Nazir", currency: "USD" }],
+    accounts: [
+      { id: "act_1", name: "Sof-Expo l Nazir", currency: "USD" },
+      { id: "act_2", name: "Foodera Test Akt", currency: "USD" },
+    ],
     syncedAt: new Date().toISOString(),
     note: "test",
+    oauth: {
+      ready: true,
+      connections: [
+        {
+          id: "conn-meta-1",
+          label: "Facebook — Test User",
+          status: "active",
+          lastSyncAt: new Date().toISOString(),
+          tokenExpiresAt: null,
+          accounts: [
+            { id: "act_1", name: "Sof-Expo l Nazir", currency: "USD", enabled: true, lastSyncAt: null },
+            { id: "act_2", name: "Foodera Test Akt", currency: "USD", enabled: false, lastSyncAt: null },
+          ],
+        },
+      ],
+    },
   },
   {
     id: "google-ads",
@@ -244,6 +263,11 @@ const connections = [
     accounts: [],
     syncedAt: null,
     note: "test",
+    oauth: {
+      ready: false,
+      reason: "GOOGLE_ADS_CLIENT_ID / SECRET / DEVELOPER_TOKEN .env da yo‘q",
+      connections: [],
+    },
   },
   {
     id: "yandex-direct",
@@ -264,6 +288,7 @@ const connections = [
     accounts: [{ id: "sofexpo", name: "Sof-Expo AmoCRM", currency: "UZS" }],
     syncedAt: new Date().toISOString(),
     note: "test",
+    oauth: { ready: true, connections: [] },
   },
 ];
 
@@ -400,7 +425,7 @@ check(
 );
 
 const routes: [string, string[], string][] = [
-  ["/campaigns", ["Batafsil jadval", "Kampaniyalar"], ["FOODERA"]],
+  ["/campaigns", ["Batafsil jadval", "Kampaniyalar"], ["FOODERA", "Barcha kabinetlar"]],
   ["/creatives", ["Reyting", "Kreativlar"], ["Bosish ulushi"]],
   ["/audience", ["Qaysi yosh javob berayapti"], ["18-24"]],
   ["/leads", ["Kampaniya tuzilmasi"], ["PROMOTORS"]],
@@ -408,7 +433,11 @@ const routes: [string, string[], string][] = [
   ["/compare", ["Nima o\'zgardi?", "Yo\'nalishlar taqqoslash"], ["FOODERA"]],
   ["/offline", ["Offline manba qo\'shish", "Test Expo Banner"], ["Offline Test Lead"]],
   ["/report", ["Rahbariyat uchun", "Chop etish"], ["murojaatgacha"]],
-  ["/connections", ["Ulanishlar"], ["Google Ads"]],
+  [
+    "/connections",
+    ["Ulanishlar", "O'z hisoblaringizni ulang"],
+    ["Facebook bilan ulash", "Google bilan ulash", "AmoCRM hisobini ulash", "Facebook — Test User", "Foodera Test Akt"],
+  ],
   ["/not-exist", ["404"], []],
 ];
 

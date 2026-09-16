@@ -13,6 +13,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import type { ActivityEvent, ActivityKind, SyncState, SyncResultItem } from "@shared/types";
+import type { OAuthConnection } from "@shared/types";
 import { DATA_DIR } from "./paths";
 
 /** Store fayli — snapshotlar papkasi yonida (server/data/store.json).
@@ -105,6 +106,8 @@ export interface StoreData {
   leads: StoreLead[];
   activity: ActivityEvent[];
   sync: SyncState;
+  /** OAuth orqali ulangan hisoblar (tokenlar bilan — client'ga yuborilmaydi) */
+  oauth?: OAuthConnection[];
 }
 
 export const DEFAULT_SYNC_INTERVAL_SEC = 300;
@@ -115,6 +118,7 @@ function emptyStore(): StoreData {
     offlineCampaigns: [],
     leads: [],
     activity: [],
+    oauth: [],
     sync: {
       running: false,
       lastSyncAt: null,

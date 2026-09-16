@@ -28,6 +28,22 @@ export interface ConnectionInfo {
   note?: string;
   /** Sync dvigateli bu manbadan avtomatik (INTERVAL bilan) tortadi */
   autoSync?: boolean;
+  /** OAuth orqali ulangan shaxsiy hisoblar (Ulanishlar sahifasi) */
+  oauth?: {
+    /** Platformani hozir ulash mumkinmi (app kalitlari .env da bormi) */
+    ready: boolean;
+    reason?: string;
+    connections: {
+      id: string;
+      label: string;
+      status: "active" | "expired" | "error";
+      error?: string;
+      lastSyncAt: string | null;
+      tokenExpiresAt: string | null;
+      accounts: OAuthAdAccount[];
+      subdomain?: string;
+    }[];
+  };
 }
 
 export interface Metrics {
@@ -242,6 +258,48 @@ export interface SyncState {
   results: SyncResultItem[];
   /** Qaysi manbalar avtomatik tortilishi uchun sozlangan (env to'ldirilgan) */
   configured: { meta: boolean; google: boolean; telegram: boolean };
+}
+
+/* ------------------------------------------------------------------ */
+/* OAuth orqali ulangan hisoblar (foydalanuvchining o'z akkauntlari)     */
+/* ------------------------------------------------------------------ */
+
+/** Bitta ulanish ostidagi reklama kabineti (Meta act_ / Google cid) */
+export interface OAuthAdAccount {
+  id: string;
+  name: string;
+  currency: string;
+  enabled: boolean;
+  lastSyncAt: string | null;
+}
+
+/** Client'ga ko'rinadigan ulanish (tokensiz — maxfiy ma'lumot yuborilmaydi) */
+export interface OAuthConnectionPublic {
+  id: string;
+  platform: "meta" | "google-ads" | "amocrm";
+  label: string;
+  status: "active" | "expired" | "error";
+  error?: string;
+  createdAt: string;
+  lastSyncAt: string | null;
+  tokenExpiresAt: string | null;
+  /** Meta/Google: ulanish ostidagi kabinetlar */
+  accounts: OAuthAdAccount[];
+  /** AmoCRM: subdomain */
+  subdomain?: string;
+}
+
+/** Server tomonda saqlanadigan to'liq ulanish (tokenlar bilan) — client'ga YUBORILMAYDI */
+export interface OAuthConnection extends OAuthConnectionPublic {
+  accessToken?: string;
+  refreshToken?: string;
+}
+
+/** /api/oauth/status javobi — qaysi platformalar ulashga tayyor (app kalitlari bor) */
+export interface OAuthConfigStatus {
+  meta: { ready: boolean; reason?: string };
+  "google-ads": { ready: boolean; reason?: string };
+  amocrm: { ready: boolean; reason?: string };
 }
 
 /* ------------------------------------------------------------------ */

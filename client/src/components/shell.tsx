@@ -384,6 +384,9 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
     snapshots,
     snapshotFile,
     setSnapshotFile,
+    connections,
+    account,
+    setAccount,
     syncing,
     syncRunning,
     syncNow,
@@ -394,6 +397,14 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
     source,
     syncState,
   } = useDashboardContext();
+  /** Barcha kabinet nomlari (platformalar bo'yicha unique) — kabinet tanlagich uchun */
+  const accountNames = [
+    ...new Set(
+      connections
+        .flatMap(c => (c.kind !== "crm" ? c.accounts.map(a => a.name) : []))
+        .filter(n => n && n !== "all")
+    ),
+  ].sort((a, b) => a.localeCompare(b));
   const [location] = useLocation();
   const platformName = snapshot
     ? PLATFORM_META[snapshot.meta.platform].name
@@ -427,6 +438,21 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
           <span className="st-label">Qidiruv va buyruqlar…</span>
           <span className="kbd">⌘K</span>
         </button>
+        {accountNames.length > 1 && (
+          <select
+            className="select-btn snap-select desktop-only"
+            value={account}
+            onChange={e => setAccount(e.target.value)}
+            title="Kabinet tanlash — faqat shu hisobning ma'lumoti ko'rinadi"
+          >
+            <option value="all">Barcha kabinetlar ({accountNames.length})</option>
+            {accountNames.map(n => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        )}
         {snapshots.length > 1 && (
           <select
             className="select-btn snap-select desktop-only"
