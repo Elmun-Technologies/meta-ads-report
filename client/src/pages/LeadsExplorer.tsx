@@ -53,24 +53,24 @@ export default function LeadsExplorer() {
     <>
       <div className="page-head">
         <div>
-          <span className="kicker">Слои</span>
-          <h1>Структура кампаний</h1>
+          <span className="kicker">Qatlamlar</span>
+          <h1>Kampaniya tuzilmasi</h1>
           <p>
-            Раскройте сверху вниз, как тратятся деньги в цепочке направление (Expo) → кампания → группа → креатив. Нажмите на название кампании, чтобы открыть ее группы и креативы.
+            Yuqoridan pastga qarab pul qayerda ketayotganini ko'ring: yo'nalish (Expo) → kampaniya → guruh → kreativ. Kampaniya nomini bossangiz guruhlari va kreativlari ochiladi.
           </p>
         </div>
         <div className="right">
           <span className="chip accent">
-            НАПРАВЛЕНИЕ <ChevronRight size={11} /> КАМПАНИЯ{" "}
-            <ChevronRight size={11} /> ГРУППА <ChevronRight size={11} /> КРЕАТИВ
+            YO'NALISH <ChevronRight size={11} /> KAMPANIYA{" "}
+            <ChevronRight size={11} /> GURUH <ChevronRight size={11} /> KREATIV
           </span>
         </div>
       </div>
 
       <PageHint>
-        Эта страница — <b>след денег</b>: кампании внутри направления (Expo),
-        группы объявлений и креативы внутри них. Здесь вы увидите, на каком
-        этапе большой расход и мало лидов.
+        Bu sahifa — <b>pulning izi</b>: yo'nalish (Expo) ichidagi kampaniyalar,
+        ularning ichidagi guruhlar va kreativlar. Qaysi bosqichda katta sarf
+        lekin kam murojaat bor — shuni ko'rasiz.
       </PageHint>
 
       {/* Expo guruhlari */}
@@ -108,7 +108,7 @@ export default function LeadsExplorer() {
                   <div className="c-name">
                     <b>{g.expo}</b>
                     <small>
-                      {g.rows.length} кампаний · CPL{" "}
+                      {g.rows.length} kampaniya · CPL{" "}
                       {g.leads ? money(g.spend / g.leads) : "N/A"}
                     </small>
                   </div>
@@ -173,9 +173,9 @@ export default function LeadsExplorer() {
       </div>
 
       <Panel
-        kicker="Выбранное направление"
+        kicker="Tanlangan yo'nalish"
         title={active?.expo}
-        sub={`${active?.rows.length ?? 0} кампаний · ${whole(active?.leads ?? 0)} leads · ${money(active?.spend ?? 0)} spend`}
+        sub={`${active?.rows.length ?? 0} kampaniya · ${whole(active?.leads ?? 0)} murojaat · ${money(active?.spend ?? 0)} sarf`}
         action={
           <div className="toolbar">
             <label className="search-box" style={{ minHeight: 34, height: 34 }}>
@@ -183,7 +183,7 @@ export default function LeadsExplorer() {
               <input
                 value={query}
                 onChange={e => setQuery(e.target.value)}
-                placeholder="Поиск кампании…"
+                placeholder="Kampaniya qidirish…"
               />
             </label>
             <button
@@ -191,13 +191,13 @@ export default function LeadsExplorer() {
               style={{ height: 34 }}
               onClick={() => setOnlyLeads(v => !v)}
             >
-              <Filter size={13} /> Только с лидами
+              <Filter size={13} /> Faqat murojaat berganlar
             </button>
           </div>
         }
       >
         {visible.length === 0 && (
-          <EmptyState text="Кампаний по этому фильтру не найдено" />
+          <EmptyState text="Bu filtr bo'yicha kampaniya topilmadi" />
         )}
         {visible.map(c => {
           const open = expanded === c.id;
@@ -268,15 +268,15 @@ export default function LeadsExplorer() {
                       </b>
                     </span>
                     <span>
-                      РЕЗУЛЬТАТ
+                      NATIJA
                       <b>
                         {c.metrics.leads > 0
                           ? `${whole(c.metrics.leads)} leads · ${money(c.metrics.cpl)} CPL`
-                          : "Лидов нет"}
+                          : "Murojaat yo'q"}
                       </b>
                     </span>
                     <span>
-                      УСТАЛОСТЬ АУДИТОРИИ
+                      AUDITORIYA CHARCHASHI
                       <b
                         style={{
                           color:
@@ -362,7 +362,7 @@ export default function LeadsExplorer() {
                       style={{ padding: "18px 8px" }}
                     >
                       <CircleHelp size={16} />
-                      Для этой кампании нет инсайтов на уровне креативов.
+                      Bu kampaniya uchun kreativ darajasidagi tahlil yo'q.
                     </div>
                   )}
                 </div>

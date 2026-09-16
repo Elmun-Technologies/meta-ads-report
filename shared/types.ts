@@ -26,6 +26,8 @@ export interface ConnectionInfo {
   accounts: AccountRef[];
   syncedAt: string | null;
   note?: string;
+  /** Sync dvigateli bu manbadan avtomatik (INTERVAL bilan) tortadi */
+  autoSync?: boolean;
 }
 
 export interface Metrics {
@@ -145,6 +147,8 @@ export interface NormalizedSnapshot {
   campaigns: CampaignNode[];
   creatives: CreativeNode[];
   age: AgeRow[];
+  /** "all" (yagona oyna) rejimida — har bir platformaning alohida jami ko'rsatkichlari */
+  platforms?: PlatformTotals[];
 }
 
 export const PLATFORM_META: Record<PlatformId, { name: string; short: string; color: string }> = {
@@ -155,6 +159,78 @@ export const PLATFORM_META: Record<PlatformId, { name: string; short: string; co
   telegram: { name: "Telegram", short: "TG", color: "#0088cc" },
   offline: { name: "Offline", short: "Offline", color: "#10b981" },
 };
+
+/* ------------------------------------------------------------------ */
+/* Yagona oyna — platformalar kesimi                                   */
+/* ------------------------------------------------------------------ */
+
+/** Bitta platformaning umumiy (jamlangan) ko'rsatkichlari — Overview'dagi kesim paneli uchun */
+export interface PlatformTotals {
+  platform: PlatformId;
+  name: string;
+  color: string;
+  spend: number;
+  leads: number;
+  cpl: number | null;
+  impressions: number;
+  clicks: number;
+  ctr: number | null;
+  campaigns: number;
+  /** Bu manbadan oxirgi ma'lumot olingan vaqt (ISO) */
+  syncedAt: string | null;
+  /** Sync dvigateli bu manbadan faol (avtomatik) tortadi */
+  autoSync: boolean;
+  /** Ushbu manbada qaysi ma'lumot bor / yo'q — "nima ma'lum" shaffofligi uchun */
+  coverage: string[];
+  limitations: string[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Real-time sync + jonli harakat                                       */
+/* ------------------------------------------------------------------ */
+
+export type ActivityKind =
+  | "sync"
+  | "lead"
+  | "stage"
+  | "channel"
+  | "webhook"
+  | "snapshot"
+  | "manual"
+  | "error";
+
+/** Bitta jonli hodisa — serverda ro'y bergan vaqtda SSE orqali clientlarga yetib boradi */
+export interface ActivityEvent {
+  id: string;
+  at: string;
+  kind: ActivityKind;
+  title: string;
+  body?: string;
+  source?: string;
+  tone?: "good" | "info" | "warn" | "risk";
+}
+
+/** Bitta manba (platforma) bo'yicha sync natijasi */
+export interface SyncResultItem {
+  id: string;
+  label: string;
+  ok: boolean;
+  message: string;
+  durationMs: number;
+  at: string;
+}
+
+/** Sync dvigatelining hozirgi holati — /api/sync va SSE sync_state orqali */
+export interface SyncState {
+  running: boolean;
+  lastSyncAt: string | null;
+  nextSyncAt: string | null;
+  intervalSec: number;
+  trigger: "auto" | "manual" | "startup" | null;
+  results: SyncResultItem[];
+  /** Qaysi manbalar avtomatik tortilishi uchun sozlangan (env to'ldirilgan) */
+  configured: { meta: boolean; google: boolean; telegram: boolean };
+}
 
 /* ------------------------------------------------------------------ */
 /* CRM (AmoCRM) — lead lifecycle                                       */

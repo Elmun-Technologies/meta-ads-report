@@ -20,16 +20,16 @@ export default function Audience() {
     <>
       <div className="page-head">
         <div>
-          <span className="kicker">Срез по возрасту</span>
-          <h1>Какой возраст реагирует?</h1>
+          <span className="kicker">Yosh bo'yicha kesim</span>
+          <h1>Qaysi yosh javob berayapti?</h1>
           <p>
-            Распределение расхода и лидов по возрастным группам. Общий охват{" "}
-            {whole(totals.reach)} человек, средняя частота{" "}
+            Sarf va murojaatlarning yosh guruhlari bo'yicha taqsimoti. Umumiy qamrov{" "}
+            {whole(totals.reach)} kishi, o'rtacha takroriylik{" "}
             {ratio(totals.frequency)}.
             {bestCplAge && (
               <>
                 {" "}
-                Самые дешевые лиды в этой группе:{" "}
+                Bu guruhda eng arzon murojaatlar:{" "}
                 <b style={{ color: "var(--text)" }}>{bestCplAge.age}</b> —{" "}
                 {money(bestCplAge.spend / bestCplAge.leads)}.
               </>
@@ -39,17 +39,17 @@ export default function Audience() {
       </div>
 
       <PageHint>
-        Вопрос:{" "}
+        Savol:{" "}
         <b>
-          люди какого возраста оставляют лиды и сколько они стоят?
+          qaysi yoshdagi odamlar murojaat qoldiradi va ular qancha turadi?
         </b>{" "}
-        Слева — сравнение расхода и лидов, справа — доля каждой возрастной
-        группы.
+        Chapda — sarf va murojaat solishtirilgan, o'ngda — har bir yosh
+        guruhining ulushi.
       </PageHint>
 
       <div className="grid-12" style={{ marginBottom: 14 }}>
         <div className="col-7">
-          <Panel kicker="По возрасту" title="Расход и лиды">
+          <Panel kicker="Yosh bo'yicha" title="Sarf va murojaatlar">
             <div style={{ height: 300 }}>
               <AgeSpendLeadsChart
                 data={age.map(a => ({
@@ -63,8 +63,8 @@ export default function Audience() {
         </div>
         <div className="col-5">
           <Panel
-            kicker="Доля лидов"
-            title="Распределение по возрастным группам"
+            kicker="Murojaatlar ulushi"
+            title="Yosh guruhlari bo'yicha taqsimot"
           >
             {age.map(a => (
               <RankRow
@@ -74,45 +74,45 @@ export default function Audience() {
                 valueLabel={`${whole(a.leads)} · ${pct((a.leads / totalLeads) * 100, 1)}`}
                 share={a.leads / maxLeads}
                 tone="var(--cyan)"
-                sub={`Расход ${money(a.spend)} · стоимость лида ${a.leads ? money(a.spend / a.leads) : "N/A"} · частота ${ratio(a.frequency)}`}
+                sub={`Sarf ${money(a.spend)} · murojaat narxi ${a.leads ? money(a.spend / a.leads) : "N/A"} · takroriylik ${ratio(a.frequency)}`}
               />
             ))}
           </Panel>
         </div>
       </div>
 
-      <Panel kicker="Детальная таблица" title="Все возрастные группы">
+      <Panel kicker="Batafsil jadval" title="Barcha yosh guruhlari">
         <div className="tbl-wrap">
           <table className="tbl">
             <thead>
               <tr>
-                <th>Возраст</th>
+                <th>Yosh</th>
                 <th>
-                  Расход<small>Spend</small>
+                  Sarf<small>Spend</small>
                 </th>
                 <th>
-                  Показы<small>Impressions</small>
+                  Ko'rsatuvlar<small>Impressions</small>
                 </th>
                 <th>
-                  Охват<small>Reach</small>
+                  Qamrov<small>Reach</small>
                 </th>
                 <th>
-                  Частота<small>Frequency</small>
+                  Takroriylik<small>Frequency</small>
                 </th>
                 <th>
-                  Клики<small>Clicks</small>
+                  Bosishlar<small>Clicks</small>
                 </th>
                 <th>
-                  Кликабельность<small>CTR</small>
+                  Bosish ulushi<small>CTR</small>
                 </th>
                 <th>
-                  Цена 1000 показов<small>CPM</small>
+                  1000 ko'rsatuv narxi<small>CPM</small>
                 </th>
                 <th>
-                  Лиды<small>Leads</small>
+                  Murojaatlar<small>Leads</small>
                 </th>
                 <th>
-                  Стоимость лида<small>CPL</small>
+                  Murojaat narxi<small>CPL</small>
                 </th>
               </tr>
             </thead>

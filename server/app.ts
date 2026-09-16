@@ -1,11 +1,12 @@
 /**
  * Express ilova qurilmasi — bir xil route'lar ikki rejimda ishlaydi:
- *   - "server": uzoq muddatli process (Railway/Render/VPS) — fs.watch + SSE + statik client serve qiladi.
- *   - "serverless": Vercel funksiyasi (api/[[...slug]].ts) — faqat /api/* route'lar, statik fayllarni
- *     Vercel to'g'ridan-to'g'ri dist/public'dan beradi.
+ *   - "server": uzoq muddatli process (Railway/Render/VPS) — fs.watch + SSE + sync scheduler + statik client serve qiladi.
+ *   - "serverless": Vercel funksiyasi (api/[[...slug]].ts) — faqat /api/* route'lar.
  *
  * Arxitektura:
  *   snapshots/ papka  →  Connector (normalize)  →  /api/snapshot  →  UI
+ *   Sync dvigateli    →  Meta/Google/TGStat API pull  →  snapshot + SSE push
+ *   AmoCRM webhook    →  /api/webhooks/amocrm  →  store + SSE push (real-time leadlar)
  *   Yangi snapshot tushsa → /api/stream (SSE, faqat "server" rejimida) → barcha clientlar live yangilanadi.
  *
  * Yangi platforma (Google Ads, Yandex Direct MCP) ulash uchun CONNECTORS ga
@@ -22,41 +23,34 @@ import {
   normalizeAmoExport,
   type RawAmoExport,
 } from "@shared/amo";
+import { metaConfigured } from "@shared/metaApi";
 import type {
   ConnectionInfo,
   CrmData,
+  CrmLead,
+  CrmStage,
   NormalizedSnapshot,
   PlatformId,
+  PlatformTotals,
   SnapshotInfo,
 } from "@shared/types";
 import { webhooksRouter } from "./routes/webhooks";
 import { offlineChannelsRouter } from "./routes/offline-channels";
 import { telegramRouter, getTelegramStats } from "./routes/telegram";
-import { prisma } from "./db";
+import {
+  getStore,
+  currentSyncState,
+  logActivity,
+  recentActivity,
+  setBroadcaster,
+} from "./store";
+import { runSync, setSyncBroadcaster } from "./sync";
+import { DATA_DIR } from "./paths";
+
+export { DATA_DIR };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-/**
- * Snapshotlar papkasi — turli muhitlarda (lokal dev, Vercel serverless, Railway/VPS)
- * turlicha joylashishi mumkin, shuning uchun bir nechta manzil tekshiriladi.
- */
-const DATA_DIR_CANDIDATES = [
-  path.join(__dirname, "data", "snapshots"),
-  path.join(__dirname, "..", "data", "snapshots"),
-  path.join(__dirname, "..", "server", "data", "snapshots"),
-  path.join(__dirname, "..", "..", "server", "data", "snapshots"),
-  path.resolve(process.cwd(), "server", "data", "snapshots"),
-  path.resolve(process.cwd(), "data", "snapshots"),
-  path.resolve(process.cwd(), "..", "server", "data", "snapshots"),
-];
-
-export const DATA_DIR =
-  DATA_DIR_CANDIDATES.find(
-    p => fs.existsSync(p) && fs.readdirSync(p).some(f => f.endsWith(".json"))
-  ) ??
-  DATA_DIR_CANDIDATES.find(p => fs.existsSync(p)) ??
-  path.resolve(process.cwd(), "server", "data", "snapshots");
 
 /* ------------------------------------------------------------------ */
 /* Connector layer                                                     */
@@ -67,7 +61,9 @@ interface Connector {
   name: string;
   vendor: string;
   note?: string;
-  /** Papkadagi eng yangi snapshot fayli (meta uchun) */
+  /** Sync dvigateli bu manbadan avtomatik tortadi (env sozlanganda) */
+  autoSync?: boolean;
+  /** Papkadagi eng yangi snapshot fayli */
   latestFile?: () => { file: string; mtime: Date } | null;
   resolve: (file?: string) => NormalizedSnapshot | null;
 }
@@ -210,12 +206,99 @@ export function readAmoSnapshot(): CrmData | null {
   }
 }
 
+/**
+ * CRM ma'lumoti — birlashtirilgan manba:
+ *   1. amo_*.json snapshot (MCP/eksport)
+ *   2. Store'dagi webhook leadlari (AmoCRM real-time)
+ *   3. Store'dagi offline leadlar
+ * Shunda CRM real-time: webhook kelsi — Pipeline sahifasi darhol yangilanadi.
+ */
+export function readCrmUnified(): CrmData | null {
+  const fileCrm = readAmoSnapshot();
+  const store = getStore();
+  const storeLeads = store.leads;
+
+  if (!fileCrm && storeLeads.length === 0) return null;
+
+  // Store leadlarini CrmLead shaklida jamlash
+  const fromStore: CrmLead[] = storeLeads.map(l => ({
+    id: l.id,
+    name: l.name,
+    createdAt: l.createdAt,
+    updatedAt: l.updatedAt,
+    stageId: l.stageId,
+    stageName: l.stageName,
+    pipeline: l.pipeline,
+    price: l.price,
+    responsible: l.responsible ?? null,
+    contactName: l.contactName ?? null,
+    phone: l.phone ?? null,
+    utmCampaign: l.utmCampaign ?? null,
+    utmContent: l.utmContent ?? null,
+    utmSource: l.utmSource ?? null,
+    campaignId: null,
+    creativeId: null,
+    history: l.history.map(h => ({ at: h.at, stage: h.stage })),
+    lossReason: l.lossReason ?? null,
+  }));
+
+  // Store leadlarining bosqichlari (sintetik ro'yxat)
+  const stageIds = [...new Set(storeLeads.map(l => l.stageId))];
+  const synthStages: CrmStage[] = stageIds.map((id, i) => {
+    const sample = storeLeads.find(l => l.stageId === id)!;
+    const name = sample.stageName;
+    const n = name.toLowerCase();
+    const kind: CrmStage["kind"] =
+      n.includes("won") || n.includes("bitim") || n.includes("yutuq") || n.includes("успешн")
+        ? "won"
+        : n.includes("lost") || n.includes("rad") || n.includes("yo'qot") || n.includes("проигр")
+          ? "lost"
+          : i === 0
+            ? "new"
+            : "in_progress";
+    return { id, name, pipeline: sample.pipeline, sort: 100 + i, kind };
+  });
+
+  if (!fileCrm) {
+    // Faqat webhook/offline leadlar mavjud
+    const crm: CrmData = {
+      account: "AmoCRM (webhook) + Offline",
+      currency: process.env.AMOCRM_CURRENCY || "UZS",
+      syncedAt: new Date().toISOString(),
+      sourceLabel: "Real-time (webhook + offline)",
+      stages: synthStages,
+      leads: fromStore,
+      matchedLeads: 0,
+      unmatchedLeads: fromStore.length,
+    };
+    return matchLeadsToAds(crm, readMetaSnapshot());
+  }
+
+  // Ikkalasini birlashtirish — webhook lead fayldagi lead bilan bir xil id'da bo'lsa, webhook yangiroq
+  const byId = new Map(fileCrm.leads.map(l => [l.id, l]));
+  for (const l of fromStore) byId.set(l.id, l);
+  const merged: CrmData = {
+    ...fileCrm,
+    syncedAt: new Date().toISOString(),
+    sourceLabel: `${fileCrm.sourceLabel} + real-time webhook`,
+    stages: [...fileCrm.stages, ...synthStages.filter(s => !fileCrm.stages.some(fs => fs.id === s.id))],
+    leads: [...byId.values()],
+  };
+  const matched = merged.leads.filter(l => l.utmCampaign).length;
+  merged.matchedLeads = matched;
+  merged.unmatchedLeads = merged.leads.length - matched;
+  return matchLeadsToAds(merged, readMetaSnapshot());
+}
+
 const CONNECTORS: Connector[] = [
   {
     id: "meta",
     name: "Meta Ads",
     vendor: "Facebook / Instagram",
-    note: "Facebook Ads MCP orqali olingan real eksportga ulangan.",
+    note: metaConfigured()
+      ? "Real-time: Graph API'dan har sync intervalda avtomatik tortiladi (META_ACCESS_TOKEN sozlangan)."
+      : "META_ACCESS_TOKEN + META_AD_ACCOUNT_ID berilsa — real-time Graph API pull yoqiladi. Aks holda meta_*.json eksporti papkaga tushganda ulanadi.",
+    autoSync: metaConfigured(),
     latestFile: latestMetaFile,
     resolve: () => readMetaSnapshot(),
   },
@@ -223,7 +306,10 @@ const CONNECTORS: Connector[] = [
     id: "google-ads",
     name: "Google Ads",
     vendor: "Google",
-    note: "google_*.json snapshot papkaga tushganda avtomatik ulanadi (campaign_name, cost_micros, clicks, conversions maydonlari taniladi — README).",
+    note: "GOOGLE_ADS_* env to'ldirilsa — API'dan avtomatik tortiladi. Aks holda google_*.json snapshot papkaga tushganda avtomatik ulanadi.",
+    autoSync: Boolean(
+      process.env.GOOGLE_ADS_DEVELOPER_TOKEN && process.env.GOOGLE_ADS_REFRESH_TOKEN
+    ),
     latestFile: () => latestFileFor("google"),
     resolve: () => readGenericSnapshot("google-ads"),
   },
@@ -256,12 +342,12 @@ const CRM_CONNECTIONS: ConnectionInfo[] = [
     status: "ready",
     accounts: [],
     syncedAt: null,
-    note: "amo_*.json snapshot papkaga tushganda lead lifecycle (bosqichlar, bitimlar, ROAS) avtomatik yonadi.",
+    note: "amo_*.json snapshot + /api/webhooks/amocrm (real-time). Webhook ulansa leadlar darhol ko'rinadi.",
   },
 ];
 
 export function connectionsPayload(): ConnectionInfo[] {
-  const crm = readAmoSnapshot();
+  const crm = readCrmUnified();
   const amoInfo: ConnectionInfo = {
     ...CRM_CONNECTIONS[0],
     status: crm ? "connected" : "ready",
@@ -292,6 +378,7 @@ export function connectionsPayload(): ConnectionInfo[] {
           : [],
         syncedAt: latest?.mtime.toISOString() ?? null,
         note: c.note,
+        autoSync: c.autoSync,
       } satisfies ConnectionInfo;
     }),
     amoInfo,
@@ -299,7 +386,7 @@ export function connectionsPayload(): ConnectionInfo[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* SSE — live sync kanali (faqat "server" rejimida ishlaydi)          */
+/* SSE — live sync kanali (faqat "server" rejimda ishlaydi)            */
 /* ------------------------------------------------------------------ */
 
 const sseClients = new Set<import("http").ServerResponse>();
@@ -315,13 +402,27 @@ export function broadcast(event: string, data: unknown = {}) {
   }
 }
 
-/** Snapshot papkasini kuzatadi va SSE orqali ulangan clientlarga push qiladi. Faqat uzoq muddatli process'da chaqiriladi — serverless funksiya har chaqiriqda qayta ishga tushgani uchun fs.watch foydasiz. */
+// Store (activity, sync_state) va sync dvigateli SSE'ga ulanadi
+setBroadcaster(broadcast);
+setSyncBroadcaster(broadcast);
+
+/** Snapshot papkasini kuzatadi va SSE orqali ulangan clientlarga push qiladi. Faqat uzoq muddatli process'da chaqiriladi. */
 export function watchSnapshots() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   let debounce: NodeJS.Timeout | null = null;
-  fs.watch(DATA_DIR, { persistent: false }, () => {
+  fs.watch(DATA_DIR, { persistent: false }, (_event, filename) => {
     if (debounce) clearTimeout(debounce);
     debounce = setTimeout(() => {
+      const name = filename ? String(filename) : null;
+      if (name && name.endsWith(".json")) {
+        logActivity({
+          kind: "snapshot",
+          source: "snapshots-dir",
+          tone: "good",
+          title: `Yangi snapshot: ${name}`,
+          body: "Fayl papkaga tushdi — dashboard yangilanmoqda",
+        });
+      }
       const latest = latestMetaFile();
       broadcast("sync", {
         at: new Date().toISOString(),
@@ -330,6 +431,321 @@ export function watchSnapshots() {
       });
     }, 400);
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Yagona oyna — platformalar kesimi                                   */
+/* ------------------------------------------------------------------ */
+
+/** Har bir platformaning jamlangan ko'rsatkichlari + nima ma'lumligi */
+function platformTotalsFor(
+  platform: PlatformId,
+  snap: NormalizedSnapshot | null,
+  autoSync: boolean,
+  coverage: string[],
+  limitations: string[]
+): PlatformTotals {
+  const names: Partial<Record<PlatformId, string>> = {
+    meta: "Meta Ads",
+    "google-ads": "Google Ads",
+    "yandex-direct": "Yandex Direct",
+    telegram: "Telegram",
+    offline: "Offline",
+  };
+  const colors: Partial<Record<PlatformId, string>> = {
+    meta: "#0866FF",
+    "google-ads": "#4285F4",
+    "yandex-direct": "#FC3F1D",
+    telegram: "#0088cc",
+    offline: "#10b981",
+  };
+  const t = snap?.totals;
+  return {
+    platform,
+    name: names[platform] ?? platform,
+    color: colors[platform] ?? "var(--text)",
+    spend: t?.spend ?? 0,
+    leads: t?.leads ?? 0,
+    cpl: t?.cpl ?? null,
+    impressions: t?.impressions ?? 0,
+    clicks: t?.clicks ?? 0,
+    ctr: t?.ctr ?? null,
+    campaigns: snap?.campaigns.length ?? 0,
+    syncedAt: snap?.meta.syncedAt ?? null,
+    autoSync,
+    coverage,
+    limitations,
+  };
+}
+
+export async function buildUnifiedSnapshot(): Promise<NormalizedSnapshot | null> {
+  const byPlatform = readSnapshotsByPlatform();
+  const snapshots: NormalizedSnapshot[] = [];
+  const platforms: PlatformTotals[] = [];
+
+  const metaSnap = byPlatform["meta"];
+  if (metaSnap) {
+    snapshots.push(metaSnap);
+    platforms.push(
+      platformTotalsFor(
+        "meta",
+        metaSnap,
+        metaConfigured(),
+        ["Sarf", "Murojaatlar", "Kliklar", "Ko'rsatuvlar", "Kreativlar", "Yosh kesimi"],
+        metaSnap.meta.limitations
+      )
+    );
+  } else {
+    platforms.push(
+      platformTotalsFor("meta", null, metaConfigured(), [], ["Hali ulanmagan"])
+    );
+  }
+
+  const googleSnap = byPlatform["google-ads"];
+  if (googleSnap) {
+    snapshots.push(googleSnap);
+    platforms.push(
+      platformTotalsFor(
+        "google-ads",
+        googleSnap,
+        Boolean(process.env.GOOGLE_ADS_DEVELOPER_TOKEN && process.env.GOOGLE_ADS_REFRESH_TOKEN),
+        ["Sarf", "Konversiyalar (murojaat sifatida)", "Kliklar", "Ko'rsatuvlar", "Kampaniyalar"],
+        googleSnap.meta.limitations
+      )
+    );
+  } else {
+    platforms.push(
+      platformTotalsFor("google-ads", null, Boolean(process.env.GOOGLE_ADS_DEVELOPER_TOKEN), [], ["Hali ulanmagan"])
+    );
+  }
+
+  const yandexSnap = byPlatform["yandex-direct"];
+  if (yandexSnap) {
+    snapshots.push(yandexSnap);
+    platforms.push(
+      platformTotalsFor("yandex-direct", yandexSnap, false, ["Sarf", "Kliklar", "Ko'rsatuvlar", "Konversiyalar"], yandexSnap.meta.limitations)
+    );
+  }
+
+  /* Offline kampaniyalar — store'dan */
+  const offlineCampaigns = getStore().offlineCampaigns;
+  if (offlineCampaigns.length > 0) {
+    const offSpend = offlineCampaigns.reduce((s, c) => s + (c.metrics.spend || 0), 0);
+    const offLeads = offlineCampaigns.reduce((s, c) => s + (c.metrics.leadsCount || 0), 0);
+    const offSnap: NormalizedSnapshot = {
+      meta: {
+        platform: "offline",
+        period: { start: "", end: "", label: "Umumiy" },
+        account: { id: "offline", name: "Offline manbalar", currency: process.env.OFFLINE_CURRENCY || "UZS" },
+        sourceLabel: "Qo'lda kiritilgan (API)",
+        syncedAt: new Date().toISOString(),
+        limitations: [],
+      },
+      totals: {
+        spend: offSpend,
+        leads: offLeads,
+        cpl: offLeads > 0 ? offSpend / offLeads : null,
+        impressions: offlineCampaigns.reduce((s, c) => s + (c.metrics.impressions || 0), 0),
+        clicks: offlineCampaigns.reduce((s, c) => s + (c.metrics.clicks || 0), 0),
+        ctr: null,
+        reach: null,
+        frequency: null,
+        linkClicks: offlineCampaigns.reduce((s, c) => s + (c.metrics.linkClicks || 0), 0),
+        linkCtr: null,
+        cpm: null,
+        cpc: null,
+        landingPageViews: null,
+        messagingConversations: null,
+        videoViews: null,
+      },
+      campaigns: offlineCampaigns.map(c => ({
+        id: c.id,
+        name: c.name,
+        originalName: c.originalName,
+        objective: c.objective,
+        platform: "offline" as PlatformId,
+        expo: c.expo,
+        goal: c.goal,
+        metrics: {
+          spend: c.metrics.spend,
+          leads: c.metrics.leadsCount,
+          cpl: c.metrics.leadsCount > 0 ? c.metrics.spend / c.metrics.leadsCount : null,
+          impressions: c.metrics.impressions,
+          clicks: c.metrics.clicks,
+          linkClicks: c.metrics.linkClicks,
+          reach: null,
+          frequency: null,
+          ctr: null,
+          linkCtr: null,
+          cpc: null,
+          cpm: null,
+          landingPageViews: null,
+          messagingConversations: null,
+          videoViews: null,
+        } satisfies NormalizedSnapshot["campaigns"][number]["metrics"],
+        creatives: [],
+      })),
+      creatives: [],
+      age: [],
+    };
+    snapshots.push(offSnap);
+    platforms.push(
+      platformTotalsFor("offline", offSnap, false, ["Sarf", "Murojaatlar (qo'lda)"], [])
+    );
+  }
+
+  /* Telegram kanallar — TGStat'dan */
+  const tgChannels = getTelegramStats();
+  if (tgChannels.length > 0) {
+    const tgCampaigns: NormalizedSnapshot["campaigns"] = [];
+    let tgSpend = 0;
+    let tgViews = 0;
+    let tgReactions = 0;
+
+    for (const ch of tgChannels) {
+      const chSpend = ch.posts.reduce((s, p) => s + (p.cost || 0), 0);
+      const chViews = ch.posts.reduce((s, p) => s + (p.views || 0), 0);
+      const chReactions = ch.posts.reduce((s, p) => s + (p.reactions || 0), 0);
+
+      tgSpend += chSpend;
+      tgViews += chViews;
+      tgReactions += chReactions;
+
+      tgCampaigns.push({
+        id: `tg-${ch.id}`,
+        name: `${ch.name} (${ch.username})`,
+        originalName: ch.name,
+        objective: "telegram",
+        platform: "telegram",
+        expo: `${ch.subscribers} obunachi · ERR ${ch.errPercent}%`,
+        goal: "engagement",
+        metrics: {
+          spend: chSpend,
+          leads: 0,
+          cpl: null,
+          impressions: chViews,
+          clicks: chReactions,
+          reach: ch.avgPostReach,
+          frequency: null,
+          ctr: null,
+          linkClicks: 0,
+          linkCtr: null,
+          cpc: null,
+          cpm: null,
+          landingPageViews: null,
+          messagingConversations: null,
+          videoViews: null,
+          postEngagement: chReactions,
+        },
+        creatives: [],
+      });
+    }
+
+    const tgSnap: NormalizedSnapshot = {
+      meta: {
+        platform: "telegram",
+        period: { start: "", end: "", label: "Oxirgi postlar" },
+        account: { id: "telegram", name: "Telegram kanallar", currency: process.env.TELEGRAM_CURRENCY || "UZS" },
+        sourceLabel: `TGStat API · ${tgChannels.length} kanal`,
+        syncedAt: tgChannels[0]?.syncedAt ?? new Date().toISOString(),
+        limitations: ["Telegram'da bevosita lead yo'q — reaksiya/ko'rish metrikalari ko'rsatiladi."],
+      },
+      totals: {
+        spend: tgSpend,
+        leads: 0,
+        cpl: null,
+        impressions: tgViews,
+        clicks: tgReactions,
+        ctr: tgViews > 0 ? (tgReactions / tgViews) * 100 : null,
+        reach: null,
+        frequency: null,
+        linkClicks: 0,
+        linkCtr: null,
+        cpm: null,
+        cpc: null,
+        landingPageViews: null,
+        messagingConversations: null,
+        videoViews: null,
+      },
+      campaigns: tgCampaigns,
+      creatives: [],
+      age: [],
+    };
+    snapshots.push(tgSnap);
+    platforms.push(
+      platformTotalsFor(
+        "telegram",
+        tgSnap,
+        Boolean(process.env.TGSTAT_TOKEN),
+        ["Post narxi (qo'lda)", "Ko'rishlar", "Reaksiyalar", "Obunachilar", "ERR"],
+        tgSnap.meta.limitations
+      )
+    );
+  }
+
+  if (snapshots.length === 0) return null;
+
+  // Jamlovchi hisoblagichlar — Metrics'dagi nullable maydonlardan farqli ravishda
+  // bu yerda 0 dan boshlanadi (null = "ma'lumot yo'q" ma'nosini saqlash uchun
+  // faqat manbada yo'q bo'lganda ishlatiladi).
+  const totals = {
+    spend: 0,
+    leads: 0,
+    cpl: 0,
+    impressions: 0,
+    clicks: 0,
+    ctr: 0,
+    reach: 0,
+    cpm: 0,
+    cpc: 0,
+    landingPageViews: 0,
+    linkClicks: 0,
+    videoViews: 0,
+    messagingConversations: 0,
+    postEngagement: 0,
+    reactions: 0,
+    comments: 0,
+    saves: 0,
+    messagingFirstReply: 0,
+  };
+  const campaigns: NormalizedSnapshot["campaigns"] = [];
+  const creatives: NormalizedSnapshot["creatives"] = [];
+  const age: NormalizedSnapshot["age"] = [];
+
+  for (const s of snapshots) {
+    totals.spend += s.totals.spend || 0;
+    totals.leads += s.totals.leads || 0;
+    totals.impressions += s.totals.impressions || 0;
+    totals.clicks += s.totals.clicks || 0;
+    totals.reach += s.totals.reach || 0;
+    totals.landingPageViews += s.totals.landingPageViews || 0;
+    totals.linkClicks += s.totals.linkClicks || 0;
+    totals.videoViews += s.totals.videoViews || 0;
+    campaigns.push(...s.campaigns);
+    creatives.push(...s.creatives);
+    age.push(...s.age);
+  }
+
+  if (totals.leads > 0) totals.cpl = totals.spend / totals.leads;
+  if (totals.impressions > 0) totals.ctr = (totals.clicks / totals.impressions) * 100;
+  if (totals.impressions > 0) totals.cpm = (totals.spend / totals.impressions) * 1000;
+  if (totals.clicks > 0) totals.cpc = totals.spend / totals.clicks;
+
+  return {
+    meta: {
+      platform: "all" as PlatformId,
+      period: snapshots[0].meta.period,
+      account: { id: "all", name: "Jami — barcha manbalar", currency: snapshots[0].meta.account.currency },
+      sourceLabel: "Yagona oyna — real-time",
+      syncedAt: new Date().toISOString(),
+      limitations: [],
+    },
+    totals: totals as NormalizedSnapshot["totals"],
+    campaigns,
+    creatives,
+    age,
+    platforms,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -360,7 +776,7 @@ export function createApp(mode: AppMode = "server") {
       : [];
     const debug =
       req.query.debug === "1"
-        ? { dataDir: DATA_DIR, cwd: process.cwd(), dirname: __dirname, files }
+        ? { dataDir: DATA_DIR, cwd: process.cwd(), files }
         : undefined;
     res.json({
       ok: true,
@@ -381,192 +797,43 @@ export function createApp(mode: AppMode = "server") {
   });
 
   app.get("/api/crm", (_req, res) => {
-    const crm = readAmoSnapshot();
+    const crm = readCrmUnified();
     if (!crm) {
       res
         .status(503)
         .json({
           connected: false,
           error:
-            "AmoCRM snapshot topilmadi — server/data/snapshots/ ga amo_*.json qo'ying (format: server/data/README.md).",
+            "AmoCRM ma'lumoti topilmadi — server/data/snapshots/ ga amo_*.json qo'ying yoki webhook'ni ulang (/api/webhooks/amocrm).",
         });
       return;
     }
     res.json({ connected: true, ...crm });
   });
 
-async function buildUnifiedSnapshot(): Promise<NormalizedSnapshot | null> {
-  const snapshots: NormalizedSnapshot[] = [];
-  const metaC = CONNECTORS.find(c => c.id === "meta");
-  if (metaC) {
-    const metaSnap = metaC.resolve(undefined);
-    if (metaSnap) snapshots.push(metaSnap);
-  }
-  const googleC = CONNECTORS.find(c => c.id === "google-ads");
-  if (googleC) {
-    const googleSnap = googleC.resolve(undefined);
-    if (googleSnap) snapshots.push(googleSnap);
-  }
-  const yandexC = CONNECTORS.find(c => c.id === "yandex-direct");
-  if (yandexC) {
-    const yandexSnap = yandexC.resolve(undefined);
-    if (yandexSnap) snapshots.push(yandexSnap);
-  }
+  /* ---------------- Real-time sync ---------------- */
 
-  const offlineCampaigns = await prisma.campaign.findMany({
-    where: { platform: "offline" },
-    include: { metrics: true }
-  });
-
-  if (offlineCampaigns.length > 0) {
-    const offSnap: NormalizedSnapshot = {
-      meta: {
-        platform: "offline" as PlatformId,
-        period: { start: "", end: "", label: "Umumiy" },
-        account: { id: "offline", name: "Offline", currency: "UZS" },
-        sourceLabel: "Offline",
-        syncedAt: new Date().toISOString(),
-        limitations: []
-      },
-      totals: { spend: 0, leads: 0, cpl: 0, impressions: 0, clicks: 0, ctr: 0, reach: 0, cpm: 0, cpc: 0, landingPageViews: 0, linkClicks: 0, videoViews: 0, messagingConversations: 0, frequency: 0, linkCtr: 0 },
-      campaigns: offlineCampaigns.map(c => ({
-        id: c.id,
-        name: c.name,
-        originalName: c.originalName,
-        objective: "offline",
-        platform: "offline",
-        expo: c.expo,
-        goal: c.goal as any,
-        status: "active",
-        effectiveStatus: "active",
-        metrics: {
-          spend: c.metrics.spend,
-          leads: c.metrics.leadsCount,
-          cpl: c.metrics.leadsCount > 0 ? c.metrics.spend / c.metrics.leadsCount : 0,
-          impressions: c.metrics.impressions,
-          clicks: c.metrics.clicks
-        } as any,
-        hasLeads: c.metrics.leadsCount > 0,
-        creatives: []
-      })),
-      creatives: [],
-      age: []
-    };
-    
-    offSnap.campaigns.forEach(c => {
-      offSnap.totals.spend += c.metrics.spend;
-      offSnap.totals.leads += c.metrics.leads;
-    });
-    if (offSnap.totals.leads > 0) offSnap.totals.cpl = offSnap.totals.spend / offSnap.totals.leads;
-    snapshots.push(offSnap);
-  }
-
-  // Telegram kanallar va postlarni qo'shish
-  const tgChannels = await getTelegramStats();
-  if (tgChannels.length > 0) {
-    const tgCampaigns: any[] = [];
-    let tgSpend = 0;
-    let tgViews = 0;
-    let tgReactions = 0;
-
-    for (const ch of tgChannels) {
-      // Har bir kanalni "kampaniya" sifatida ko'rsatish
-      const chSpend = ch.posts.reduce((s: number, p: any) => s + (p.cost || 0), 0);
-      const chViews = ch.posts.reduce((s: number, p: any) => s + (p.views || 0), 0);
-      const chReactions = ch.posts.reduce((s: number, p: any) => s + (p.reactions || 0), 0);
-      
-      tgSpend += chSpend;
-      tgViews += chViews;
-      tgReactions += chReactions;
-
-      tgCampaigns.push({
-        id: `tg-${ch.id}`,
-        name: `${ch.name} (${ch.username})`,
-        originalName: ch.name,
-        objective: "telegram",
-        platform: "telegram",
-        expo: `${ch.subscribers} obunachi · ERR ${ch.errPercent}%`,
-        goal: "engagement" as any,
-        status: "active",
-        effectiveStatus: "active",
-        metrics: {
-          spend: chSpend,
-          leads: 0,
-          cpl: 0,
-          impressions: chViews,
-          clicks: chReactions,
-          reach: ch.avgPostReach,
-          postEngagement: chReactions,
-        } as any,
-        hasLeads: false,
-        creatives: [],
+  // Qo'lda sync — barcha ulangan manbalardan hoziroq tortadi
+  app.post("/api/sync", async (_req, res) => {
+    try {
+      const results = await runSync("manual");
+      res.json({ ok: true, at: new Date().toISOString(), results });
+    } catch (err) {
+      res.status(500).json({
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
+  });
 
-    if (tgCampaigns.length > 0) {
-      const tgSnap: NormalizedSnapshot = {
-        meta: {
-          platform: "telegram" as PlatformId,
-          period: { start: "", end: "", label: "Telegram" },
-          account: { id: "telegram", name: "Telegram Kanallar", currency: "UZS" },
-          sourceLabel: "TGStat API",
-          syncedAt: new Date().toISOString(),
-          limitations: []
-        },
-        totals: { spend: tgSpend, leads: 0, cpl: 0, impressions: tgViews, clicks: tgReactions, ctr: 0, reach: 0, cpm: 0, cpc: 0, landingPageViews: 0, linkClicks: 0, videoViews: 0, messagingConversations: 0, frequency: 0, linkCtr: 0 } as any,
-        campaigns: tgCampaigns,
-        creatives: [],
-        age: []
-      };
-      snapshots.push(tgSnap);
-    }
-  }
+  app.get("/api/sync", (_req, res) => {
+    res.json(currentSyncState());
+  });
 
-  if (snapshots.length === 0) return null;
-
-  const totals = { spend: 0, leads: 0, cpl: 0, impressions: 0, clicks: 0, ctr: 0, reach: 0, cpm: 0, cpc: 0, landingPageViews: 0, linkClicks: 0, videoViews: 0, messagingConversations: 0, postEngagement: 0, reactions: 0, comments: 0, saves: 0, messagingFirstReply: 0 };
-  const campaigns: any[] = [];
-  const creatives: any[] = [];
-  const age: any[] = [];
-
-  for (const s of snapshots) {
-    totals.spend += s.totals.spend || 0;
-    totals.leads += s.totals.leads || 0;
-    totals.impressions += s.totals.impressions || 0;
-    totals.clicks += s.totals.clicks || 0;
-    totals.reach += s.totals.reach || 0;
-    totals.landingPageViews += s.totals.landingPageViews || 0;
-    totals.linkClicks += s.totals.linkClicks || 0;
-    totals.videoViews += s.totals.videoViews || 0;
-    
-    // safe property adds
-    if ("messagingConversations" in s.totals) totals.messagingConversations += s.totals.messagingConversations as number || 0;
-    
-    campaigns.push(...s.campaigns);
-    creatives.push(...s.creatives);
-    age.push(...s.age);
-  }
-
-  if (totals.leads > 0) totals.cpl = totals.spend / totals.leads;
-  if (totals.impressions > 0) totals.ctr = (totals.clicks / totals.impressions) * 100;
-  if (totals.impressions > 0) totals.cpm = (totals.spend / totals.impressions) * 1000;
-  if (totals.clicks > 0) totals.cpc = totals.spend / totals.clicks;
-
-  return {
-    meta: {
-      platform: "all" as PlatformId,
-      period: snapshots[0].meta.period,
-      account: { id: "all", name: "Jami Barcha Manbalar", currency: snapshots[0].meta.account.currency },
-      sourceLabel: "Yagona Oyna (Unified)",
-      syncedAt: new Date().toISOString(),
-      limitations: []
-    },
-    totals: totals as any,
-    campaigns,
-    creatives,
-    age
-  };
-}
+  app.get("/api/activity", (req, res) => {
+    const limit = Math.min(Number(req.query.limit ?? 50) || 50, 120);
+    res.json({ events: recentActivity(limit) });
+  });
 
   app.get("/api/snapshot", async (req, res) => {
     const file = req.query.file ? String(req.query.file) : undefined;
@@ -578,7 +845,7 @@ async function buildUnifiedSnapshot(): Promise<NormalizedSnapshot | null> {
       } else {
         const target = path.join(DATA_DIR, path.basename(file));
         snapshot = fs.existsSync(target)
-          ? readGenericSnapshotFile(platform as any, target, fs.statSync(target).mtime)
+          ? readGenericSnapshotFile(platform as "google-ads" | "yandex-direct", target, fs.statSync(target).mtime)
           : null;
       }
       if (!snapshot) {
@@ -588,13 +855,13 @@ async function buildUnifiedSnapshot(): Promise<NormalizedSnapshot | null> {
       res.json(snapshot);
       return;
     }
-    const platform = String(req.query.platform || "meta") as PlatformId;
-    
+    const platform = String(req.query.platform || "all") as PlatformId;
+
     if (platform === "all") {
       const unified = await buildUnifiedSnapshot();
       if (!unified) {
-         res.status(503).json({ error: "Hali hech qanday manba ulanmagan" });
-         return;
+        res.status(503).json({ error: "Hali hech qanday manba ulanmagan" });
+        return;
       }
       res.json(unified);
       return;
@@ -626,7 +893,7 @@ async function buildUnifiedSnapshot(): Promise<NormalizedSnapshot | null> {
         .status(501)
         .json({
           error:
-            "SSE serverless rejimida qo'llab-quvvatlanmaydi — client polling fallback ishlatadi.",
+            "SSE serverless rejimda qo'llab-quvvatlanmaydi — client polling fallback ishlatadi.",
         });
       return;
     }
@@ -639,6 +906,11 @@ async function buildUnifiedSnapshot(): Promise<NormalizedSnapshot | null> {
     res.write(
       `event: hello\ndata: ${JSON.stringify({ at: new Date().toISOString(), clients: sseClients.size + 1 })}\n\n`
     );
+    // Ulangan zahari hozirgi sync holati + oxirgi activitylar ham yuboriladi
+    res.write(`event: sync_state\ndata: ${JSON.stringify(currentSyncState())}\n\n`);
+    for (const ev of recentActivity(12).reverse()) {
+      res.write(`event: activity\ndata: ${JSON.stringify(ev)}\n\n`);
+    }
     sseClients.add(res);
     const heartbeat = setInterval(() => {
       try {
@@ -655,7 +927,7 @@ async function buildUnifiedSnapshot(): Promise<NormalizedSnapshot | null> {
     });
   });
 
-  // Yangi snapshot yozilgach (masalan MCP tomonidan) chaqiriladi — barcha clientlarga push
+  // Yangi snapshot yozilgach (masalan sync dvigateli tomonidan) chaqiriladi — barcha clientlarga push
   app.post("/api/refresh", (_req, res) => {
     broadcast("sync", { at: new Date().toISOString(), source: "manual" });
     res.json({ ok: true, pushed: sseClients.size });

@@ -1,4 +1,4 @@
-import { ArrowUpRight, Check, FolderOpen, Radio } from "lucide-react";
+import { ArrowUpRight, Check, FolderOpen, Radio, RefreshCw, Zap } from "lucide-react";
 import { PLATFORM_META } from "@shared/types";
 import { dateLabel, whole } from "@/lib/format";
 import { useDashboardContext } from "@/contexts/DashboardContext";
@@ -36,7 +36,11 @@ const GUIDES: Guide[] = [
         code: "id · name · created_at · stage_id · price · responsible · contact · utm_campaign · history",
       },
       {
-        t: "Faylni nomlab, snapshot papkasiga tashlang:",
+        t: "Real-time rejim (tavsiya): AmoCRM → Sozlamalar → Integratsiyalar → Webhook'lar ga quyidagi URL'ni bog'lang (leads.add / leads.status / leads.update):",
+        code: "https://<sizingiz>/api/webhooks/amocrm",
+      },
+      {
+        t: "Yoki faylni nomlab, snapshot papkasiga tashlang:",
         code: "server/data/snapshots/amo_<hisob>_<davr>.json",
       },
       {
@@ -61,16 +65,16 @@ const GUIDES: Guide[] = [
         t: "Marketing API uchun access token oling — ruxsat: ads_read (yoki tayyor Meta Ads MCP serverini ishlating).",
       },
       {
-        t: "MCP standart eksportini oling:",
-        code: "account · summary · campaigns · age · ads · adInsights",
+        t: "Real-time rejim (tavsiya): .env ga token va kabinet ID sini yozing — sync dvigateli har 5 daqiqada o'zi tortadi:",
+        code: "META_ACCESS_TOKEN=...\nMETA_AD_ACCOUNT_ID=act_...\nSYNC_INTERVAL_SEC=300",
       },
       {
-        t: "Faylni nomlab, snapshot papkasiga tashlang:",
-        code: "server/data/snapshots/meta_act-<id>_<davr>.json",
+        t: "Yoki MCP standart eksportini olib, faylni nomlab papkaga tashlang:",
+        code: "account · summary · campaigns · age · ads · adInsights\n→ server/data/snapshots/meta_act-<id>_<davr>.json",
       },
     ],
     verify:
-      "Tepadagi kabinet tanlagichda hisob nomi chiqadi; /api/health da snapshot soni oshadi.",
+      "Tepadagi kabinet tanlagichda hisob nomi chiqadi; real-time rejimda «Jonli harakat» panelida har sync natijasi ko'rinadi.",
   },
   {
     id: "google-ads",
@@ -83,16 +87,37 @@ const GUIDES: Guide[] = [
         t: "Google Ads hisobi va Developer tokenni tayyorlang (yoki tayyor Google Ads MCP serverini ishlating).",
       },
       {
-        t: "Kampaniyalar kesimida eksport oling:",
-        code: "campaign_id · campaign_name · cost_micros · impressions · clicks · conversions",
+        t: "Real-time rejim: .env ga GOOGLE_ADS_* kalitlarini yozing (qo'llanma: docs/google-ads-api-setup.md) — sync dvigateli o'zi tortadi.",
+        code: "pnpm google:oauth   # refresh token olish\npnpm google:pull    # bir marta qo'lda tortish",
       },
       {
-        t: "Faylni nomlab, snapshot papkasiga tashlang:",
-        code: "server/data/snapshots/google_<id>_<davr>.json",
+        t: "Yoki kampaniyalar kesimida eksport olib, faylni nomlab papkaga tashlang:",
+        code: "campaign_id · campaign_name · cost_micros · impressions · clicks · conversions\n→ server/data/snapshots/google_<id>_<davr>.json",
       },
     ],
     verify:
       "Chap panelda Google Ads «Ulangan»ga o‘tadi — kampaniyalar umumiy KPI va jadvalda ko‘rinadi.",
+  },
+  {
+    id: "telegram",
+    name: "Telegram",
+    logo: "TG",
+    color: PLATFORM_META.telegram.color,
+    where: "TGStat API — @channelname bo'yicha kanal statistikasi",
+    steps: [
+      {
+        t: "TGStat'da token oling va .env ga yozing:",
+        code: "TGSTAT_TOKEN=...",
+      },
+      {
+        t: "«Telegram kanallar» sahifasida kanal @username ini kiriting — obunachilar, qamrov, postlar va reaksiyalar avtomatik yuklanadi.",
+      },
+      {
+        t: "Har bir reklama postiga narx kiriting — Telegram sarfi umumiy hisobga qo'shiladi.",
+      },
+    ],
+    verify:
+      "«Telegram kanallar» (/telegram) sahifasi to'ladi; real-time rejimda har syncda statistika yangilanadi.",
   },
   {
     id: "yandex-direct",
@@ -119,7 +144,8 @@ const GUIDES: Guide[] = [
 ];
 
 export default function Connections() {
-  const { connections, snapshot, live, refresh } = useDashboardContext();
+  const { connections, snapshot, live, syncNow, syncState, syncing } =
+    useDashboardContext();
 
   return (
     <>
@@ -135,8 +161,12 @@ export default function Connections() {
           </p>
         </div>
         <div className="right">
-          <button className="primary-btn" onClick={() => void refresh()}>
-            <Radio size={13} /> Ulanganligini tekshirish
+          <button
+            className="primary-btn"
+            onClick={() => void syncNow()}
+            disabled={syncing}
+          >
+            <RefreshCw size={13} className={syncing ? "spin" : ""} /> Barcha manbalarni hoziroq yangilash
           </button>
         </div>
       </div>
@@ -201,9 +231,18 @@ export default function Connections() {
               <div className="conn-kv">
                 <span>Real-time kanal</span>
                 <b>
-                  {connected ? (live ? "SSE · faol" : "Polling · 60s") : "—"}
+                  {connected ? (live ? "SSE · faol" : "Polling · 30s") : "—"}
                 </b>
               </div>
+              {conn.autoSync && (
+                <div className="conn-kv">
+                  <span>Avtomatik tortish</span>
+                  <b style={{ color: "var(--good)" }}>
+                    <Zap size={11} style={{ display: "inline", marginRight: 4 }} />
+                    har {Math.round((syncState?.intervalSec ?? 300) / 60)} daqiqada
+                  </b>
+                </div>
+              )}
             </div>
           );
         })}
@@ -272,7 +311,11 @@ export default function Connections() {
         </div>
         <div className="d-kv">
           <span>Live kanal</span>
-          <b>/api/stream (SSE) + fs.watch</b>
+          <b>/api/stream (SSE) + fs.watch + sync dvigateli</b>
+        </div>
+        <div className="d-kv">
+          <span>Sync intervali</span>
+          <b>har {Math.round((syncState?.intervalSec ?? 300) / 60)} daqiqa (SYNC_INTERVAL_SEC)</b>
         </div>
         <div className="d-kv">
           <span>Joriy manba</span>
@@ -287,8 +330,10 @@ export default function Connections() {
         </div>
         <div className="note-strip" style={{ marginTop: 12 }}>
           <span>
-            Fayl papkaga tushgach (yoki qayta yozilgach) <b>fs.watch</b> darhol
-            sezadi va SSE orqali hamma ochiq dashboardga push qiladi —{" "}
+            <b>Real-time ikki yo'lda ishlaydi:</b> (1) sync dvigateli ulangan
+            manbalardan (Meta/Google/Telegram API) har intervalda o'zi tortadi;
+            (2) fayl papkaga tushsa <b>fs.watch</b> darhol sezadi — ikkalasida ham
+            SSE orqali hamma ochiq dashboardga push boradi,{" "}
             <b>sahifani yangilash shart emas</b>. To‘liq JSON namunalari:{" "}
             <a
               className="panel-link"

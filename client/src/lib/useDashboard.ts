@@ -1,8 +1,12 @@
 /**
  * Dashboard live-data hook:
- *   - /api/snapshot + /api/connections olinadi
- *   - /api/stream (SSE) ga obuna — server yangi snapshot tushsa UI avtomatik yangilanadi
- *   - SSE ishlamasa 60s polling fallback
+ *   - /api/snapshot + /api/connections + /api/crm olinadi
+ *   - /api/stream (SSE) ga obuna — server yangi snapshot tushsa UI avtomatik yangilanadi:
+ *       · sync     → ma'lumot qayta o'qiladi
+ *       · activity → "Jonli harakat" feed'ga hodisa qo'shiladi (+toast)
+ *       · sync_state → sync dvigatelining holati (keyingi sync vaqti, natijalar)
+ *   - SSE ishlamasa 30s polling fallback
+ *   - Tab fokusga qaytganda darhol yangilanadi (visibilitychange)
  *
  * Muhim: API javob bermasa (Vercel'da serverless funksiya ishlamasa, deployment
  * protection yoki boshqa sabab) — build vaqtida yaratilgan statik
@@ -10,11 +14,13 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  ActivityEvent,
   ConnectionInfo,
   CrmData,
   NormalizedSnapshot,
   PlatformId,
   SnapshotInfo,
+  SyncState,
 } from "@shared/types";
 
 export type DataSource = "api" | "static";
@@ -34,12 +40,20 @@ export interface DashboardState {
   setPlatform: (platform: PlatformId) => void;
   loading: boolean;
   syncing: boolean;
+  /** Haqiqiy manbalardan tortish (POST /api/sync) ishlab turibdi */
+  syncRunning: boolean;
   error: string | null;
   live: boolean;
   lastEventAt: string | null;
+  /** Sync dvigateli holati — interval, keyingi sync, natijalar */
+  syncState: SyncState | null;
+  /** Jonli harakat feed'i — sync, yangi leadlar, webhooklar */
+  activity: ActivityEvent[];
   /** "api" — serverdan, "static" — build vaqtidagi fayldan */
   source: DataSource;
   refresh: () => Promise<void>;
+  /** Haqiqiy sync — serverdan barcha manbalarni hoziroq tortishini so'raydi */
+  syncNow: () => Promise<void>;
 }
 
 /** JSON kafolati bilan o'qish: HTML (404 sahifa / Vercel SSO login) kelsa xato beradi */
@@ -55,7 +69,7 @@ async function fetchJson<T>(url: string): Promise<T> {
     throw new Error(message);
   }
   if (!type.includes("application/json"))
-    throw new Error("Ответ не в формате JSON (HTML?)");
+    throw new Error("Javob JSON formatida emas (HTML?)");
   return (await res.json()) as T;
 }
 
@@ -69,10 +83,13 @@ export function useDashboard(): DashboardState {
   const [platform, setPlatformState] = useState<PlatformId>("all");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncRunning, setSyncRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState(false);
   const [source, setSource] = useState<DataSource>("api");
   const [lastEventAt, setLastEventAt] = useState<string | null>(null);
+  const [syncState, setSyncState] = useState<SyncState | null>(null);
+  const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const esRef = useRef<EventSource | null>(null);
 
   const load = useCallback(
@@ -82,16 +99,20 @@ export function useDashboard(): DashboardState {
         const snapUrl = file
           ? `/api/snapshot?file=${encodeURIComponent(file)}`
           : `/api/snapshot?platform=${encodeURIComponent(plat)}`;
-        const [snapRes, connRes, crmRes, snapsRes] = await Promise.all([
+        const [snapRes, connRes, crmRes, snapsRes, syncRes, actRes] = await Promise.all([
           fetchJson<NormalizedSnapshot>(snapUrl).catch(() => null),
           fetchJson<ConnectionInfo[]>("/api/connections").catch(() => []),
           fetchJson<{ connected?: boolean } & CrmData>("/api/crm").catch(
             () => null
           ),
           fetchJson<SnapshotInfo[]>("/api/snapshots").catch(() => []),
+          fetchJson<SyncState>("/api/sync").catch(() => null),
+          fetchJson<{ events: ActivityEvent[] }>("/api/activity?limit=30").catch(
+            () => null
+          ),
         ]);
 
-        if (!snapRes) throw new Error("API не ответил");
+        if (!snapRes) throw new Error("API javob bermadi");
         setSnapshot(snapRes);
         setConnections(connRes);
         if (crmRes?.connected) {
@@ -102,6 +123,8 @@ export function useDashboard(): DashboardState {
           setCrmConnected(false);
         }
         if (Array.isArray(snapsRes)) setSnapshots(snapsRes);
+        if (syncRes) setSyncState(syncRes);
+        if (actRes?.events?.length) setActivity(actRes.events);
         setSource("api");
         setError(null);
       } catch (err) {
@@ -114,10 +137,6 @@ export function useDashboard(): DashboardState {
             snapshots: SnapshotInfo[];
             crm: CrmData | null;
           }>("/data/bootstrap.json");
-          // file tanlangan bo'lsa — o'sha faylning platformasini topib, statik
-          // to'plamdan mos snapshot beriladi; aks holda joriy `plat` bo'yicha.
-          // Ikkalasi ham topilmasa (eski build) — meta'ga tushadi, lekin
-          // hech bo'lmasa doim BIR XIL snapshot ko'rsatilmaydi.
           const targetPlatform = file
             ? boot.snapshots?.find(s => s.file === file)?.platform ?? plat
             : plat;
@@ -149,7 +168,7 @@ export function useDashboard(): DashboardState {
 
     let poll: ReturnType<typeof setInterval> | null = null;
     const startPolling = () => {
-      if (!poll) poll = setInterval(() => void load(false), 60000);
+      if (!poll) poll = setInterval(() => void load(false), 30000);
     };
     const stopPolling = () => {
       if (poll) clearInterval(poll);
@@ -162,13 +181,32 @@ export function useDashboard(): DashboardState {
       es.addEventListener("hello", () => setLive(true));
       es.addEventListener("ping", () => setLive(true));
       es.addEventListener("sync", ev => {
+        let at = new Date().toISOString();
         try {
           const data = JSON.parse((ev as MessageEvent).data);
-          setLastEventAt(data.at ?? new Date().toISOString());
+          at = data.at ?? at;
         } catch {
-          setLastEventAt(new Date().toISOString());
+          /* ignore */
         }
+        setLastEventAt(at);
         void load(false);
+      });
+      es.addEventListener("sync_state", ev => {
+        try {
+          setSyncState(JSON.parse((ev as MessageEvent).data));
+        } catch {
+          /* ignore */
+        }
+      });
+      es.addEventListener("activity", ev => {
+        try {
+          const event = JSON.parse((ev as MessageEvent).data) as ActivityEvent;
+          setActivity(prev =>
+            prev.some(p => p.id === event.id) ? prev : [event, ...prev].slice(0, 60)
+          );
+        } catch {
+          /* ignore */
+        }
       });
       es.onopen = () => {
         setLive(true);
@@ -182,8 +220,15 @@ export function useDashboard(): DashboardState {
       startPolling();
     }
 
+    // Tab fokusga qaytdi — darhol yangilaymiz (odam qaytib kelganda yangi raqam ko'rsin)
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void load(false);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       stopPolling();
+      document.removeEventListener("visibilitychange", onVisible);
       esRef.current?.close();
     };
   }, [load]);
@@ -194,6 +239,20 @@ export function useDashboard(): DashboardState {
       await fetch("/api/refresh", { method: "POST" });
     } catch {
       /* boshqa clientlarga push muhim emas */
+    }
+  }, [load]);
+
+  /** Haqiqiy sync — server barcha sozlangan manbalardan (Meta/Google/Telegram) hoziroq tortadi */
+  const syncNow = useCallback(async () => {
+    setSyncRunning(true);
+    setSyncing(true);
+    try {
+      await fetch("/api/sync", { method: "POST" });
+    } catch {
+      /* serverless yoki vaqtinchalik xato — baribir load qilamiz */
+    } finally {
+      await load(false);
+      setSyncRunning(false);
     }
   }, [load]);
 
@@ -226,10 +285,14 @@ export function useDashboard(): DashboardState {
     setPlatform: selectPlatform,
     loading,
     syncing,
+    syncRunning,
     error,
     live,
     lastEventAt,
+    syncState,
+    activity,
     source,
     refresh,
+    syncNow,
   };
 }

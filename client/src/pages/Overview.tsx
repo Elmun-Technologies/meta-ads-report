@@ -1,10 +1,17 @@
 import { useMemo } from "react";
 import { Link } from "wouter";
-import { ArrowUpRight, MessageSquare, Video } from "lucide-react";
-import { PLATFORM_META, type CampaignNode } from "@shared/types";
+import {
+  ArrowUpRight,
+  MessageSquare,
+  Radio,
+  RefreshCw,
+  Video,
+  Zap,
+} from "lucide-react";
+import { PLATFORM_META, type ActivityEvent, type CampaignNode, type PlatformTotals } from "@shared/types";
 import { buildAlerts, buildPacing, SEVERITY_META } from "@/lib/alerts";
 import { buildCrmSummary } from "@shared/amo";
-import { compact, money, pct, ratio, whole } from "@/lib/format";
+import { ago, compact, money, pct, ratio, whole } from "@/lib/format";
 import { useDashboardContext } from "@/contexts/DashboardContext";
 import { Funnel, KpiCard, Panel, SpendShare } from "@/components/widgets";
 import { PageHint } from "@/components/Help";
@@ -13,8 +20,286 @@ import { LeadsCplChart, SpendByCampaignChart } from "@/components/charts";
 const shorten = (name: string, max = 22) =>
   name.length > max ? `${name.slice(0, max - 1)}…` : name;
 
+/* ------------------------------------------------------------------ */
+/* Platformalar kesimi — pul qaysi kanalga ketayapti                    */
+/* ------------------------------------------------------------------ */
+
+function PlatformBreakdown({ platforms }: { platforms: PlatformTotals[] }) {
+  const connected = platforms.filter(p => p.spend > 0 || p.campaigns > 0);
+  const totalSpend = connected.reduce((s, p) => s + p.spend, 0);
+  const totalLeads = connected.reduce((s, p) => s + p.leads, 0);
+
+  return (
+    <Panel
+      kicker="Yagona oyna · platformalar kesimi"
+      title="Pul qaysi kanalga ketayapti?"
+      sub="Barcha marketing manbalari bir joyda: har bir platformaning sarfi, murojaatlari va narxi"
+      action={
+        <Link className="panel-link" href="/connections">
+          Ulanishlar <ArrowUpRight size={12} />
+        </Link>
+      }
+    >
+      {/* Sarf ulushi — stacked bar */}
+      {totalSpend > 0 && (
+        <div
+          className="plat-bar"
+          style={{
+            display: "flex",
+            height: 10,
+            borderRadius: 6,
+            overflow: "hidden",
+            marginBottom: 12,
+            background: "var(--panel-2)",
+          }}
+        >
+          {connected.map(p => (
+            <div
+              key={p.platform}
+              title={`${p.name}: ${money(p.spend)}`}
+              style={{
+                width: `${(p.spend / totalSpend) * 100}%`,
+                background: p.color,
+                minWidth: p.spend > 0 ? 4 : 0,
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="tbl-wrap">
+        <table className="tbl" style={{ minWidth: 640 }}>
+          <thead>
+            <tr>
+              <th>Platforma</th>
+              <th>Sarf</th>
+              <th>Ulush</th>
+              <th>Murojaat</th>
+              <th>Murojaat narxi</th>
+              <th>Bosish ulushi</th>
+              <th>Ma'lumot qamrovi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {platforms.map(p => {
+              const share = totalSpend > 0 ? (p.spend / totalSpend) * 100 : 0;
+              const isEmpty = p.spend === 0 && p.campaigns === 0;
+              return (
+                <tr key={p.platform} className={isEmpty ? "row-muted" : ""}>
+                  <td>
+                    <div className="cell-name">
+                      <span
+                        className="p-dot"
+                        style={{
+                          background: p.color,
+                          width: 18,
+                          height: 18,
+                          borderRadius: 6,
+                          flex: "none",
+                        }}
+                      />
+                      <span className="n">
+                        <b>{p.name}</b>
+                        <small>
+                          {isEmpty
+                            ? "ulanmagan"
+                            : `${p.campaigns} kampaniya · ${p.syncedAt ? ago(p.syncedAt) : "—"}`}
+                        </small>
+                      </span>
+                      {p.autoSync && (
+                        <span
+                          className="chip good"
+                          title="Sync dvigateli bu manbadan avtomatik tortadi"
+                          style={{ marginLeft: 6 }}
+                        >
+                          auto
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="num" style={{ fontWeight: 600 }}>
+                    {p.spend > 0 ? money(p.spend) : "—"}
+                  </td>
+                  <td className="num">
+                    {totalSpend > 0 && p.spend > 0 ? (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        {pct(share, 1)}
+                        <SpendShare share={share / 100} />
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="num">{p.leads > 0 ? whole(p.leads) : "—"}</td>
+                  <td className="num">
+                    {p.cpl != null && p.cpl > 0 ? money(p.cpl) : "—"}
+                  </td>
+                  <td className="num">{p.ctr != null ? pct(p.ctr, 2) : "—"}</td>
+                  <td>
+                    <span
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 4,
+                        maxWidth: 220,
+                      }}
+                    >
+                      {p.coverage.length > 0 ? (
+                        p.coverage.map(c => (
+                          <span key={c} className="chip muted" style={{ fontSize: 9.5 }}>
+                            {c}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="tone-muted" style={{ fontSize: 11 }}>
+                          ma'lumot yo'q
+                        </span>
+                      )}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td style={{ fontWeight: 700 }}>Jami</td>
+              <td className="num" style={{ fontWeight: 700 }}>
+                {money(totalSpend)}
+              </td>
+              <td className="num">100%</td>
+              <td className="num" style={{ fontWeight: 700 }}>
+                {whole(totalLeads)}
+              </td>
+              <td className="num" style={{ fontWeight: 700 }}>
+                {totalLeads > 0 ? money(totalSpend / totalLeads) : "—"}
+              </td>
+              <td colSpan={2} />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </Panel>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Jonli harakat — real-time hodisalar                                  */
+/* ------------------------------------------------------------------ */
+
+const ACTIVITY_ICON: Record<string, typeof Zap> = {
+  sync: RefreshCw,
+  snapshot: RefreshCw,
+  lead: Zap,
+  stage: ArrowUpRight,
+  channel: Radio,
+  webhook: Radio,
+  manual: RefreshCw,
+  error: ArrowUpRight,
+};
+
+function LiveActivity({
+  events,
+  nextSyncAt,
+  intervalSec,
+}: {
+  events: ActivityEvent[];
+  nextSyncAt: string | null | undefined;
+  intervalSec: number | undefined;
+}) {
+  return (
+    <Panel
+      kicker="Jonli harakat"
+      title="Hoziroq nima bo'ldi?"
+      sub="Sync, yangi murojaatlar va webhooklar — serverdan real-time (SSE)"
+      action={
+        nextSyncAt ? (
+          <span className="chip muted" title="Keyingi rejalashtirilgan sinxronlash">
+            <RefreshCw size={10} style={{ marginRight: 4 }} />
+            keyingi sync: {ago(nextSyncAt).replace(" oldin", "")}dan keyin
+          </span>
+        ) : (
+          <span className="chip muted">har {Math.round((intervalSec ?? 300) / 60)} daqiqada</span>
+        )
+      }
+    >
+      {events.length === 0 ? (
+        <div className="empty-state">
+          Hozircha hodisa yo'q. Manbalar ulangach (yoki "Yangilash" bossangiz)
+          sync natijalari shu yerda real-time ko'rinadi.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {events.slice(0, 9).map(ev => {
+            const Icon = ACTIVITY_ICON[ev.kind] ?? Zap;
+            const tone =
+              ev.tone === "good"
+                ? "var(--good)"
+                : ev.tone === "warn"
+                  ? "var(--warn)"
+                  : ev.tone === "risk"
+                    ? "var(--risk)"
+                    : "var(--text-3)";
+            return (
+              <div
+                key={ev.id}
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  padding: "7px 0",
+                  borderBottom: "1px solid var(--line)",
+                  alignItems: "flex-start",
+                }}
+              >
+                <span
+                  style={{
+                    color: tone,
+                    flex: "none",
+                    marginTop: 2,
+                  }}
+                >
+                  <Icon size={13} />
+                </span>
+                <span style={{ minWidth: 0, flex: 1 }}>
+                  <b style={{ fontSize: 12, display: "block" }}>{ev.title}</b>
+                  {ev.body && (
+                    <small
+                      style={{
+                        color: "var(--text-3)",
+                        fontSize: 11,
+                        display: "block",
+                        lineHeight: 1.45,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                      title={ev.body}
+                    >
+                      {ev.body}
+                    </small>
+                  )}
+                </span>
+                <span
+                  className="mono tone-muted"
+                  style={{ fontSize: 10, flex: "none", marginTop: 2 }}
+                >
+                  {ago(ev.at)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Overview sahifasi                                                    */
+/* ------------------------------------------------------------------ */
+
 export default function Overview() {
-  const { snapshot, crm, crmConnected, openCampaign, openCreative } =
+  const { snapshot, crm, crmConnected, openCampaign, openCreative, activity, syncState } =
     useDashboardContext();
 
   const alerts = useMemo(
@@ -61,6 +346,7 @@ export default function Overview() {
 
   if (!snapshot) return null;
   const { totals, campaigns, creatives, age } = snapshot;
+  const platforms = snapshot.platforms ?? null;
 
   const spendChart = campaigns
     .slice(0, 9)
@@ -97,26 +383,27 @@ export default function Overview() {
             {snapshot.meta.period.label} ·{" "}
             {PLATFORM_META[snapshot.meta.platform].name}
           </span>
-        <h1>Общие результаты</h1>
-        <p>
-          Кабинет {snapshot.meta.account.name}: {campaigns.length} кампаний, {creatives.length} креативов,{" "}
-          {whole(totals.impressions)} показов. Все цифры получены из источника{" "}
-          {snapshot.meta.sourceLabel} — никаких приблизительных расчетов.
-        </p>
+          <h1>Umumiy natijalar</h1>
+          <p>
+            Kabinet {snapshot.meta.account.name}: {campaigns.length} kampaniya,{" "}
+            {creatives.length} kreativ, {whole(totals.impressions)} ko'rsatuv.
+            Barcha raqamlar {snapshot.meta.sourceLabel} manbasidan olingan —
+            taxminiy hisob yo'q.
+          </p>
         </div>
         <div className="right">
           <span className="chip good">
-            <i /> Данные подключены
+            <i /> Ma'lumot ulangan
           </span>
           <span className="chip muted">
-            Валюта {snapshot.meta.account.currency}
+            Valyuta {snapshot.meta.account.currency}
           </span>
         </div>
       </div>
 
       <PageHint>
-        Шесть ключевых показателей, кампании, требующие внимания, и
-        воронка лидов — всё на одной странице.
+        Oltita asosiy ko'rsatkich, diqqat talab qiladigan kampaniyalar va
+        murojaatlar voronkasi — hammasi bitta sahifada.
       </PageHint>
 
       {/* KPI ledger */}
@@ -125,19 +412,19 @@ export default function Overview() {
           <KpiCard
             label={
               <>
-                Расход <i>(Spend)</i>
+                Sarf <i>(Spend)</i>
               </>
             }
             value={money(totals.spend)}
             sub={
               <>
-                Общий расход · по <b>{campaigns.length}</b> кампаниям
+                Umumiy sarf · <b>{campaigns.length}</b> kampaniya bo'yicha
               </>
             }
             foot={
               <>
                 <span>
-                  Макс: {money(campaigns[0]?.metrics.spend ?? 0)}
+                  Maksimal: {money(campaigns[0]?.metrics.spend ?? 0)}
                 </span>
                 <SpendShare
                   share={
@@ -153,39 +440,39 @@ export default function Overview() {
           <KpiCard
             label={
               <>
-                Лиды <i>(Leads)</i>
+                Murojaatlar <i>(Leads)</i>
               </>
             }
             value={whole(totals.leads)}
             tone="var(--cyan)"
             sub={
               <>
-                Кампании с лидами:{" "}
+                Murojaat bergan kampaniyalar:{" "}
                 <b>{campaigns.filter(c => c.metrics.leads > 0).length}</b> /{" "}
                 {campaigns.length}
               </>
             }
-            foot={<span>Максимум с одной: {whole(maxLeads)}</span>}
+            foot={<span>Bittasidan maksimum: {whole(maxLeads)}</span>}
           />
         </div>
         <div className="col-4">
           <KpiCard
             label={
               <>
-                Стоимость лида <i>(CPL)</i>
+                Murojaat narxi <i>(CPL)</i>
               </>
             }
             value={money(totals.cpl)}
             tone="var(--violet)"
             sub={
               <>
-                Среднее по аккаунту · самый дешевый{" "}
+                Hisob bo'yicha o'rtacha · eng arzoni{" "}
                 <b>{bestCpl != null ? money(bestCpl) : "N/A"}</b>
               </>
             }
             foot={
               <span>
-                Просмотры видео: {compact(totals.videoViews)}
+                Video ko'rish: {compact(totals.videoViews)}
               </span>
             }
           />
@@ -194,70 +481,70 @@ export default function Overview() {
           <KpiCard
             label={
               <>
-                Кликабельность <i>(CTR)</i>
+                Bosish ulushi <i>(CTR)</i>
               </>
             }
             value={pct(totals.ctr)}
             tone="var(--warn)"
             sub={
               <>
-                <b>{whole(totals.clicks)}</b> кликов ·{" "}
-                <b>{whole(totals.linkClicks)}</b> по ссылке
+                <b>{whole(totals.clicks)}</b> bosish ·{" "}
+                <b>{whole(totals.linkClicks)}</b> havola bosish
               </>
             }
-            foot={<span>CTR ссылок: {pct(totals.linkCtr)}</span>}
+            foot={<span>Havola CTR: {pct(totals.linkCtr)}</span>}
           />
         </div>
         <div className="col-4">
           <KpiCard
             label={
               <>
-                Цена 1000 показов <i>(CPM)</i>
+                1000 ko'rsatuv narxi <i>(CPM)</i>
               </>
             }
             value={money(totals.cpm)}
             tone="var(--good)"
             sub={
               <>
-                Цена клика (CPC) <b>{money(totals.cpc)}</b>
+                Bosish narxi (CPC) <b>{money(totals.cpc)}</b>
               </>
             }
-            foot={<span>Частота: {ratio(totals.frequency)}</span>}
+            foot={<span>Takroriylik: {ratio(totals.frequency)}</span>}
           />
         </div>
         <div className="col-4">
           <KpiCard
             label={
               <>
-                Охват <i>(Reach)</i>
+                Qamrov <i>(Reach)</i>
               </>
             }
             value={whole(totals.reach)}
             tone="var(--risk)"
             sub={
               <>
-                Уникальных людей · <b>{compact(totals.impressions)}</b> показов
+                Noyob odamlar · <b>{compact(totals.impressions)}</b> ko'rsatuv
               </>
             }
-            foot={<span>Активный возраст: {bestAge?.age ?? "—"}</span>}
+            foot={<span>Eng faol yosh: {bestAge?.age ?? "—"}</span>}
           />
         </div>
       </div>
 
-      {/* Сигналы + Pacing */}
+      {/* Diqqat signallari + Pacing */}
       <div className="grid-12" style={{ marginBottom: 14 }}>
         <div className="col-7">
           <Panel
-            kicker="Внимание"
-            title="На что обратить внимание"
-            sub="Следующие ситуации определены автоматически. Нажмите на строку, чтобы открыть кампанию"
+            kicker="Diqqat"
+            title="Nimaga e'tibor berish kerak?"
+            sub="Quyidagi holatlar avtomatik aniqlandi. Qatorni bossangiz kampaniya ochiladi"
             action={
-              <span className="chip muted">{alerts.length} событий</span>
+              <span className="chip muted">{alerts.length} ta signal</span>
             }
           >
             {alerts.length === 0 && (
               <div className="empty-state">
-                Проблем не найдено — всё в норме
+                Muammo topilmadi — hammasi me'yorida
               </div>
             )}
             {alerts.slice(0, 5).map(a => (
@@ -299,27 +586,27 @@ export default function Overview() {
         </div>
         <div className="col-5">
           <Panel
-            kicker="Темп расхода"
-            title="Сколько будет к концу месяца при таком темпе?"
+            kicker="Sarf sur'ati"
+            title="Shu tempda oy oxiriga qancha bo'ladi?"
             sub={pacing?.daysNote}
           >
             {pacing && (
               <>
                 <div className="pace-grid">
                   <div>
-                    <small>Дневной расход</small>
+                    <small>Kunlik sarf</small>
                     <b>{money(pacing.dailySpend)}</b>
                   </div>
                   <div>
-                    <small>Лидов в день</small>
+                    <small>Kunlik murojaat</small>
                     <b>{pacing.dailyLeads.toFixed(1)}</b>
                   </div>
                   <div>
-                    <small>Прогноз на 30 дней — расход</small>
+                    <small>30 kunlik prognoz — sarf</small>
                     <b>{money(pacing.projected30Spend)}</b>
                   </div>
                   <div>
-                    <small>Прогноз на 30 дней — лиды</small>
+                    <small>30 kunlik prognoz — murojaat</small>
                     <b>{whole(pacing.projected30Leads)}</b>
                   </div>
                 </div>
@@ -329,16 +616,28 @@ export default function Overview() {
         </div>
       </div>
 
+      {/* Yagona oyna: platformalar kesimi + jonli harakat */}
+      <div className="grid-12" style={{ marginBottom: 14 }}>
+        <div className="col-8">{platforms && <PlatformBreakdown platforms={platforms} />}</div>
+        <div className="col-4">
+          <LiveActivity
+            events={activity}
+            nextSyncAt={syncState?.nextSyncAt}
+            intervalSec={syncState?.intervalSec}
+          />
+        </div>
+      </div>
+
       {/* CRM lifecycle strip */}
       <div className="grid-12">
         <div className="col-12">
           {crmSummary && crm ? (
             <Panel
-              kicker="AmoCRM · от лида к сделке"
-              title="Принесла ли реклама реальные сделки?"
+              kicker="AmoCRM · murojaatdan bitimgacha"
+              title="Reklama haqiqiy bitim berdimi?"
               action={
                 <Link className="panel-link" href="/pipeline">
-                  Открыть доску воронки <ArrowUpRight size={12} />
+                  Voronka doskasini ochish <ArrowUpRight size={12} />
                 </Link>
               }
             >
@@ -361,12 +660,12 @@ export default function Overview() {
                     c: "var(--text-2)",
                   },
                   {
-                    l: "Bitim bo‘ldi",
+                    l: "Bitim bo'ldi",
                     v: whole(crmSummary.won),
                     c: "var(--good)",
                   },
                   {
-                    l: "Bekor bo‘ldi",
+                    l: "Bekor bo'ldi",
                     v: whole(crmSummary.lost),
                     c: "var(--risk)",
                   },
@@ -411,12 +710,12 @@ export default function Overview() {
               </div>
               <div className="note-strip" style={{ marginTop: 11 }}>
                 <span className="kicker" style={{ flex: "none" }}>
-                  Bog‘lanish
+                  Bog'lanish
                 </span>
                 <span>
-                  {crm.matchedLeads} ta murojaatdan {crm.leads.length} tasi UTM
-                  belgisi orqali aniq kampaniyaga bog‘landi. Bog‘lanmaganlari
-                  taxminiy hisobga qo‘shilmagan —{" "}
+                  {crm.leads.length} ta murojaatdan {crm.matchedLeads} tasi UTM
+                  belgisi orqali aniq kampaniyaga bog'landi. Bog'lanmaganlari
+                  taxminiy hisobga qo'shilmagan —{" "}
                   <Link
                     className="panel-link"
                     href="/pipeline"
@@ -431,7 +730,7 @@ export default function Overview() {
           ) : (
             <Panel
               kicker="AmoCRM ulanmagan"
-              title="Keyingi qadam: murojaat emas — bitimni ko‘rish"
+              title="Keyingi qadam: murojaat emas — bitimni ko'rish"
               action={
                 <Link className="panel-link" href="/pipeline">
                   Qanday ulanadi <ArrowUpRight size={12} />
@@ -446,30 +745,31 @@ export default function Overview() {
                   lineHeight: 1.6,
                 }}
               >
-                AmoCRM ulanganda (amo_*.json fayli tushganda) shu panelda yutuq
-                ulushi, tushum, bitim tannarxi va qaytim (ROAS) paydo bo‘ladi —
-                har bir murojaat o‘z kampaniyasiga UTM orqali bog‘lanadi. Buning
-                uchun tayyor sahifa bor: <b>“Murojaat yo‘li”</b> bo‘limida doska
-                va manba tahlili kutib turibdi.
+                AmoCRM ulanganda (amo_*.json fayli tushganda yoki{" "}
+                <b>/api/webhooks/amocrm</b> webhook'i sozlanganda) shu panelda
+                yutuq ulushi, tushum, bitim tannarxi va qaytim (ROAS) paydo
+                bo'ladi — har bir murojaat o'z kampaniyasiga UTM orqali
+                bog'lanadi, yangi leadlar esa <b>jonli harakat</b> panelida
+                darhol ko'rinadi.
               </p>
             </Panel>
           )}
         </div>
       </div>
 
-      {/* Funnel + spend */}
+      {/* Voronka + sarf */}
       <div className="grid-12" style={{ marginBottom: 14 }}>
         <div className="col-5">
           <Panel
-            kicker="Yo‘l: ko‘rishdan murojaatgacha"
-            title="Qayerda odam yo‘qotilmoqda?"
+            kicker="Yo'l: ko'rishdan murojaatgacha"
+            title="Qayerda odam yo'qotilmoqda?"
             sub="Har qadamda oldingisiga nisbatan qolganlar ulushi"
           >
             <Funnel
               stages={[
                 {
                   key: "imp",
-                  label: "Ko‘rsatuvlar",
+                  label: "Ko'rsatuvlar",
                   value: totals.impressions,
                   tone: "var(--accent)",
                 },
@@ -493,7 +793,7 @@ export default function Overview() {
                 },
                 {
                   key: "lpv",
-                  label: "Sahifaga o‘tish",
+                  label: "Sahifaga o'tish",
                   value: totals.landingPageViews ?? 0,
                   tone: "var(--violet)",
                 },
@@ -511,7 +811,7 @@ export default function Overview() {
           <Panel
             kicker="Byudjet taqsimoti"
             title="Pul qaysi kampaniyaga ketdi?"
-            sub="Eng ko‘p sarflangan 9 ta kampaniya"
+            sub="Eng ko'p sarflangan 9 ta kampaniya"
             action={
               <Link className="panel-link" href="/campaigns">
                 Barcha kampaniyalar <ArrowUpRight size={12} />
@@ -532,7 +832,7 @@ export default function Overview() {
             <Panel
               kicker="Qiziqish reytingi"
               title="Auditoriya qanday javob berdi?"
-              sub="Reaksiya, komment, saqlash va bosishlar yig‘indisi bo‘yicha eng faol 5 ta kampaniya"
+              sub="Reaksiya, komment, saqlash va bosishlar yig'indisi bo'yicha eng faol 5 ta kampaniya"
             >
               <div className="tbl-wrap">
                 <table className="tbl" style={{ minWidth: 620 }}>
@@ -604,12 +904,12 @@ export default function Overview() {
                       size={10}
                       style={{ display: "inline", marginRight: 4 }}
                     />{" "}
-                    Video ko‘rish (30 s)
+                    Video ko'rish (30 s)
                   </small>
                   <b>{compact(engagement.videoViews)}</b>
                 </div>
                 <div>
-                  <small>Sarf / video ko‘rish</small>
+                  <small>Sarf / video ko'rish</small>
                   <b>
                     {engagement.videoViews
                       ? money(totals.spend / engagement.videoViews)
@@ -640,7 +940,7 @@ export default function Overview() {
         </div>
       )}
 
-      {/* Leads/CPL + top creative */}
+      {/* Murojaat/CPL + top kreativ */}
       <div className="grid-12">
         <div className="col-7">
           <Panel
@@ -656,7 +956,7 @@ export default function Overview() {
         <div className="col-5">
           <Panel
             kicker="Eng yaxshi kreativ"
-            title="Qaysi reklama eng ko‘p ishladi?"
+            title="Qaysi reklama eng ko'p ishladi?"
           >
             {topCreative ? (
               <div
@@ -676,7 +976,7 @@ export default function Overview() {
                     <b>{money(topCreative.metrics.spend)}</b>
                   </div>
                   <div>
-                    <small>Ko‘rsatuv</small>
+                    <small>Ko'rsatuv</small>
                     <b>{compact(topCreative.metrics.impressions)}</b>
                   </div>
                   <div>
@@ -712,7 +1012,7 @@ export default function Overview() {
                 </button>
               </div>
             ) : (
-              <div className="empty-state">Kreativ ma’lumoti topilmadi</div>
+              <div className="empty-state">Kreativ ma'lumoti topilmadi</div>
             )}
           </Panel>
         </div>

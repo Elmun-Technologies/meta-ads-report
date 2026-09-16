@@ -72,3 +72,32 @@
 - [ ] Alertlar: CPL/CTR chegara buzilganda bildirishnoma (browser notification).
 - [ ] Lead sifati integratsiyasi (CRM webhook → lead status qayta hisoblash).
 - [ ] Foydalanuvchi rollari va ko'p til (uz/en/ru).
+
+## Bajarildi (V3 — real-time + yagona oyna, 2026-09-16)
+
+- [x] **Real-time sync dvigateli** (`server/sync.ts`): Meta Graph API / Google Ads API /
+      TGStat'dan har SYNC_INTERVAL_SEC da avtomatik pull; `POST /api/sync` — qo'lda
+      hoziroq tortish; scheduler faqat "server" rejimida (serverless'da on-demand).
+- [x] **Meta Graph API puller** (`shared/metaApi.ts`): kampaniya + ad + yosh kesimi +
+      summary — normalizeMetaExport formatida (MCP eksportiga muhtojlik yo'q).
+- [x] **AmoCRM webhook** (`/api/webhooks/amocrm`): leads.add/status/update parsing,
+      UTM/telefon ajratish, store'ga upsert — leadlar real-time CRM'ga tushadi.
+- [x] **Jonli harakat feed'i**: activity log (store) + SSE `activity` eventlari +
+      Overview'da "Hoziroq nima bo'ldi?" paneli.
+- [x] **Yagona oyna kesimi**: /api/snapshot?platform=all endi `platforms[]` qaytaradi —
+      har platformaning sarf/murojaat/CPL/qamrovi; Overview'da "Pul qaysi kanalga
+      ketayapti?" paneli (stacked bar + jadval + auto chip).
+- [x] **Prisma → JSON store** (`server/store.ts`): tashqi DB yo'q, serverless'da ham
+      ishlaydi, prisma engine yuklashga bog'liqlik yo'q. store.json gitignore'da.
+- [x] **UI to'liq o'zbekchaga qaytarildi** (ruscha qoldiqlar 10+ sahifadan olib tashlandi).
+- [x] **Live indikator**: LIVE + keyingi syncgacha countdown (Topbar/Sidebar), tab
+      fokusda darhol yangilanish, polling fallback 60s→30s.
+- [x] Sync state endpointlari: `GET /api/sync`, `GET /api/activity`, SSE `sync_state`.
+- [x] Smoke-test 36 tekshiruvga kengaytirildi (jonli harakat + platforma kesimi) — 36/36.
+- [x] .env.example: META_*, TGSTAT_TOKEN, SYNC_INTERVAL_SEC valyutalar.
+
+### Keyingi qadamlar
+- [ ] Kredensiallar berilgach: Meta/Google real pull'ni ishlab ko'rish.
+- [ ] Kunlik timeseries (time_increment=1) → trend chartlar.
+- [ ] Browser notification (kritik signallar desktop'ga).
+- [ ] Ko'p kabinet tanlagich Google/Yandex uchun.

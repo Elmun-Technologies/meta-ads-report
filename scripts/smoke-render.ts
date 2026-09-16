@@ -69,10 +69,49 @@ const raw = JSON.parse(
     "utf8"
   )
 );
-const snapshot = normalizeMetaExport(raw, {
+const metaSnapshot = normalizeMetaExport(raw, {
   syncedAt: new Date().toISOString(),
   sourceLabel: "smoke-test",
 });
+// Yagona oyna ("all") snapshoti — real /api/snapshot?platform=all kabi platforms kesimi bilan
+const snapshot = {
+  ...metaSnapshot,
+  meta: { ...metaSnapshot.meta, platform: "all" as const },
+  platforms: [
+    {
+      platform: "meta" as const,
+      name: "Meta Ads",
+      color: "#0866FF",
+      spend: metaSnapshot.totals.spend,
+      leads: metaSnapshot.totals.leads,
+      cpl: metaSnapshot.totals.cpl,
+      impressions: metaSnapshot.totals.impressions,
+      clicks: metaSnapshot.totals.clicks,
+      ctr: metaSnapshot.totals.ctr,
+      campaigns: metaSnapshot.campaigns.length,
+      syncedAt: new Date().toISOString(),
+      autoSync: true,
+      coverage: ["Sarf", "Murojaatlar", "Kliklar", "Ko'rsatuvlar", "Kreativlar", "Yosh kesimi"],
+      limitations: [],
+    },
+    {
+      platform: "google-ads" as const,
+      name: "Google Ads",
+      color: "#4285F4",
+      spend: 0,
+      leads: 0,
+      cpl: null,
+      impressions: 0,
+      clicks: 0,
+      ctr: null,
+      campaigns: 0,
+      syncedAt: null,
+      autoSync: false,
+      coverage: [],
+      limitations: ["Hali ulanmagan"],
+    },
+  ],
+};
 
 // AmoCRM fixture — real kampaniya IDlariga bog'langan leadlar
 const amoRaw = {
@@ -229,6 +268,32 @@ g.fetch = async (url: string) => ({
     const u = String(url);
     if (u.includes("connections")) return connections;
     if (u.includes("/api/crm")) return { connected: true, ...crm };
+    if (u.includes("/api/sync"))
+      return {
+        running: false,
+        lastSyncAt: new Date().toISOString(),
+        nextSyncAt: new Date(Date.now() + 300000).toISOString(),
+        intervalSec: 300,
+        trigger: "auto",
+        results: [
+          { id: "meta", label: "Meta Ads", ok: true, message: "12 kampaniya", durationMs: 900, at: new Date().toISOString() },
+        ],
+        configured: { meta: true, google: false, telegram: false },
+      };
+    if (u.includes("/api/activity"))
+      return {
+        events: [
+          {
+            id: "ev-1",
+            at: new Date().toISOString(),
+            kind: "sync",
+            title: "Avtomatik sync boshlandi",
+            body: "Ulangan manbalardan yangi ma'lumot tortilmoqda…",
+            source: "sync-engine",
+            tone: "info",
+          },
+        ],
+      };
     if (u.includes("/api/snapshots"))
       return [
         {
@@ -287,6 +352,11 @@ check(
   "Overview interaksiya+video",
   overview.includes("Qiziqish reytingi") &&
     overview.includes("Video va yozishmalar")
+);
+check("Overview jonli harakat paneli", overview.includes("Jonli harakat"));
+check(
+  "Overview platforma kesimi (yagona oyna)",
+  overview.includes("Pul qaysi kanalga ketayapti")
 );
 
 const routes: [string, string[], string][] = [

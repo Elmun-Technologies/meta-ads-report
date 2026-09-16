@@ -1,13 +1,15 @@
 /**
- * Uzoq muddatli process entry (Railway/Render/VPS) — SSE + fs.watch yoqilgan.
+ * Uzoq muddatli process entry (Railway/Render/VPS) — SSE + fs.watch + sync scheduler yoqilgan.
  * Vercel'da bu fayl ishlatilmaydi — api/[[...slug]].ts o'rniga createApp("serverless") chaqiradi.
  */
 import { createApp, watchSnapshots, DATA_DIR } from "./app";
+import { startSyncScheduler } from "./sync";
 
 const PORT = Number(process.env.API_PORT || process.env.PORT || 3001);
 
 const app = createApp("server");
 watchSnapshots();
+startSyncScheduler();
 app.listen(PORT, () => {
   console.log(`[api] http://localhost:${PORT} · snapshots: ${DATA_DIR}`);
 });
