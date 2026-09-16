@@ -711,6 +711,8 @@ export async function buildUnifiedSnapshot(): Promise<NormalizedSnapshot | null>
   const campaigns: NormalizedSnapshot["campaigns"] = [];
   const creatives: NormalizedSnapshot["creatives"] = [];
   const age: NormalizedSnapshot["age"] = [];
+  /** Kunlik qatorlar — platformalar bo'yicha sanaga jamlanadi */
+  const dailyByDate = new Map<string, NonNullable<NormalizedSnapshot["daily"]>[number]>();
 
   for (const s of snapshots) {
     totals.spend += s.totals.spend || 0;
@@ -724,7 +726,16 @@ export async function buildUnifiedSnapshot(): Promise<NormalizedSnapshot | null>
     campaigns.push(...s.campaigns);
     creatives.push(...s.creatives);
     age.push(...s.age);
+    for (const d of s.daily ?? []) {
+      const acc = dailyByDate.get(d.date) ?? { date: d.date, spend: 0, leads: 0, impressions: 0, clicks: 0 };
+      acc.spend += d.spend || 0;
+      acc.leads += d.leads || 0;
+      acc.impressions += d.impressions || 0;
+      acc.clicks += d.clicks || 0;
+      dailyByDate.set(d.date, acc);
+    }
   }
+  const daily = [...dailyByDate.values()].sort((a, b) => a.date.localeCompare(b.date));
 
   if (totals.leads > 0) totals.cpl = totals.spend / totals.leads;
   if (totals.impressions > 0) totals.ctr = (totals.clicks / totals.impressions) * 100;
@@ -744,6 +755,7 @@ export async function buildUnifiedSnapshot(): Promise<NormalizedSnapshot | null>
     campaigns,
     creatives,
     age,
+    daily,
     platforms,
   };
 }

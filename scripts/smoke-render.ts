@@ -77,6 +77,13 @@ const metaSnapshot = normalizeMetaExport(raw, {
 const snapshot = {
   ...metaSnapshot,
   meta: { ...metaSnapshot.meta, platform: "all" as const },
+  daily: Array.from({ length: 14 }, (_, i) => ({
+    date: `2026-08-${String(i + 1).padStart(2, "0")}`,
+    spend: 40 + Math.round(Math.sin(i / 2) * 25 + i * 2),
+    leads: 8 + (i % 5),
+    impressions: 9000 + i * 350,
+    clicks: 220 + i * 9,
+  })),
   platforms: [
     {
       platform: "meta" as const,
@@ -267,6 +274,30 @@ g.fetch = async (url: string) => ({
   json: async () => {
     const u = String(url);
     if (u.includes("connections")) return connections;
+    if (u.includes("channels/offline"))
+      return {
+        campaigns: [
+          {
+            id: "offline-1",
+            name: "Test Expo Banner",
+            expo: "FOODERA EXPO",
+            createdAt: new Date().toISOString(),
+            metrics: { spend: 1200000, impressions: 0, clicks: 0, linkClicks: 0, leadsCount: 3 },
+          },
+        ],
+        leads: [
+          {
+            id: "lead-offline-1",
+            name: "Offline Test Lead",
+            phone: "+998901234567",
+            source: "offline",
+            createdAt: new Date().toISOString(),
+            stageName: "Yangi",
+            price: 2000000,
+            campaignId: "offline-1",
+          },
+        ],
+      };
     if (u.includes("/api/crm")) return { connected: true, ...crm };
     if (u.includes("/api/sync"))
       return {
@@ -358,6 +389,11 @@ check(
   "Overview platforma kesimi (yagona oyna)",
   overview.includes("Pul qaysi kanalga ketayapti")
 );
+check(
+  "Overview kunlik trend chart",
+  overview.includes("Kunlik dinamika") &&
+    overview.includes("qanday o'zgarmoqda")
+);
 
 const routes: [string, string[], string][] = [
   ["/campaigns", ["Batafsil jadval", "Kampaniyalar"], ["FOODERA"]],
@@ -366,6 +402,7 @@ const routes: [string, string[], string][] = [
   ["/leads", ["Kampaniya tuzilmasi"], ["PROMOTORS"]],
   ["/pipeline", ["Murojaatdan bitimgacha", "Doska"], ["OOO Chorrak", "Qaytim"]],
   ["/compare", ["Nima o\'zgardi?", "Yo\'nalishlar taqqoslash"], ["FOODERA"]],
+  ["/offline", ["Offline manba qo\'shish", "Test Expo Banner"], ["Offline Test Lead"]],
   ["/report", ["Rahbariyat uchun", "Chop etish"], ["murojaatgacha"]],
   ["/connections", ["Ulanishlar"], ["Google Ads"]],
   ["/not-exist", ["404"], []],

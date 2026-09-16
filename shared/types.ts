@@ -109,6 +109,7 @@ export const GOAL_META: Record<CampaignGoal, { label: string; short: string }> =
   other: { label: "Aniqlanmagan", short: "—" },
 };
 
+/** Yosh kesimi qatori (Audience sahifasi uchun) */
 export interface AgeRow {
   age: string;
   spend: number;
@@ -119,6 +120,15 @@ export interface AgeRow {
   clicks: number;
   ctr: number | null;
   cpm: number | null;
+}
+
+/** Bitta kun ko'rsatkichi — kunlik trend chart uchun (time_increment=1) */
+export interface DailyRow {
+  date: string; // YYYY-MM-DD
+  spend: number;
+  leads: number;
+  impressions: number;
+  clicks: number;
 }
 
 export interface SnapshotMeta {
@@ -147,6 +157,8 @@ export interface NormalizedSnapshot {
   campaigns: CampaignNode[];
   creatives: CreativeNode[];
   age: AgeRow[];
+  /** Kunlik timeseries (Meta API real-time rejimida to'ladi) — trend chart uchun */
+  daily?: DailyRow[];
   /** "all" (yagona oyna) rejimida — har bir platformaning alohida jami ko'rsatkichlari */
   platforms?: PlatformTotals[];
 }

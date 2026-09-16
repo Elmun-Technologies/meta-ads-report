@@ -3,7 +3,6 @@ import { Link, useLocation } from "wouter";
 import {
   Activity,
   ArrowLeftRight,
-  BarChart3,
   Command,
   Gauge,
   LayoutDashboard,
@@ -388,7 +387,6 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
     syncing,
     syncRunning,
     syncNow,
-    refresh,
     theme,
     toggleTheme,
     setPaletteOpen,
@@ -492,14 +490,6 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
           title={theme === "dark" ? "Yorug' tema" : "Tungi tema"}
         >
           {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
-        </button>
-        <button
-          className="icon-btn"
-          onClick={() => void refresh()}
-          title="Fayllardan qayta o'qish (manbalarni tortmasdan)"
-          style={{ display: "none" }}
-        >
-          <BarChart3 size={15} />
         </button>
         <AlertsMenu />
         <div

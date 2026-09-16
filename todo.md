@@ -101,3 +101,19 @@
 - [ ] Kunlik timeseries (time_increment=1) → trend chartlar.
 - [ ] Browser notification (kritik signallar desktop'ga).
 - [ ] Ko'p kabinet tanlagich Google/Yandex uchun.
+
+## Bajarildi (V3.1 — kunlik trend, offline to'liq, real-time toastlar)
+
+- [x] Kunlik timeseries (time_increment=1): Meta Graph API puller kunlik kesimni
+      tortadi → NormalizedSnapshot.daily → Overview'da "Kunlik dinamika" charti
+      (sarf ustunlari + murojaatlar chizigi). Yagona oynada platformalar bo'yicha
+      sanaga jamlanadi. Mavjud snapshot fayllarida daily yo'q — panel faqat
+      real-time rejimda ko'rinadi (taxminiy ma'lumot o'ylab topilmaydi).
+- [x] /offline sahifasi to'liq ishlaydi: manbalar ro'yxati (sarf/murojaat/CPL),
+      har bir manbaga inline murojaat qo'shish formasi, oxirgi murojaatlar jadvali,
+      real-time yangilanish (SSE lastEventAt orqali).
+- [x] Real-time toastlar: yangi murojaat / bosqich o'zgarishi / xato hodisalari
+      desktop bildirishnomasi sifatida ko'rinadi (faqat obunadan keyingi
+      hodisalar — server replayi toast qilmaydi).
+- [x] /telegram sahifasi ham real-time hodisalarda avtomatik qayta yuklanadi.
+- [x] Smoke-test 39 tekshiruvga kengaytirildi (kunlik trend + offline sahifa) — 39/39.

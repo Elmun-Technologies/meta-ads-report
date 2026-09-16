@@ -300,6 +300,107 @@ export function AgeSpendLeadsChart({
   );
 }
 
+/* Kunlik dinamika: Sarf ustunlari + Murojaatlar chizigi (time_increment=1) */
+export function DailyTrendChart({
+  data,
+}: {
+  data: { date: string; spend: number; leads: number }[];
+}) {
+  const dayLabel = (iso: string) => {
+    const [, m, d] = iso.split("-");
+    return m && d ? `${d}.${m}` : iso;
+  };
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <ComposedChart
+        data={data.map(x => ({ ...x, label: dayLabel(x.date) }))}
+        margin={{ left: -12, right: 6, top: 8, bottom: 0 }}
+      >
+        <defs>
+          <linearGradient id="dailySpend" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.9} />
+            <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.35} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid
+          stroke={GRID.stroke}
+          strokeDasharray={GRID.strokeDasharray}
+          vertical={false}
+        />
+        <XAxis
+          dataKey="label"
+          tick={{ ...AXIS, fontSize: 9.5 }}
+          axisLine={false}
+          tickLine={false}
+          interval="preserveStartEnd"
+          minTickGap={18}
+        />
+        <YAxis
+          yAxisId="l"
+          tick={AXIS}
+          axisLine={false}
+          tickLine={false}
+          tickFormatter={v => moneyShort(v)}
+        />
+        <YAxis
+          yAxisId="r"
+          orientation="right"
+          tick={AXIS}
+          axisLine={false}
+          tickLine={false}
+          allowDecimals={false}
+        />
+        <Tooltip
+          cursor={{ fill: "var(--panel-hover)" }}
+          content={({ active, payload }) => {
+            if (!active || !payload?.length) return null;
+            const d = payload[0].payload;
+            return (
+              <TipBox
+                title={d.date}
+                rows={[
+                  {
+                    label: "Sarf",
+                    value: money(d.spend),
+                    color: "var(--accent)",
+                  },
+                  {
+                    label: "Murojaatlar",
+                    value: whole(d.leads),
+                    color: "var(--cyan)",
+                  },
+                ]}
+              />
+            );
+          }}
+        />
+        <Legend
+          wrapperStyle={{ fontSize: 10.5, fontFamily: "var(--mono)" }}
+          iconType="circle"
+          iconSize={7}
+        />
+        <Bar
+          yAxisId="l"
+          dataKey="spend"
+          name="Sarf"
+          fill="url(#dailySpend)"
+          radius={[3, 3, 0, 0]}
+          maxBarSize={26}
+        />
+        <Line
+          yAxisId="r"
+          dataKey="leads"
+          name="Murojaatlar"
+          stroke="var(--cyan)"
+          strokeWidth={2.2}
+          dot={false}
+          activeDot={{ r: 4 }}
+        />
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
 /* CTR top-10 (gorizontal) */
 export function CtrTopChart({
   data,

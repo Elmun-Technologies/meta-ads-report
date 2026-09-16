@@ -50,7 +50,7 @@ interface TelegramPost {
 }
 
 export default function TelegramChannels() {
-  const { refresh } = useDashboardContext();
+  const { refresh, lastEventAt } = useDashboardContext();
   const [channels, setChannels] = useState<TelegramChannel[]>([]);
   const [hasToken, setHasToken] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -74,9 +74,10 @@ export default function TelegramChannels() {
     }
   }, []);
 
+  // lastEventAt — real-time hodisa kelganda (sync/webhook) ro'yxat qayta yuklanadi
   useEffect(() => {
     void loadChannels();
-  }, [loadChannels]);
+  }, [loadChannels, lastEventAt]);
 
   const addChannel = async () => {
     if (!newUsername.trim()) return;

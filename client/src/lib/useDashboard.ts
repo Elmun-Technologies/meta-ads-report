@@ -13,6 +13,7 @@
  * /data/bootstrap.json faylidan o'qiydi. Shunda UI hech qachon bo'sh qolmaydi.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import type {
   ActivityEvent,
   ConnectionInfo,
@@ -178,6 +179,10 @@ export function useDashboard(): DashboardState {
     try {
       const es = new EventSource("/api/stream");
       esRef.current = es;
+      // Faqat obuna bo'lgandan KEYIN ro'y bergan hodisalarga toast chiqaramiz —
+      // server ulanishda oxirgi hodisalarni qayta yuboradi (feed uchun), ular
+      // jimgina qoladi.
+      const subscribedAt = Date.now();
       es.addEventListener("hello", () => setLive(true));
       es.addEventListener("ping", () => setLive(true));
       es.addEventListener("sync", ev => {
@@ -204,6 +209,19 @@ export function useDashboard(): DashboardState {
           setActivity(prev =>
             prev.some(p => p.id === event.id) ? prev : [event, ...prev].slice(0, 60)
           );
+          // Real-time bildirishnoma — faqat yangi hodisalar uchun
+          if (new Date(event.at).getTime() > subscribedAt - 2000) {
+            if (event.kind === "lead") {
+              toast.success(event.title, {
+                description: event.body,
+                duration: 6000,
+              });
+            } else if (event.kind === "stage") {
+              toast.info(event.title, { description: event.body, duration: 5000 });
+            } else if (event.kind === "error") {
+              toast.error(event.title, { description: event.body, duration: 8000 });
+            }
+          }
         } catch {
           /* ignore */
         }

@@ -15,7 +15,11 @@ import { ago, compact, money, pct, ratio, whole } from "@/lib/format";
 import { useDashboardContext } from "@/contexts/DashboardContext";
 import { Funnel, KpiCard, Panel, SpendShare } from "@/components/widgets";
 import { PageHint } from "@/components/Help";
-import { LeadsCplChart, SpendByCampaignChart } from "@/components/charts";
+import {
+  DailyTrendChart,
+  LeadsCplChart,
+  SpendByCampaignChart,
+} from "@/components/charts";
 
 const shorten = (name: string, max = 22) =>
   name.length > max ? `${name.slice(0, max - 1)}…` : name;
@@ -347,6 +351,7 @@ export default function Overview() {
   if (!snapshot) return null;
   const { totals, campaigns, creatives, age } = snapshot;
   const platforms = snapshot.platforms ?? null;
+  const daily = snapshot.daily ?? null;
 
   const spendChart = campaigns
     .slice(0, 9)
@@ -627,6 +632,23 @@ export default function Overview() {
           />
         </div>
       </div>
+
+      {/* Kunlik dinamika — real-time rejimda (time_increment=1) to'ladi */}
+      {daily && daily.length > 1 && (
+        <div className="grid-12" style={{ marginBottom: 14 }}>
+          <div className="col-12">
+            <Panel
+              kicker="Kunlik dinamika"
+              title="Sarf va murojaatlar qanday o'zgarmoqda?"
+              sub={`Kunlik kesim (${daily[0].date} — ${daily[daily.length - 1].date}) — ustunlar sarf, chiziq murojaatlar soni`}
+            >
+              <div style={{ height: 250 }}>
+                <DailyTrendChart data={daily} />
+              </div>
+            </Panel>
+          </div>
+        </div>
+      )}
 
       {/* CRM lifecycle strip */}
       <div className="grid-12">

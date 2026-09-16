@@ -209,7 +209,41 @@ export async function pullMetaSnapshot(cfg: MetaApiConfig): Promise<MetaPullResu
     age = [];
   }
 
-  // 6) Summary — kampaniya insights dan jamlanadi
+  // 6) Kunlik timeseries (time_increment=1) — trend chart uchun
+  let daily: RawRow[] = [];
+  try {
+    const dailyRows = await graphGetAll<RawRow>(cfg, `${act}/insights`, {
+      level: "campaign",
+      time_increment: "1",
+      fields: `date_start,${INSIGHT_FIELDS}`,
+      time_range: timeRange,
+      limit: "1000",
+    });
+    // Kampaniyalar bo'yicha kunlarga jamlaymiz
+    const byDate = new Map<string, RawRow>();
+    for (const row of dailyRows) {
+      const key = String(row.date_start ?? "");
+      if (!key) continue;
+      const acc = byDate.get(key) ?? { date_start: key, spend: 0, impressions: 0, clicks: 0, actions: [] };
+      acc.spend += Number(row.spend ?? 0);
+      acc.impressions += Number(row.impressions ?? 0);
+      acc.clicks += Number(row.clicks ?? 0);
+      for (const a of row.actions ?? []) {
+        const cur = (acc.actions as any[]).find(x => x.action_type === a.action_type);
+        if (cur) cur.value = String(Number(cur.value) + Number(a.value ?? 0));
+        else (acc.actions as any[]).push({ ...a });
+      }
+      byDate.set(key, acc);
+    }
+    daily = [...byDate.values()].sort((a, b) =>
+      String(a.date_start).localeCompare(String(b.date_start))
+    );
+  } catch (err) {
+    console.warn("[meta-api] kunlik timeseries olinmadi:", (err as Error).message);
+    daily = [];
+  }
+
+  // 7) Summary — kampaniya insights dan jamlanadi
   const actionSum = (rows: RawRow[], type: string): number =>
     rows.reduce(
       (s, r) => s + Number((r.actions ?? []).find((a: RawRow) => a.action_type === type)?.value ?? 0),
@@ -258,10 +292,12 @@ export async function pullMetaSnapshot(cfg: MetaApiConfig): Promise<MetaPullResu
     age,
     ads,
     adInsights,
+    daily,
     limitations: [
       "Manba: Meta Graph API real-time pull (har sync intervalda avtomatik yangilanadi).",
       ...(adInsights.length === 0 ? ["Ad darajasidagi ma'lumot olinmadi — kreativlar ko'rinmaydi."] : []),
       ...(age.length === 0 ? ["Yosh kesimi olinmadi."] : []),
+      ...(daily.length === 0 ? ["Kunlik timeseries olinmadi — trend chart ko'rinmaydi."] : []),
     ],
   };
 

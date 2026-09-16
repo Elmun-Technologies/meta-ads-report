@@ -13,7 +13,7 @@
   <img alt="stack" src="https://img.shields.io/badge/React_19-Vite_7-5e8bff?style=flat-square" />
   <img alt="stack" src="https://img.shields.io/badge/TypeScript-strict-2dd4bf?style=flat-square" />
   <img alt="stack" src="https://img.shields.io/badge/Realtime-sync_engine_·_SSE_·_webhooks-a78bfa?style=flat-square" />
-  <img alt="stack" src="https://img.shields.io/badge/tests-35%2F35_passing-34d399?style=flat-square" />
+  <img alt="stack" src="https://img.shields.io/badge/tests-39%2F39_passing-34d399?style=flat-square" />
   <img alt="stack" src="https://img.shields.io/badge/audit-11_PASS_·_0_GAP-fbbf24?style=flat-square" />
 </p>
 
@@ -42,7 +42,7 @@ Har bir lead **qaysi kampaniya va kreativdan kelganini**, CRM'da **qaysi bosqich
 
 | Sahifa                 | Nima bor                                                                                                                                                                                                |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **/** Umumiy natijalar | 6 KPI karta, **platformalar kesimi** (pul qaysi kanalda — Meta/Google/Yandex/Telegram/Offline), **jonli harakat feed'i** (real-time), skvoznaya voronka, diqqat signallari, pacing + prognoz, CRM yopiq sikl paneli |
+| **/** Umumiy natijalar | 6 KPI karta, **platformalar kesimi** (pul qaysi kanalda — Meta/Google/Yandex/Telegram/Offline), **jonli harakat feed'i** (real-time), **kunlik dinamika charti** (real-time rejimda), skvoznaya voronka, diqqat signallari, pacing + prognoz, CRM yopiq sikl paneli |
 | **/campaigns**         | Saralanadigan ledger (Expo filtri, CPL vs o'rtacha benchmark, CSV eksport), detail drawer (15+ metrika)                                                                                                 |
 | **/creatives**         | Kreativ reytingi (Spend/CTR/Clicks/CPL), CTR liderlari charti, status chip'lari (ACTIVE/PAUSED/DISAPPROVED)                                                                                             |
 | **/audience**          | Yosh segmentlari: spend/leads chart, CPL kesimi, to'liq jadval                                                                                                                                          |
@@ -147,7 +147,7 @@ pnpm dev        # API (3001) + Vite dev (3000) birga — http://localhost:3000
 pnpm build      # production build → dist/
 pnpm start      # production: bitta server (client + API), port 3000
 pnpm check      # TypeScript strict typecheck
-pnpm smoke        # jsdom render test — 35 tekshiruv (barcha sahifalar, drawer, ⌘K, jonli panellar)
+pnpm smoke        # jsdom render test — 39 tekshiruv (barcha sahifalar, drawer, ⌘K, jonli panellar)
 pnpm audit:chain  # skvoznaya zanjir auditi — real snapshot ustida 11 tekshiruv
 
 # Google Ads API (batafsil pull — Variant A)

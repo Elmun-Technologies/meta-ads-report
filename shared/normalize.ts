@@ -2,7 +2,7 @@
  * Meta Ads xom eksportini (MCP orqali olingan JSON) NormalizedSnapshot'ga aylantiradi.
  * Kelajakda google-ads.ts / yandex-direct.ts normalizerlari ham shu interfeysga yoziladi.
  */
-import { inferGoal, type AdSetRef, type AgeRow, type CampaignNode, type CreativeNode, type Metrics, type NormalizedSnapshot, type PlatformId } from "./types";
+import { inferGoal, type AdSetRef, type AgeRow, type CampaignNode, type CreativeNode, type DailyRow, type Metrics, type NormalizedSnapshot, type PlatformId } from "./types";
 
 type RawRow = Record<string, any>;
 export interface RawMetaExport {
@@ -12,6 +12,8 @@ export interface RawMetaExport {
   age: RawRow[];
   ads: RawRow[];
   adInsights: RawRow[];
+  /** Kunlik timeseries (time_increment=1) — Meta API real-time rejimida keladi */
+  daily?: RawRow[];
   limitations: string[];
 }
 
@@ -221,6 +223,17 @@ export function normalizeMetaExport(raw: RawMetaExport, opts: { syncedAt: string
 
   const [start, end] = (raw.account?.period || "").split("—").map((s: string) => s.trim());
 
+  const daily: DailyRow[] = (raw.daily || [])
+    .map(row => ({
+      date: String(row.date_start ?? row.date ?? ""),
+      spend: numOr(row.spend, 0),
+      leads: leadsOf(row),
+      impressions: numOr(row.impressions, 0),
+      clicks: numOr(row.clicks, 0),
+    }))
+    .filter(r => r.date)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
   return {
     meta: {
       platform,
@@ -235,5 +248,6 @@ export function normalizeMetaExport(raw: RawMetaExport, opts: { syncedAt: string
     campaigns,
     creatives: [...creativesByCampaign.values()].flat(),
     age,
+    daily,
   };
 }
